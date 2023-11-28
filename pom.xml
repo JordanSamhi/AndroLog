@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.jordansamhi</groupId>
     <artifactId>androlog</artifactId>
-    <version>1.0</version>
+    <version>0.1</version>
     <name>AndroLog</name>
 
     <build>
