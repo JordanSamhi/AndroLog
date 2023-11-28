@@ -1,4 +1,4 @@
-package com.jordansamhi.androlog;
+package com.jordansamhi.androlog.utils;
 
 
 /**
@@ -12,4 +12,5 @@ public class Constants {
      * Misc names
      */
     public static final String TOOL_NAME = "AndroLog";
+    public static final String VERSION = "0.1";
 }
