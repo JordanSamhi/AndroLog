@@ -1,3 +1,7 @@
+<p align="center">
+<img width="1200px" src="https://github.com/JordanSamhi/AndroLog/blob/main/data/androlog_logo.png">
+</p> 
+
 # AndroLog
 
 Welcome to **AndroLog**, your simple solution to insert probes into Android apps with the goal to compute code coverage at runtime.
