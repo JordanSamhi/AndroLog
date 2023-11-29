@@ -70,5 +70,10 @@
             <artifactId>gson</artifactId>
             <version>2.8.9</version>
         </dependency>
+        <dependency>
+            <groupId>com.jordansamhi</groupId>
+            <artifactId>androspecter</artifactId>
+            <version>1.1.1</version>
+        </dependency>
     </dependencies>
 </project>
