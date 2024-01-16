@@ -5,8 +5,9 @@ import com.jordansamhi.androspecter.SootUtils;
 import com.jordansamhi.androspecter.TmpFolder;
 import com.jordansamhi.androspecter.commandlineoptions.CommandLineOption;
 import com.jordansamhi.androspecter.commandlineoptions.CommandLineOptions;
-import com.jordansamhi.androspecter.instrumentation.Instrumenter;
+import com.jordansamhi.androspecter.instrumentation.Logger;
 import com.jordansamhi.androspecter.printers.Writer;
+import soot.options.Options;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -36,6 +37,7 @@ public class Main {
         Writer.v().pinfo("Setting up environment...");
         SootUtils su = new SootUtils();
         su.setupSootWithOutput(CommandLineOptions.v().getOptionValue("platforms"), CommandLineOptions.v().getOptionValue("apk"), outputApk, true);
+        Options.v().set_wrong_staticness(Options.wrong_staticness_ignore);
         Writer.v().psuccess("Done.");
 
         Path path = Paths.get(CommandLineOptions.v().getOptionValue("apk"));
@@ -56,27 +58,26 @@ public class Main {
             SummaryStatistics stats = new SummaryStatistics();
             stats.compareSummaries(summaryBuilder, summaryLogBuilder);
         } else {
-
             Writer.v().pinfo("Instrumentation in progress...");
             if (CommandLineOptions.v().hasOption("s")) {
-                Instrumenter.v().logAllStatements(logIdentifier);
+                Logger.v().logAllStatements(logIdentifier);
             }
             if (CommandLineOptions.v().hasOption("m")) {
-                Instrumenter.v().logAllMethods(logIdentifier);
+                Logger.v().logAllMethods(logIdentifier);
             }
             if (CommandLineOptions.v().hasOption("c")) {
-                Instrumenter.v().logAllClasses(logIdentifier);
+                Logger.v().logAllClasses(logIdentifier);
             }
             if (CommandLineOptions.v().hasOption("cp")) {
-                Instrumenter.v().logActivities(logIdentifier);
-                Instrumenter.v().logContentProviders(logIdentifier);
-                Instrumenter.v().logServices(logIdentifier);
-                Instrumenter.v().logBroadcastReceivers(logIdentifier);
+                Logger.v().logActivities(logIdentifier);
+                Logger.v().logContentProviders(logIdentifier);
+                Logger.v().logServices(logIdentifier);
+                Logger.v().logBroadcastReceivers(logIdentifier);
             }
-            Instrumenter.v().instrument();
+            Logger.v().instrument();
             Writer.v().psuccess("Done.");
             Writer.v().pinfo("Exporting new apk...");
-            Instrumenter.v().exportNewApk(outputApk);
+            Logger.v().exportNewApk(outputApk);
             Writer.v().psuccess(String.format("Apk written in: %s", outputApk));
 
             Writer.v().pinfo("Signing and aligning APK...");
