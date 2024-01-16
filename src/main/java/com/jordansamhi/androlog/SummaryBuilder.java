@@ -2,9 +2,9 @@ package com.jordansamhi.androlog;
 
 import com.jordansamhi.androspecter.SootUtils;
 import com.jordansamhi.androspecter.commandlineoptions.CommandLineOptions;
+import com.jordansamhi.androspecter.utils.Constants;
 import soot.*;
-import soot.jimple.IdentityStmt;
-import soot.jimple.Stmt;
+import soot.jimple.*;
 import soot.util.Chain;
 
 import java.util.HashMap;
@@ -91,14 +91,29 @@ public class SummaryBuilder {
      * Adds a transformation to gather method information.
      */
     private void getInfoMethods() {
-        addTransformation("jtp.methods", b -> incrementComponent("methods", b.getMethod().getSignature()));
+        addTransformation("jtp.methods", b -> {
+            if (isLogCheckerClass(b.getMethod())) {
+                return;
+            }
+            incrementComponent("methods", b.getMethod().getSignature());
+        });
     }
 
     /**
      * Adds a transformation to gather class information.
      */
     private void getInfoClasses() {
-        addTransformation("jtp.classes", b -> incrementComponent("classes", b.getMethod().getDeclaringClass().getName()));
+        addTransformation("jtp.classes", b -> {
+            if (isLogCheckerClass(b.getMethod())) {
+                return;
+            }
+            incrementComponent("classes", b.getMethod().getDeclaringClass().getName());
+        });
+    }
+
+    private boolean isLogCheckerClass(SootMethod sm) {
+        String className = sm.getDeclaringClass().getName();
+        return className.equals(Constants.LOG_CHECKER_CLASS);
     }
 
     /**
@@ -130,15 +145,25 @@ public class SummaryBuilder {
      */
     private void getInfoStatements() {
         addTransformation("jtp.statements", b -> {
+            if (this.isLogCheckerClass(b.getMethod())) {
+                return;
+            }
             Chain<Unit> units = b.getUnits();
             int cnt = 0;
             for (Unit u : units) {
                 cnt++;
                 Stmt stmt = (Stmt) u;
-                if (!(stmt instanceof IdentityStmt)) {
-                    String stmt_log = String.format("STATEMENT=%s|%s|%d", b.getMethod(), stmt, cnt);
-                    incrementComponent("statements", stmt_log);
+                if (stmt instanceof IdentityStmt) {
+                    continue;
                 }
+                if (stmt instanceof ReturnStmt || stmt instanceof ReturnVoidStmt) {
+                    continue;
+                }
+                if (stmt instanceof MonitorStmt) {
+                    continue;
+                }
+                String stmt_log = String.format("STATEMENT=%s|%s|%d", b.getMethod(), stmt, cnt);
+                incrementComponent("statements", stmt_log);
             }
         });
     }
