@@ -29,7 +29,10 @@ public class Main {
         options.addOption(new CommandLineOption("methods", "m", "Log methods", false, false));
         options.addOption(new CommandLineOption("statements", "s", "Log statements", false, false));
         options.addOption(new CommandLineOption("components", "cp", "Log Android components", false, false));
+        options.addOption(new CommandLineOption("non-libraries", "n", "Whether to include libraries (by default: include libraries)", false, false));
         options.parseArgs(args);
+
+        boolean includeLibraries = !CommandLineOptions.v().hasOption("n");
 
         String logIdentifier = Optional.ofNullable(options.getOptionValue("log-identifier")).orElse("ANDROLOG");
         String outputApk = Optional.ofNullable(options.getOptionValue("output")).orElse(TmpFolder.v().get());
@@ -51,7 +54,7 @@ public class Main {
 
             SummaryBuilder summaryBuilder = SummaryBuilder.v();
             summaryBuilder.setSootUtils(su);
-            summaryBuilder.build();
+            summaryBuilder.build(includeLibraries);
 
             SummaryLogBuilder summaryLogBuilder = SummaryLogBuilder.v();
 
@@ -60,19 +63,19 @@ public class Main {
         } else {
             Writer.v().pinfo("Instrumentation in progress...");
             if (CommandLineOptions.v().hasOption("s")) {
-                Logger.v().logAllStatements(logIdentifier);
+                Logger.v().logAllStatements(logIdentifier, includeLibraries);
             }
             if (CommandLineOptions.v().hasOption("m")) {
-                Logger.v().logAllMethods(logIdentifier);
+                Logger.v().logAllMethods(logIdentifier, includeLibraries);
             }
             if (CommandLineOptions.v().hasOption("c")) {
-                Logger.v().logAllClasses(logIdentifier);
+                Logger.v().logAllClasses(logIdentifier, includeLibraries);
             }
             if (CommandLineOptions.v().hasOption("cp")) {
-                Logger.v().logActivities(logIdentifier);
-                Logger.v().logContentProviders(logIdentifier);
-                Logger.v().logServices(logIdentifier);
-                Logger.v().logBroadcastReceivers(logIdentifier);
+                Logger.v().logActivities(logIdentifier, includeLibraries);
+                Logger.v().logContentProviders(logIdentifier, includeLibraries);
+                Logger.v().logServices(logIdentifier, includeLibraries);
+                Logger.v().logBroadcastReceivers(logIdentifier, includeLibraries);
             }
             Logger.v().instrument();
             Writer.v().psuccess("Done.");

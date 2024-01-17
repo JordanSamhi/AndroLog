@@ -2,6 +2,7 @@ package com.jordansamhi.androlog;
 
 import com.jordansamhi.androspecter.SootUtils;
 import com.jordansamhi.androspecter.commandlineoptions.CommandLineOptions;
+import com.jordansamhi.androspecter.files.LibrariesManager;
 import com.jordansamhi.androspecter.utils.Constants;
 import soot.*;
 import soot.jimple.*;
@@ -90,9 +91,12 @@ public class SummaryBuilder {
     /**
      * Adds a transformation to gather method information.
      */
-    private void getInfoMethods() {
+    private void getInfoMethods(boolean includeLibraries) {
         addTransformation("jtp.methods", b -> {
             if (isLogCheckerClass(b.getMethod())) {
+                return;
+            }
+            if (!includeLibraries && LibrariesManager.v().isLibrary(b.getMethod().getDeclaringClass())) {
                 return;
             }
             incrementComponent("methods", b.getMethod().getSignature());
@@ -102,9 +106,12 @@ public class SummaryBuilder {
     /**
      * Adds a transformation to gather class information.
      */
-    private void getInfoClasses() {
+    private void getInfoClasses(boolean includeLibraries) {
         addTransformation("jtp.classes", b -> {
             if (isLogCheckerClass(b.getMethod())) {
+                return;
+            }
+            if (!includeLibraries && LibrariesManager.v().isLibrary(b.getMethod().getDeclaringClass())) {
                 return;
             }
             incrementComponent("classes", b.getMethod().getDeclaringClass().getName());
@@ -119,9 +126,12 @@ public class SummaryBuilder {
     /**
      * Adds a transformation to gather information on Android components like Activities, Services, etc.
      */
-    private void getInfoComponents() {
+    private void getInfoComponents(boolean includeLibraries) {
         addTransformation("jtp.components", b -> {
             SootClass sc = b.getMethod().getDeclaringClass();
+            if (!includeLibraries && LibrariesManager.v().isLibrary(sc)) {
+                return;
+            }
             String actualComponentType = su.getComponentType(sc);
             switch (actualComponentType) {
                 case "Activity":
@@ -143,9 +153,12 @@ public class SummaryBuilder {
     /**
      * Adds a transformation to gather statement information.
      */
-    private void getInfoStatements() {
+    private void getInfoStatements(boolean includeLibraries) {
         addTransformation("jtp.statements", b -> {
             if (this.isLogCheckerClass(b.getMethod())) {
+                return;
+            }
+            if (!includeLibraries && LibrariesManager.v().isLibrary(b.getMethod().getDeclaringClass())) {
                 return;
             }
             Chain<Unit> units = b.getUnits();
@@ -171,18 +184,18 @@ public class SummaryBuilder {
     /**
      * Executes all transformation phases to build the summary.
      */
-    public void build() {
+    public void build(boolean includeLibraries) {
         if (CommandLineOptions.v().hasOption("c")) {
-            getInfoClasses();
+            getInfoClasses(includeLibraries);
         }
         if (CommandLineOptions.v().hasOption("cp")) {
-            getInfoComponents();
+            getInfoComponents(includeLibraries);
         }
         if (CommandLineOptions.v().hasOption("m")) {
-            getInfoMethods();
+            getInfoMethods(includeLibraries);
         }
         if (CommandLineOptions.v().hasOption("s")) {
-            getInfoStatements();
+            getInfoStatements(includeLibraries);
         }
         PackManager.v().runPacks();
     }
