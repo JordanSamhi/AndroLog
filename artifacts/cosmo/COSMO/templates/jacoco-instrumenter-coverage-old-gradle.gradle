@@ -1,0 +1,41 @@
+apply plugin: 'jacoco'
+
+task jacocoInstrumenterReport(type: JacocoReport) {
+    reports {
+        html.enabled = true
+        csv.enabled = true
+    }
+
+    final def sourceClasses = fileTree(
+        dir: buildDir,
+        includes: [
+            "**/intermediates/classes/**",
+            "**/intermediates/javac/**/classes/**"
+        ],
+        excludes: [
+            '**/R.class',
+            '**/R$*.class',
+            '**/*$InjectAdapter.class',
+            '**/*$ModuleAdapter.class',
+            '**/*$ViewInjector*.class'
+        ]
+    )
+
+    classDirectories = sourceClasses
+
+    sourceDirectories = files(["src/main/java"])
+
+    executionData = fileTree(
+        // TODO: set the directory containing the .ec file(s).
+        dir: "/path/to/coverage/dir",
+        includes: ['**/*.ec']
+    )
+
+    doFirst {
+        sourceClasses.forEach({ file ->
+            if (file.name.contains('$$')) {
+                file.renameTo(file.path.replace('$$', '$'))
+            }
+        })
+    }
+}

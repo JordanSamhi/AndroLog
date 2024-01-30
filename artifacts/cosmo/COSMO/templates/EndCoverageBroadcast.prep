@@ -1,0 +1,55 @@
+{{def(package)}}
+package {{package}};
+
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Handler;
+import android.os.Process;
+import android.util.Log;
+import android.widget.Toast;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+
+
+/*
+   This is a the broadcast receiver responsible for generating the file with the
+   code coverage.
+*/
+public class EndCoverageBroadcast extends BroadcastReceiver {
+    public static String TAG = "JacocoInstrumenter";
+    private static String COVERAGE_FILE_PATH = null;
+
+    private void generateCoverageReport() {
+        Log.d(TAG, "EndCoverageBroadcast received, generating coverage report in " + COVERAGE_FILE_PATH);
+        try (OutputStream out = new FileOutputStream(COVERAGE_FILE_PATH, false)) {
+            Object agent = Class.forName("org.jacoco.agent.rt.RT")
+                    .getMethod("getAgent")
+                    .invoke(null);
+            out.write((byte[]) agent.getClass().getMethod("getExecutionData", boolean.class)
+                    .invoke(agent, false));
+        } catch (Exception e) {
+            Log.d(TAG, "EndCoverageBroadcast threw an exception while generating the coverage report", e);
+        }
+    }
+
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        File file = new File(context.getExternalFilesDir(null).getPath(), "coverage.ec");
+        COVERAGE_FILE_PATH = file.getAbsolutePath();
+        if (!file.exists()) {
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                Log.d(TAG, "EndCoverageBroadcast was not able to create the coverage report file", e);
+            }
+        }
+        generateCoverageReport();
+        Toast.makeText(context, "Coverage report generated in " + COVERAGE_FILE_PATH, Toast.LENGTH_LONG).show();
+    }
+}
+
