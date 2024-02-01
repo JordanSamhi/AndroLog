@@ -27,16 +27,14 @@ git clone https://github.com/JordanSamhi/AndroLog.git
 
 ### :wrench: Installing the tool
 
+➡️ Before compiling AndroLog, make sure to set the paths to zipalign and apksigner in the config.properties file located in `src/main/resources/`
+
 <pre>
 cd AndroLog
 mvn clean install
 </pre>
 
 ### :computer: Using the tool
-
-🔧 Before using AndroLog, make sure to set the paths to zipalign and apksigner in the config.properties file located in `src/main/resources/`
-
-Usage:
 
 <pre>
 java -jar AndroLog/target/androlog-0.1-jar-with-dependencies.jar <i>options</i>
