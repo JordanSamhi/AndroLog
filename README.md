@@ -34,6 +34,10 @@ mvn clean install
 
 ### :computer: Using the tool
 
+🔧 Before using AndroLog, make sure to set the paths to zipalign and apksigner in the config.properties file located in `src/main/resources/`
+
+Usage:
+
 <pre>
 java -jar AndroLog/target/androlog-0.1-jar-with-dependencies.jar <i>options</i>
 </pre>
