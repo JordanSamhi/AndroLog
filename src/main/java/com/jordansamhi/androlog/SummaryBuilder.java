@@ -6,12 +6,12 @@ import com.jordansamhi.androspecter.files.LibrariesManager;
 import com.jordansamhi.androspecter.utils.Constants;
 import soot.*;
 import soot.jimple.*;
+import soot.jimple.infoflow.collect.ConcurrentHashSet;
 import soot.util.Chain;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -22,8 +22,8 @@ import java.util.function.Consumer;
 public class SummaryBuilder {
     private static SummaryBuilder instance;
     private SootUtils su;
-    private final Map<String, Integer> summary = new HashMap<>();
-    private final Set<String> visitedComponents = new HashSet<>();
+    private final Map<String, Integer> summary = new ConcurrentHashMap<>();
+    private final Set<String> visitedComponents = new ConcurrentHashSet<>();
 
     /**
      * Private constructor to prevent instantiation.
@@ -72,7 +72,7 @@ public class SummaryBuilder {
      *
      * @param key The key to increment in the summary.
      */
-    private void increment(String key) {
+    private synchronized void increment(String key) {
         summary.merge(key, 1, Integer::sum);
     }
 
@@ -82,7 +82,7 @@ public class SummaryBuilder {
      * @param type      The type of the component.
      * @param component The name of the component.
      */
-    private void incrementComponent(String type, String component) {
+    private synchronized void incrementComponent(String type, String component) {
         if (visitedComponents.add(type + component)) {
             increment(type);
         }
