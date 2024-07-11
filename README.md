@@ -52,6 +52,7 @@ Options:
 * ```-s``` : Logging statements.
 * ```-cp``` : Logging Android components (Activity, Service, BroadcastReceiver, ContentProvider).
 * ```-n``` : If set, this flag tells AndroLog to not consider libraries in the process.
+* ```-pkg``` : Sets the package name of classes to be exclusively instrumented.
 
 ### :information_source: Examples
 
