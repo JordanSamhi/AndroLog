@@ -30,6 +30,7 @@ public class Main {
         options.addOption(new CommandLineOption("statements", "s", "Log statements", false, false));
         options.addOption(new CommandLineOption("components", "cp", "Log Android components", false, false));
         options.addOption(new CommandLineOption("non-libraries", "n", "Whether to include libraries (by default: include libraries)", false, false));
+        options.addOption(new CommandLineOption("package", "pkg", "Package name that will exclusively be instrumented", true, false));
         options.parseArgs(args);
 
         boolean includeLibraries = !CommandLineOptions.v().hasOption("n");
@@ -45,6 +46,11 @@ public class Main {
 
         Path path = Paths.get(CommandLineOptions.v().getOptionValue("apk"));
         String fileName = path.getFileName().toString();
+
+        String packageName = null;
+        if (CommandLineOptions.v().hasOption("pkg")) {
+            packageName = CommandLineOptions.v().getOptionValue("package");
+        }
 
         if (CommandLineOptions.v().hasOption("pa")) {
             Writer.v().pinfo("Generating Code Coverage Report...");
@@ -62,6 +68,7 @@ public class Main {
             stats.compareSummaries(summaryBuilder, summaryLogBuilder);
         } else {
             Writer.v().pinfo("Instrumentation in progress...");
+            Logger.v().setTargetPackage(packageName);
             if (CommandLineOptions.v().hasOption("s")) {
                 Logger.v().logAllStatements(logIdentifier, includeLibraries);
             }
