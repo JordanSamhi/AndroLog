@@ -51,6 +51,7 @@ Options:
 * ```-m``` : Logging methods.
 * ```-s``` : Logging statements.
 * ```-cp``` : Logging Android components (Activity, Service, BroadcastReceiver, ContentProvider).
+* ```-mc``` : Log method calls (e.g., a()-->b()).
 * ```-n``` : If set, this flag tells AndroLog to not consider libraries in the process.
 * ```-pkg``` : Sets the package name of classes to be exclusively instrumented.
 
