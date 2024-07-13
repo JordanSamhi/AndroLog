@@ -31,6 +31,7 @@ public class Main {
         options.addOption(new CommandLineOption("components", "cp", "Log Android components", false, false));
         options.addOption(new CommandLineOption("non-libraries", "n", "Whether to include libraries (by default: include libraries)", false, false));
         options.addOption(new CommandLineOption("package", "pkg", "Package name that will exclusively be instrumented", true, false));
+        options.addOption(new CommandLineOption("method-calls", "mc", "Log method calls (e.g., a()-->b())", false, false));
         options.parseArgs(args);
 
         boolean includeLibraries = !CommandLineOptions.v().hasOption("n");
@@ -74,6 +75,9 @@ public class Main {
             }
             if (CommandLineOptions.v().hasOption("m")) {
                 Logger.v().logAllMethods(logIdentifier, includeLibraries);
+            }
+            if (CommandLineOptions.v().hasOption("mc")) {
+                Logger.v().logAllMethodCalls(logIdentifier, includeLibraries);
             }
             if (CommandLineOptions.v().hasOption("c")) {
                 Logger.v().logAllClasses(logIdentifier, includeLibraries);
