@@ -70,14 +70,14 @@ public class Main {
         } else {
             Writer.v().pinfo("Instrumentation in progress...");
             Logger.v().setTargetPackage(packageName);
+            if (CommandLineOptions.v().hasOption("mc")) {
+                Logger.v().logAllMethodCalls(logIdentifier, includeLibraries);
+            }
             if (CommandLineOptions.v().hasOption("s")) {
                 Logger.v().logAllStatements(logIdentifier, includeLibraries);
             }
             if (CommandLineOptions.v().hasOption("m")) {
                 Logger.v().logAllMethods(logIdentifier, includeLibraries);
-            }
-            if (CommandLineOptions.v().hasOption("mc")) {
-                Logger.v().logAllMethodCalls(logIdentifier, includeLibraries);
             }
             if (CommandLineOptions.v().hasOption("c")) {
                 Logger.v().logAllClasses(logIdentifier, includeLibraries);
