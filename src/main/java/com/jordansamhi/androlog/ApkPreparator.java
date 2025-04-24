@@ -50,7 +50,6 @@ public class ApkPreparator {
         String signedApkPath = apkPath.replace(".apk", "_signed.apk");
         String alignedApkPath = apkPath.replace(".apk", "_aligned.apk");
 
-
         alignApk(alignedApkPath);
         replaceOriginalApk(alignedApkPath);
 
@@ -115,6 +114,21 @@ public class ApkPreparator {
     private void executeCommand(String command) {
         try {
             Process process = Runtime.getRuntime().exec(command);
+
+            // Consume stdout
+            new Thread(() -> {
+                try (InputStream is = process.getInputStream()) {
+                    while (is.read() != -1) {}
+                } catch (IOException ignored) {}
+            }).start();
+
+            // Consume stderr
+            new Thread(() -> {
+                try (InputStream es = process.getErrorStream()) {
+                    while (es.read() != -1) {}
+                } catch (IOException ignored) {}
+            }).start();
+
             process.waitFor();
         } catch (Exception e) {
             Writer.v().perror(String.format("Problem with the execution of the command: %s", command));
@@ -157,6 +171,7 @@ public class ApkPreparator {
         try {
             Files.move(Paths.get(newPath), Paths.get(apkPath), StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception e) {
+            System.out.println(e.getMessage());
             Writer.v().perror("Problem with the replacement of the new APK");
         }
     }
