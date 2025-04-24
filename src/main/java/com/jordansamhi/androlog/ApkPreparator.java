@@ -1,6 +1,5 @@
 package com.jordansamhi.androlog;
 
-import com.jordansamhi.androspecter.TmpFolder;
 import com.jordansamhi.androspecter.printers.Writer;
 import org.apache.commons.io.FileUtils;
 
@@ -73,7 +72,6 @@ public class ApkPreparator {
         String command = String.format(
                 "%s sign --ks %s --ks-pass pass:android --in %s --out %s --ks-key-alias android",
                 apksignerPath, keystorePath, apkPath, outputApk);
-
         executeCommand(command);
         deleteIdsigFile(outputApk);
     }
@@ -130,17 +128,22 @@ public class ApkPreparator {
      *
      * @return The absolute path of the extracted keystore file.
      */
+
     private String extractKeystore() {
         File keystore = null;
         try {
-            InputStream is_keystore = getClass().getClassLoader().getResourceAsStream("keystore.keystore");
-            keystore = new File(String.format("%s/%s", TmpFolder.v().get(),
-                    "keystore.keystore"));
-            FileUtils.copyInputStreamToFile(is_keystore, keystore);
+            String username = System.getProperty("user.name");
+            File targetDir = new File(String.format("/tmp/%s", username));
+            if (!targetDir.exists()) {
+                targetDir.mkdirs();
+            }
+            InputStream isKeystore = getClass().getClassLoader().getResourceAsStream("keystore.keystore");
+            keystore = new File(targetDir, "keystore.keystore");
+            FileUtils.copyInputStreamToFile(isKeystore, keystore);
         } catch (Exception e) {
             Writer.v().perror("Problem with the keystore");
         }
-        return keystore.getAbsolutePath();
+        return keystore != null ? keystore.getAbsolutePath() : null;
     }
 
 
