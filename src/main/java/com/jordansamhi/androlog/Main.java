@@ -22,6 +22,7 @@ public class Main {
         options.setAppName("AndroLog");
         options.addOption(new CommandLineOption("platforms", "p", "Platform file", true, true));
         options.addOption(new CommandLineOption("parse", "pa", "Parse log file", true, false));
+        options.addOption(new CommandLineOption("parse-per-minute", "pam", "Parse log file per-minute", true, false));
         options.addOption(new CommandLineOption("output", "o", "Instrumented APK output", true, false));
         options.addOption(new CommandLineOption("apk", "a", "Apk file", true, true));
         options.addOption(new CommandLineOption("log-identifier", "l", "Log identifier", true, false));
@@ -53,9 +54,14 @@ public class Main {
             packageName = CommandLineOptions.v().getOptionValue("package");
         }
 
-        if (CommandLineOptions.v().hasOption("pa")) {
+        if (CommandLineOptions.v().hasOption("pa") || CommandLineOptions.v().hasOption("pam")) {
             Writer.v().pinfo("Generating Code Coverage Report...");
-            String logFilePath = CommandLineOptions.v().getOptionValue("parse");
+            String logFilePath = "";
+            if (CommandLineOptions.v().hasOption("pa")) {
+                logFilePath = CommandLineOptions.v().getOptionValue("parse");
+            } else if (CommandLineOptions.v().hasOption("pam")) {
+                logFilePath = CommandLineOptions.v().getOptionValue("parse-per-minute");
+            }
             LogParser lp = new LogParser(logIdentifier);
             lp.parseLogs(logFilePath);
 
@@ -66,7 +72,12 @@ public class Main {
             SummaryLogBuilder summaryLogBuilder = SummaryLogBuilder.v();
 
             SummaryStatistics stats = new SummaryStatistics();
-            stats.compareSummaries(summaryBuilder, summaryLogBuilder);
+            if (CommandLineOptions.v().hasOption("pa")) {
+                stats.compareSummaries(summaryBuilder, summaryLogBuilder);
+            } else if (CommandLineOptions.v().hasOption("pam")) {
+                stats.compareSummariesPerMinute(summaryBuilder, summaryLogBuilder);
+            }
+
         } else {
             Writer.v().pinfo("Instrumentation in progress...");
             Logger.v().setTargetPackage(packageName);
