@@ -1,6 +1,7 @@
 package com.jordansamhi.androlog;
 
 import java.util.Map;
+import java.util.HashMap;
 
 /**
  * This class is responsible for comparing and displaying summary statistics.
@@ -28,6 +29,41 @@ public class SummaryStatistics {
         summary.keySet().forEach(category ->
                 printFormattedPercentage(category, summary.getOrDefault(category, 0), logSummary.getOrDefault(category, 0)));
         System.out.println("------------------------");
+    }
+
+    public void compareSummariesPerMinute(SummaryBuilder summaryBuilder, SummaryLogBuilder summaryLogBuilder) {
+        Map<String, Integer> summary = summaryBuilder.getSummary();
+        Map<String, Integer> logSummary = summaryLogBuilder.getSummary();
+
+        System.out.println();
+        System.out.println("=== Coverage Summary ===");
+        System.out.println("------------------------");
+        summary.keySet().forEach(category ->
+                printFormattedPercentage(category, summary.getOrDefault(category, 0), logSummary.getOrDefault(category, 0)));
+        System.out.println("------------------------");
+
+        System.out.println();
+        System.out.println("=== Per-Minute Coverage Summaries ===");
+        System.out.println("------------------------");
+
+        Map<String, Map<String, Integer>> perMinuteSummaries = summaryLogBuilder.getPerMinuteSummaries();
+        Map<String, Integer> cumulativeTotals = new HashMap<>();
+
+        for (String minute : perMinuteSummaries.keySet()) {
+            System.out.println("Minute: " + minute);
+            Map<String, Integer> minuteSummary = perMinuteSummaries.get(minute);
+
+            for (String category : minuteSummary.keySet()) {
+                cumulativeTotals.put(category, cumulativeTotals.getOrDefault(category, 0) + minuteSummary.get(category));
+            }
+
+            for (String category : summary.keySet()) {
+                int totalCount = cumulativeTotals.getOrDefault(category, 0);
+                int overallCount = summary.getOrDefault(category, 0);
+                printFormattedPercentage(category, overallCount, totalCount);
+            }
+            System.out.println("------------------------");
+        }
     }
 
     /**

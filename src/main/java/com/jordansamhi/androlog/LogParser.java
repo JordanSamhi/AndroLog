@@ -33,25 +33,25 @@ public class LogParser {
         if (logType != null) {
             switch (logType) {
                 case "STATEMENT":
-                    summaryLogBuilder.incrementStatement(extractContent(line, "STATEMENT="));
+                    summaryLogBuilder.incrementStatement(line);
                     break;
                 case "METHOD":
-                    summaryLogBuilder.incrementMethod(extractContent(line, "METHOD="));
+                    summaryLogBuilder.incrementMethod(line);
                     break;
                 case "CLASS":
-                    summaryLogBuilder.incrementClass(extractContent(line, "CLASS="));
+                    summaryLogBuilder.incrementClass(line);
                     break;
                 case "ACTIVITY":
-                    summaryLogBuilder.incrementActivity(extractContent(line, "ACTIVITY="));
+                    summaryLogBuilder.incrementActivity(line);
                     break;
                 case "SERVICE":
-                    summaryLogBuilder.incrementService(extractContent(line, "SERVICE="));
+                    summaryLogBuilder.incrementService(line);
                     break;
                 case "BROADCASTRECEIVER":
-                    summaryLogBuilder.incrementBroadcastReceiver(extractContent(line, "BROADCASTRECEIVER="));
+                    summaryLogBuilder.incrementBroadcastReceiver(line);
                     break;
                 case "CONTENTPROVIDER":
-                    summaryLogBuilder.incrementContentProvider(extractContent(line, "CONTENTPROVIDER="));
+                    summaryLogBuilder.incrementContentProvider(line);
                     break;
             }
         }
