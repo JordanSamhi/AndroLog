@@ -47,6 +47,8 @@ Options:
 * ```-l``` : The log identifier to use.
 * ```-o``` :  The output where to write the instrumented APK.
 * ```-pa``` : Parsing runtime output logs.
+* ```-pam``` : Parsing runtime output logs per minute.
+* ```-j``` : The output where to write the parsed logs in JSON format.
 * ```-c``` : Logging classes.
 * ```-m``` : Logging methods.
 * ```-s``` : Logging statements.
