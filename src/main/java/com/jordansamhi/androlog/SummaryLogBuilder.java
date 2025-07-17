@@ -3,10 +3,8 @@ package com.jordansamhi.androlog;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.text.SimpleDateFormat;
 
 /**
  * This class provides functionality for building a summary log of various components
@@ -20,6 +18,8 @@ public class SummaryLogBuilder {
     private static SummaryLogBuilder instance;
     private final Map<String, Integer> summary = new HashMap<>();
     private final Set<String> visitedComponents = new HashSet<>();
+    private final Map<String, Map<String, Integer>> perMinuteSummaries = new TreeMap<>(); // TreeMap keeps minutes ordered
+    private final SimpleDateFormat minuteFormat = new SimpleDateFormat("MM-dd HH:mm", Locale.US);
 
     /**
      * Private constructor to prevent instantiation from outside the class.
@@ -27,12 +27,6 @@ public class SummaryLogBuilder {
     private SummaryLogBuilder() {
     }
 
-    /**
-     * Provides access to the singleton instance of the class.
-     * If the instance does not exist, it is created.
-     *
-     * @return The singleton instance of SummaryLogBuilder.
-     */
     public static SummaryLogBuilder v() {
         if (instance == null) {
             instance = new SummaryLogBuilder();
@@ -40,13 +34,8 @@ public class SummaryLogBuilder {
         return instance;
     }
 
-    /**
-     * Increments the count for a given key in the summary map.
-     *
-     * @param key The key whose count is to be incremented.
-     */
-    private void increment(String key) {
-        summary.merge(key, 1, Integer::sum);
+    private void increment(String key, Map<String, Integer> map) {
+        map.merge(key, 1, Integer::sum);
     }
 
     /**
@@ -120,8 +109,25 @@ public class SummaryLogBuilder {
      * @param component The name of the component.
      */
     private void incrementComponent(String type, String component) {
+        String minuteKey = extractMinuteKey(component);
+        perMinuteSummaries.putIfAbsent(minuteKey, new HashMap<>());
+
         if (visitedComponents.add(type + component)) {
-            increment(type);
+            increment(type, summary);
+            Map<String, Integer> minuteSummary = perMinuteSummaries.get(minuteKey);
+            increment(type, minuteSummary);
+        }
+    }
+
+    /**
+     * Parse log line to get minute string like "07-03 11:05"
+     */
+    private String extractMinuteKey(String logLine) {
+        try {
+            String ts = logLine.substring(0, 18); // "MM-dd HH:mm:ss.SSS"
+            return minuteFormat.format(minuteFormat.parse(ts));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -140,5 +146,9 @@ public class SummaryLogBuilder {
      */
     public Map<String, Integer> getSummary() {
         return summary;
+    }
+
+    public Map<String, Map<String, Integer>> getPerMinuteSummaries() {
+        return perMinuteSummaries;
     }
 }
