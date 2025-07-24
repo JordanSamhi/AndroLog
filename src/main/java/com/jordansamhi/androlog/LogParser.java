@@ -126,16 +126,6 @@ public class LogParser {
         }
     }
 
-    private String extractContent(String line, String prefix) {
-        Pattern pattern = Pattern.compile("=(.*)");
-        Matcher matcher = pattern.matcher(line);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-        return null;
-    }
-
-
     private String getLogType(String line) {
         Pattern pattern = Pattern.compile("(\\w+?)=");
         Matcher matcher = pattern.matcher(line);

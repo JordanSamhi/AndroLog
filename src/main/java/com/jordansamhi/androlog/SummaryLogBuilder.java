@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 
 import java.util.*;
 import java.text.SimpleDateFormat;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * This class provides functionality for building a summary log of various components
@@ -112,11 +114,20 @@ public class SummaryLogBuilder {
         String minuteKey = extractMinuteKey(component);
         perMinuteSummaries.putIfAbsent(minuteKey, new HashMap<>());
 
-        if (visitedComponents.add(type + component)) {
+        if (visitedComponents.add(type + extractContent(component))) {
             increment(type, summary);
             Map<String, Integer> minuteSummary = perMinuteSummaries.get(minuteKey);
             increment(type, minuteSummary);
         }
+    }
+
+    private String extractContent(String line) {
+        Pattern pattern = Pattern.compile("=(.*)");
+        Matcher matcher = pattern.matcher(line);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return null;
     }
 
     /**
