@@ -208,4 +208,6 @@ public class SummaryBuilder {
     public Map<String, Integer> getSummary() {
         return summary;
     }
+
+    public Set<String> getVisitedComponents() { return visitedComponents; }
 }

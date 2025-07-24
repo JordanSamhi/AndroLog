@@ -3,15 +3,68 @@ package com.jordansamhi.androlog;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class LogParser {
     private final String logIdentifier;
+    private final SummaryBuilder summaryBuilder;
     private final SummaryLogBuilder summaryLogBuilder = SummaryLogBuilder.v();
 
-    public LogParser(String logIdentifier) {
+    private final Set<String> visitedStatements = new HashSet<>();
+    private final Set<String> visitedMethods = new HashSet<>();
+    private final Set<String> visitedClasses = new HashSet<>();
+    private final Set<String> visitedActivities = new HashSet<>();
+    private final Set<String> visitedServices = new HashSet<>();
+    private final Set<String> visitedBroadcastReceivers = new HashSet<>();
+    private final Set<String> visitedContentProviders = new HashSet<>();
+
+    public LogParser(String logIdentifier, SummaryBuilder summaryBuilder) {
         this.logIdentifier = logIdentifier;
+        this.summaryBuilder = summaryBuilder;
+
+        for (String component : this.summaryBuilder.getVisitedComponents()) {
+            String logType = getType(component);
+            if (logType != null){
+                switch (logType) {
+                    case "statements":
+                        int firstPipe = component.indexOf('|');
+                        visitedStatements.add(component.substring(logType.length(),firstPipe));
+                        break;
+                    case "methods":
+                        visitedMethods.add(component.substring(logType.length()));
+                        break;
+                    case "classes":
+                        visitedClasses.add(component.substring(logType.length()));
+                        break;
+                    case "activities":
+                        visitedActivities.add(component.substring(logType.length()));
+                        break;
+                    case "services":
+                        visitedServices.add(component.substring(logType.length()));
+                        break;
+                    case "broadcast-receivers":
+                        visitedBroadcastReceivers.add(component.substring(logType.length()));
+                        break;
+                    case "content-providers":
+                        visitedContentProviders.add(component.substring(logType.length()));
+                        break;
+                }
+            }
+        }
+    }
+
+    private static String getType(String component) {
+        String logType = null;
+        String[] logTypes = {"statements", "methods", "classes", "activities", "services", "broadcast-receivers"};
+        for (String lt : logTypes) {
+            if (component.startsWith(lt)) {
+                logType = lt;
+            }
+        }
+        return logType;
     }
 
     public void parseLogs(String filePath) {
@@ -33,25 +86,41 @@ public class LogParser {
         if (logType != null) {
             switch (logType) {
                 case "STATEMENT":
-                    summaryLogBuilder.incrementStatement(line);
+                    int logIndex = line.indexOf(logType + "=");
+                    int firstPipe = line.indexOf('|');
+                    if (visitedStatements.contains(line.substring(logIndex, firstPipe))) {
+                        summaryLogBuilder.incrementStatement(line);
+                    }
                     break;
                 case "METHOD":
-                    summaryLogBuilder.incrementMethod(line);
+                    if (visitedMethods.contains(line.split(logType + "=")[1])) {
+                        summaryLogBuilder.incrementMethod(line);
+                    }
                     break;
                 case "CLASS":
-                    summaryLogBuilder.incrementClass(line);
+                    if (visitedClasses.contains(line.split(logType + "=")[1])) {
+                        summaryLogBuilder.incrementClass(line);
+                    }
                     break;
                 case "ACTIVITY":
-                    summaryLogBuilder.incrementActivity(line);
+                    if (visitedActivities.contains(line.split(logType + "=")[1])) {
+                        summaryLogBuilder.incrementActivity(line);
+                    }
                     break;
                 case "SERVICE":
-                    summaryLogBuilder.incrementService(line);
+                    if (visitedServices.contains(line.split(logType + "=")[1])) {
+                        summaryLogBuilder.incrementService(line);
+                    }
                     break;
                 case "BROADCASTRECEIVER":
-                    summaryLogBuilder.incrementBroadcastReceiver(line);
+                    if (visitedBroadcastReceivers.contains(line.split(logType + "=")[1])) {
+                        summaryLogBuilder.incrementBroadcastReceiver(line);
+                    }
                     break;
                 case "CONTENTPROVIDER":
-                    summaryLogBuilder.incrementContentProvider(line);
+                    if (visitedContentProviders.contains(line.split(logType + "=")[1])) {
+                        summaryLogBuilder.incrementContentProvider(line);
+                    }
                     break;
             }
         }

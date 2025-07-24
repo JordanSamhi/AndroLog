@@ -64,12 +64,12 @@ public class Main {
             } else if (CommandLineOptions.v().hasOption("pam")) {
                 logFilePath = CommandLineOptions.v().getOptionValue("parse-per-minute");
             }
-            LogParser lp = new LogParser(logIdentifier);
-            lp.parseLogs(logFilePath);
-
             SummaryBuilder summaryBuilder = SummaryBuilder.v();
             summaryBuilder.setSootUtils(su);
             summaryBuilder.build(includeLibraries);
+
+            LogParser lp = new LogParser(logIdentifier, summaryBuilder);
+            lp.parseLogs(logFilePath);
 
             SummaryLogBuilder summaryLogBuilder = SummaryLogBuilder.v();
 
