@@ -16,7 +16,7 @@ import java.util.Optional;
 
 public class Main {
     public static void main(String[] args) {
-        System.out.println(String.format("%s v%s started on %s\n", Constants.TOOL_NAME, Constants.VERSION, new Date()));
+        System.out.printf("%s v%s started on %s\n%n", Constants.TOOL_NAME, Constants.VERSION, new Date());
 
         CommandLineOptions options = CommandLineOptions.v();
         options.setAppName("AndroLog");
@@ -34,6 +34,7 @@ public class Main {
         options.addOption(new CommandLineOption("non-libraries", "n", "Whether to include libraries (by default: include libraries)", false, false));
         options.addOption(new CommandLineOption("package", "pkg", "Package name that will exclusively be instrumented", true, false));
         options.addOption(new CommandLineOption("method-calls", "mc", "Log method calls (e.g., a()-->b())", false, false));
+        options.addOption(new CommandLineOption("threads", "t", "Number of threads to use in Soot", true, false));
         options.parseArgs(args);
 
         boolean includeLibraries = !CommandLineOptions.v().hasOption("n");
@@ -46,6 +47,7 @@ public class Main {
         SootUtils su = new SootUtils();
         su.setupSootWithOutput(CommandLineOptions.v().getOptionValue("platforms"), CommandLineOptions.v().getOptionValue("apk"), outputApk, true);
         Options.v().set_wrong_staticness(Options.wrong_staticness_ignore);
+        applyThreadOption();
         Writer.v().psuccess("Done.");
 
         Path path = Paths.get(CommandLineOptions.v().getOptionValue("apk"));
@@ -113,6 +115,7 @@ public class Main {
                 Logger.v().logBroadcastReceivers(logIdentifier, includeLibraries);
             }
             Logger.v().instrument();
+            System.out.printf("%s v%s finished Instrumentation at %s\n%n", Constants.TOOL_NAME, Constants.VERSION, new Date());
             Writer.v().psuccess("Done.");
             Writer.v().pinfo("Exporting new apk...");
             Logger.v().exportNewApk(outputApk);
@@ -124,6 +127,37 @@ public class Main {
             Writer.v().psuccess("Done.");
 
             Writer.v().pinfo("The apk is now instrumented, install it and execute it to generate logs.");
+        }
+    }
+
+    /**
+     * Configures the number of threads used by the Soot framework based on the
+     * command-line option provided by the user.
+     * <p>
+     * If the "--threads" (or "-t") option is specified and contains a valid positive
+     * integer, this value is passed to {@code Options.v().set_num_threads()}.
+     * Otherwise, Soot's default thread configuration is used.
+     * <p>
+     * Logs appropriate messages for valid, missing, or invalid input.
+     * Exits the program if the input value is non-numeric or non-positive.
+     */
+    private static void applyThreadOption() {
+        if (CommandLineOptions.v().hasOption("threads")) {
+            try {
+                int numThreads = Integer.parseInt(CommandLineOptions.v().getOptionValue("threads"));
+                if (numThreads > 0) {
+                    Options.v().set_num_threads(numThreads);
+                    Writer.v().pinfo(String.format("Using %d threads for Soot processing", numThreads));
+                } else {
+                    Writer.v().perror("Invalid number of threads. Must be a positive integer.");
+                    System.exit(1);
+                }
+            } catch (NumberFormatException e) {
+                Writer.v().perror("Invalid format for thread count. Please provide a numeric value.");
+                System.exit(1);
+            }
+        } else {
+            Writer.v().pinfo("No thread count specified. Using Soot's default thread configuration.");
         }
     }
 }
