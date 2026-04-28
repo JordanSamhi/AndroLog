@@ -58,7 +58,7 @@ public class LogParser {
 
     private static String getType(String component) {
         String logType = null;
-        String[] logTypes = {"statements", "methods", "classes", "activities", "services", "broadcast-receivers"};
+        String[] logTypes = {"statements", "methods", "classes", "activities", "services", "broadcast-receivers", "content-providers"};
         for (String lt : logTypes) {
             if (component.startsWith(lt)) {
                 logType = lt;
