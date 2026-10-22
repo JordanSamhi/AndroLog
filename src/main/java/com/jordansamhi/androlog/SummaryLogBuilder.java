@@ -3,8 +3,11 @@ package com.jordansamhi.androlog;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.*;
-import java.text.SimpleDateFormat;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,7 +24,13 @@ public class SummaryLogBuilder {
     private final Map<String, Integer> summary = new HashMap<>();
     private final Set<String> visitedComponents = new HashSet<>();
     private final Map<String, Map<String, Integer>> perMinuteSummaries = new TreeMap<>(); // TreeMap keeps minutes ordered
-    private final SimpleDateFormat minuteFormat = new SimpleDateFormat("MM-dd HH:mm", Locale.US);
+    private static final Pattern MINUTE_PREFIX = Pattern.compile("^(\\d{2}-\\d{2} \\d{2}:\\d{2})(?=[:\\s]|$)");
+    private static final DateTimeFormatter MINUTE_FORMAT = DateTimeFormatter
+            .ofPattern("uuuu-MM-dd HH:mm", Locale.US).withResolverStyle(ResolverStyle.STRICT);
+    private int unattributedCount;
+    private final CallGraph callGraph = new CallGraph();
+
+    public CallGraph getCallGraph() { return callGraph; }
 
     /**
      * Private constructor to prevent instantiation from outside the class.
@@ -111,34 +120,68 @@ public class SummaryLogBuilder {
      * @param component The name of the component.
      */
     private void incrementComponent(String type, String component) {
-        String minuteKey = extractMinuteKey(component);
-        perMinuteSummaries.putIfAbsent(minuteKey, new HashMap<>());
-
-        if (visitedComponents.add(type + extractContent(component))) {
-            increment(type, summary);
-            Map<String, Integer> minuteSummary = perMinuteSummaries.get(minuteKey);
-            increment(type, minuteSummary);
-        }
+        record(type, extractContent(type, component), component);
     }
 
-    private String extractContent(String line) {
-        Pattern pattern = Pattern.compile("=(.*)");
-        Matcher matcher = pattern.matcher(line);
-        if (matcher.find()) {
-            return matcher.group(1);
+    /**
+     * Records a validated entity payload once. A missing or invalid timestamp does
+     * not prevent aggregate coverage, but the observation has no minute bucket.
+     */
+    public void record(String type, String payload, String originalLine) {
+        if (payload == null || payload.isEmpty()) {
+            return;
         }
-        return null;
+        String minuteKey = extractMinuteKey(originalLine);
+        Map<String, Integer> minuteSummary = minuteKey == null ? null
+                : perMinuteSummaries.computeIfAbsent(minuteKey, key -> new HashMap<>());
+        if (!visitedComponents.add(type + payload)) {
+            return;
+        }
+        increment(type, summary);
+        if (minuteSummary == null) {
+            unattributedCount++;
+            return;
+        }
+        increment(type, minuteSummary);
+    }
+
+    private String extractContent(String type, String line) {
+        if (line == null) {
+            return null;
+        }
+        String label;
+        switch (type) {
+            case "methods": label = "METHOD="; break;
+            case "classes": label = "CLASS="; break;
+            case "statements": label = "STATEMENT="; break;
+            case "activities": label = "ACTIVITY="; break;
+            case "services": label = "SERVICE="; break;
+            case "broadcast-receivers": label = "BROADCASTRECEIVER="; break;
+            case "content-providers": label = "CONTENTPROVIDER="; break;
+            default: return null;
+        }
+        int start = line.indexOf(label);
+        return start < 0 ? null : line.substring(start + label.length());
     }
 
     /**
      * Parse log line to get minute string like "07-03 11:05"
      */
     private String extractMinuteKey(String logLine) {
+        if (logLine == null) {
+            return null;
+        }
+        Matcher matcher = MINUTE_PREFIX.matcher(logLine);
+        if (!matcher.find()) {
+            return null;
+        }
+        String minute = matcher.group(1);
         try {
-            String ts = logLine.substring(0, 18); // "MM-dd HH:mm:ss.SSS"
-            return minuteFormat.format(minuteFormat.parse(ts));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+            // Logcat omits the year; a leap year keeps February 29 valid.
+            LocalDateTime.parse("2000-" + minute, MINUTE_FORMAT);
+            return minute;
+        } catch (DateTimeParseException e) {
+            return null;
         }
     }
 
@@ -157,6 +200,17 @@ public class SummaryLogBuilder {
      */
     public Map<String, Integer> getSummary() {
         return summary;
+    }
+
+    /**
+     * Returns the observed entity identifiers without exposing the mutable set.
+     */
+    public Set<String> getVisitedComponents() {
+        return Collections.unmodifiableSet(visitedComponents);
+    }
+
+    public int getUnattributedCount() {
+        return unattributedCount;
     }
 
     public Map<String, Map<String, Integer>> getPerMinuteSummaries() {

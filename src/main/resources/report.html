@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>AndroLog · Coverage report</title>
+  <style>
+    :root {
+      --ink: #172e43; --muted: #536879; --line: #dce4e9; --paper: #fff;
+      --canvas: #f3f6f8; --navy: #102d44; --teal: #087c70; --teal-soft: #e8f5f1;
+      --red: #a53e40; --red-soft: #fff0ef;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: default; opacity: .5; }
+    button, input, summary, a { -webkit-tap-highlight-color: transparent; }
+    :focus-visible { outline: 3px solid #007bba; outline-offset: 3px; }
+    [hidden] { display: none !important; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: clamp(24px, 3vw, 34px); line-height: 1.25; font-weight: 650; letter-spacing: -.8px; }
+    h2 { font-size: 19px; line-height: 1.4; letter-spacing: -.3px; }
+    h3 { font-size: 15px; }
+    .skip { position: absolute; left: 16px; top: -70px; z-index: 5; padding: 12px 18px; background: white; color: var(--navy); border-radius: 8px; }
+    .skip:focus { top: 12px; }
+    .topbar { background: var(--navy); color: white; padding: 18px max(24px, calc((100% - 1456px) / 2)); display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .brand { font-weight: 720; font-size: 21px; letter-spacing: -.5px; display: flex; gap: 11px; align-items: center; }
+    .brand-mark { width: 28px; height: 28px; display: inline-flex; gap: 3px; align-items: flex-end; padding: 4px; border: 1px solid #76919f; border-radius: 7px; }
+    .brand-mark i { width: 5px; background: #65d4bf; border-radius: 2px; }
+    .brand-mark i:nth-child(1) { height: 8px; }.brand-mark i:nth-child(2) { height: 14px; }.brand-mark i:nth-child(3) { height: 19px; }
+    .top-label { font-size: 12px; color: #cfdee5; letter-spacing: .7px; text-transform: uppercase; }
+    .page { max-width: 1504px; margin: auto; padding: 32px 24px 40px; }
+    .intro { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
+    .eyebrow { color: var(--teal); font-weight: 700; text-transform: uppercase; letter-spacing: 1.3px; font-size: 11px; margin-bottom: 8px; }
+    .app-name { color: var(--muted); margin-top: 9px; overflow-wrap: anywhere; }
+    .metadata { font-size: 12px; text-align: right; color: var(--muted); flex: 0 1 42%; }
+    .metadata p { overflow-wrap: anywhere; margin-top: 4px; }
+    .metadata strong { color: var(--ink); font-weight: 600; }
+    .scope { margin: 8px 0 20px; color: var(--muted); max-width: 1100px; overflow-wrap: anywhere; }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .metric { text-align: left; color: var(--ink); transition: border-color .12s, background .12s; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 17px 18px 15px; min-width: 0; }
+    .metric:hover { border-color: #8ab7aa; background: #fbfefd; }
+    .metric[aria-pressed="true"] { border-color: var(--teal); box-shadow: inset 0 0 0 1px var(--teal); background: #f2faf7; }
+    .metric-label, .metric-note, .meter, .meter-fill { display: block; }
+    .metric-label { color: var(--muted); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+    .metric-number { display: flex; align-items: baseline; gap: 8px; margin-top: 7px; }
+    .metric-number strong { font-size: 28px; line-height: 1.25; font-weight: 660; letter-spacing: -.8px; }
+    .metric-number span { color: var(--muted); font-size: 12px; }
+    .meter { height: 5px; background: #e8eef0; border-radius: 8px; margin: 13px 0 8px; overflow: hidden; }
+    .meter-fill { height: 100%; background: var(--teal); border-radius: inherit; }
+    .metric-note { color: var(--muted); font-size: 11px; }
+    .noscript-note { margin: 20px 0; padding: 16px; color: var(--muted); background: white; border: 1px solid var(--line); border-radius: 8px; }
+    .view-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid #cfdbe2; }
+    .view-tab { border: 0; border-bottom: 3px solid transparent; background: transparent; padding: 11px 19px; color: var(--muted); font-weight: 600; font-size: 13px; }
+    .view-tab[aria-selected="true"] { color: var(--teal); border-bottom-color: var(--teal); }
+    .view-tab:hover { background: #e9eff3; }
+    .workspace { --workspace-height: clamp(580px, calc(100vh - 40px), 1080px); display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: stretch; }
+    .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    .sidebar { display: flex; flex-direction: column; height: var(--workspace-height); min-height: 0; }
+    .sidebar-head { padding: 20px 18px 16px; border-bottom: 1px solid var(--line); }
+    .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+    .small { color: var(--muted); font-size: 12px; }
+    .search-label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    input[type="search"] { display: block; width: 100%; background: #f8fafb; border: 1px solid #bdccd6; color: var(--ink); border-radius: 7px; padding: 9px 10px; min-height: 40px; }
+    input::placeholder { color: #647989; }
+    .class-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 12px; }
+    .class-scope-label { color: var(--teal); font-size: 11px; font-weight: 600; flex: 1; }
+    .class-scope .button { padding: 4px 7px; min-height: 28px; font-size: 10px; }
+    .method-drilldown { display: flex; align-items: center; gap: 9px; width: 100%; }
+    .method-drilldown label { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .method-drilldown select { flex: 1; min-width: 0; max-width: 100%; color: var(--ink); background: white; border: 1px solid #bfccd5; border-radius: 6px; padding: 7px; font: 11px var(--mono); }
+    .class-list { padding: 7px; flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
+    .package-root, .package-children { list-style: none; padding: 0; margin: 0; }
+    .package-children { margin-left: 10px; padding-left: 6px; border-left: 1px solid var(--line); }
+    .package-toggle { display: flex; width: 100%; align-items: center; gap: 6px; padding: 8px 5px; border: 0; background: transparent; border-radius: 5px; color: var(--ink); font-size: 12px; text-align: left; }
+    .package-toggle:hover { background: #f3f7f9; }
+    .package-arrow { width: 10px; flex: 0 0 10px; font-size: 16px; line-height: 1; }
+    .package-toggle[aria-expanded="true"] .package-arrow { transform: rotate(90deg); }
+    .package-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .package-count { margin-left: auto; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .package-more { margin: 6px 2px 10px; }
+    .package-more .button { font-size: 10px; width: 100%; padding: 5px; }
+    .selected-beyond-page { padding-top: 6px; border-top: 1px dashed #bdccd6; margin-top: 6px; }
+    .selected-beyond-page > p { font-size: 10px; color: var(--muted); padding-left: 7px; }
+    .class-choice { width: 100%; background: transparent; border: 1px solid transparent; text-align: left; text-decoration: none; border-radius: 6px; color: var(--ink); padding: 7px 6px; display: block; margin: 2px 0; font-size: 11px; }
+    .class-choice:hover { background: #f3f7f9; }
+    .class-choice[aria-current="true"] { background: var(--teal-soft); border-color: #afdad0; }
+    .class-choice-name { display: flex; align-items: center; gap: 7px; }
+    .class-choice-name strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dot { flex: 0 0 7px; height: 7px; border-radius: 50%; background: #96a8b3; }
+    .dot.covered { background: var(--teal); }.dot.uncovered { background: var(--red); }
+    .sidebar-foot { padding: 10px 14px; border-top: 1px solid var(--line); text-align: center; }
+    .button { border: 1px solid #bfccd5; border-radius: 7px; color: var(--ink); background: white; padding: 7px 10px; font-size: 12px; min-height: 34px; }
+    .button:hover { background: #f0f5f7; }
+    #code-explorer { display: flex; flex-direction: column; height: var(--workspace-height); min-height: 0; }
+    #class-detail { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    .detail-head { padding: 16px 20px 13px; border-bottom: 1px solid var(--line); }
+    .detail-title { overflow-wrap: anywhere; margin-top: 4px; font-size: 19px; }
+    .package-name { font-family: var(--mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+    .class-badges { display: flex; flex-wrap: wrap; gap: 7px; margin: 9px 0; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 5px; padding: 3px 7px; font-size: 11px; font-weight: 550; background: #edf1f4; color: #506271; }
+    .badge.covered { background: var(--teal-soft); color: #07665c; }
+    .badge.uncovered { background: var(--red-soft); color: #93383b; }
+    .badge.excluded { background: #f0f2f4; color: #556673; }
+    .code-note { font-size: 12px; color: var(--muted); }
+    .toolbar { padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; background: #fbfcfd; border-bottom: 1px solid var(--line); }
+    .segmented { display: inline-flex; padding: 3px; border: 1px solid var(--line); background: #edf2f5; border-radius: 8px; }
+    .segmented button { border: 0; background: transparent; color: var(--muted); padding: 6px 11px; border-radius: 5px; font-size: 12px; min-height: 32px; }
+    .segmented button[aria-pressed="true"] { background: white; color: var(--navy); box-shadow: 0 1px 3px #102d4418; font-weight: 650; }
+    .class-permalink { font-size: 12px; color: var(--teal); text-underline-offset: 3px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 5px 15px; padding: 8px 20px; color: var(--muted); font-size: 10px; border-bottom: 1px solid var(--line); }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend .key { width: 9px; height: 9px; border-radius: 2px; background: #e9eef1; border: 1px solid #c2ced6; }
+    .legend .key.covered { background: #9ed6c4; border-color: #69b49b; }.legend .key.uncovered { background: #efc3be; border-color: #db9690; }
+    .source-surface { display: flex; flex-direction: column; flex: 1; min-height: 0; background: #fff; }
+    .source-tab { display: flex; align-items: center; gap: 8px; padding: 9px 15px; background: #edf2f5; border-bottom: 1px solid #d7e0e6; color: #385264; font-size: 11px; }
+    .source-tab::before { content: "{}"; color: var(--teal); font-family: var(--mono); font-weight: 700; }
+    .source-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+    .source-language { margin-left: auto; color: var(--muted); flex-shrink: 0; font-size: 10px; }
+    .source-status { padding: 5px 14px; background: #f3f6f8; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; min-height: 26px; }
+    .code-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; overscroll-behavior: contain; background: #fff; }
+    .code-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; line-height: 22px; tab-size: 4; }
+    .code-table tr { background: #fff; }
+    .code-table tr.covered { background: #edf8f2; }
+    .code-table tr.uncovered { background: #fff1ef; }
+    .code-table tr.excluded, .code-table tr.unmeasured { color: #596b77; background: #fafbfc; }
+    .code-table th, .code-table td { padding-top: 0; padding-bottom: 0; vertical-align: top; height: 22px; }
+    .code-table .line-number { position: sticky; left: 0; z-index: 1; width: 54px; min-width: 54px; padding-left: 9px; padding-right: 11px; text-align: right; font-weight: 400; color: #7c8d98; background: #f5f7f9; border-right: 1px solid #e1e7eb; user-select: none; font-size: 11px; }
+    .code-table .coverage-gutter { position: sticky; left: 54px; z-index: 1; width: 25px; min-width: 25px; padding: 0 4px; text-align: center; background: inherit; color: #778996; font-size: 11px; user-select: none; }
+    .code-table .covered .coverage-gutter, .code-table .coverage-gutter.covered { color: #08705f; box-shadow: inset 2px 0 #6bb89e; }
+    .code-table .uncovered .coverage-gutter, .code-table .coverage-gutter.uncovered { color: #a23f41; box-shadow: inset 2px 0 #d99591; }
+    .code-table .line-code { padding-left: 10px; padding-right: 24px; white-space: pre; min-width: 300px; }
+    .code-table .declaration .line-code { color: #153d65; }
+    .code-table .declaration a { color: inherit; text-decoration: none; }
+    .code-table .declaration a:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .code-table .source-comment .line-code { color: #7a8791; font-style: italic; }
+    .code-table .navigation-target > td { background: #e5f1fa; }
+    .code-table .navigation-target > .line-number { background: #dcebf7; color: #174e78; }
+    .code-table tr:focus-visible { outline: 2px solid #438ab7; outline-offset: -2px; }
+    .graph-header { padding: 20px 23px 15px; border-bottom: 1px solid var(--line); }
+    .graph-header h2 { margin-bottom: 5px; }
+    .graph-note { color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; max-width: 1000px; }
+    .graph-totals { margin-top: 10px; font-size: 11px; font-weight: 550; color: #395d70; }
+    .graph-shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); height: clamp(640px, calc(100vh - 160px), 1000px); }
+    .graph-sidebar { display: flex; flex-direction: column; min-height: 0; padding: 16px 12px 12px; border-right: 1px solid var(--line); background: #fbfcfd; }
+    .graph-search-count { font-size: 10px; color: var(--muted); margin: 10px 2px 7px; }
+    .graph-search-results { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
+    .graph-search-method { width: 100%; display: block; border: 1px solid transparent; text-align: left; background: transparent; padding: 9px 8px; border-radius: 6px; color: var(--ink); }
+    .graph-search-method strong, .graph-search-method span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .graph-search-method strong { font-family: var(--mono); font-size: 11px; font-weight: 500; }
+    .graph-search-method span { color: var(--muted); font-size: 10px; margin-top: 3px; }
+    .graph-search-method:hover { background: #edf3f6; }
+    .graph-search-method[aria-pressed="true"] { background: var(--teal-soft); border-color: #b8ded4; }
+    .graph-class-group { margin: 3px 0; }
+    .graph-class-head { display: flex; align-items: stretch; gap: 2px; }
+    .graph-class-toggle { flex: 0 0 24px; border: 0; background: transparent; color: #537184; border-radius: 5px; padding: 5px 2px; }
+    .graph-class-toggle:hover { background: #edf3f6; }
+    .graph-class-choice { flex: 1; min-width: 0; border: 1px solid transparent; background: transparent; color: var(--ink); border-radius: 6px; text-align: left; padding: 8px 5px; }
+    .graph-class-choice strong, .graph-class-choice span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .graph-class-choice strong { font: 600 11px var(--mono); }
+    .graph-class-choice span { color: var(--muted); font-size: 10px; margin-top: 3px; }
+    .graph-class-choice:hover { background: #edf3f6; }
+    .graph-class-choice[aria-pressed="true"] { background: var(--teal-soft); border-color: #b8ded4; }
+    .graph-class-methods { margin-left: 12px; padding-left: 7px; border-left: 1px solid #d4e1e7; }
+    .graph-class-methods .graph-search-method { padding: 7px 5px; }
+    .graph-class-more { margin: 5px 0; max-width: 100%; font-size: 10px; }
+    .graph-no-results { margin: 14px 8px; color: var(--muted); font-size: 12px; }
+    .graph-more { margin-top: 8px; }
+    .graph-content { display: grid; grid-template-rows: auto minmax(260px, 1fr) auto auto minmax(155px, 215px); min-height: 0; min-width: 0; }
+    .graph-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 15px; border-bottom: 1px solid var(--line); background: #f7f9fb; }
+    .graph-scope-label { color: var(--muted); font-size: 11px; min-width: 0; overflow-wrap: anywhere; }
+    .graph-reset { white-space: nowrap; }
+    .graph-depth { font-size: 11px; color: var(--muted); display: flex; gap: 7px; align-items: center; }
+    .graph-depth select { font: inherit; color: var(--ink); background: white; border: 1px solid #bfccd5; border-radius: 5px; padding: 6px 8px; }
+    .graph-tools { display: flex; gap: 5px; }.graph-tools .button { min-width: 34px; }
+    .graph-canvas { min-height: 0; position: relative; background-color: #f9fbfc; background-image: radial-gradient(#cfdce3 .8px, transparent .8px); background-size: 19px 19px; }
+    .graph-start-empty { position: absolute; inset: 0; display: grid; place-content: center; padding: 32px; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+    .graph-svg { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; cursor: grab; }
+    .graph-svg.is-panning { cursor: grabbing; }
+    .graph-gesture-help { position: absolute; bottom: 8px; left: 12px; right: 12px; width: fit-content; color: #627888; background: #f9fbfce8; padding: 3px 6px; border-radius: 3px; font-size: 10px; pointer-events: none; }
+    .graph-edge { cursor: pointer; }
+    .graph-edge.is-muted { opacity: .14; }
+    .graph-edge.is-muted:hover { opacity: .65; }
+    .graph-edge.is-selected, .graph-edge:focus { opacity: 1; }
+    .graph-edge.is-incident .graph-edge-line { stroke-width: 2.8px; }
+    .graph-edge-hit { fill: none; stroke: transparent; stroke-width: 14px; }
+    .graph-edge-line { fill: none; stroke: #258677; stroke-width: 1.8px; }
+    .graph-edge.declared .graph-edge-line { stroke: #7d899c; stroke-dasharray: 6 5; }
+    .graph-edge.is-selected .graph-edge-line, .graph-edge:focus .graph-edge-line { stroke-width: 3.4px; }
+    .graph-node { cursor: pointer; }
+    .graph-node rect { fill: white; stroke: #b6cad5; stroke-width: 1.4px; }
+    .graph-node:hover rect, .graph-node:focus rect { stroke: #296b8e; stroke-width: 2.5px; }
+    .graph-node.is-selected rect { stroke: #0c5268; stroke-width: 3px; }
+    .graph-node.is-class-selected rect { fill: #e2f3ed; stroke: #248779; stroke-width: 2px; }
+    .graph-node.is-class-selected.is-selected rect { stroke: #0c5268; stroke-width: 3px; }
+    .graph-svg.is-overview .graph-node-label, .graph-svg.is-overview .graph-node-class { visibility: hidden; }
+    .graph-node.is-external rect { fill: #f1f3f7; stroke-dasharray: 4 3; }
+    .graph-node-label { fill: #183b51; font: 11px var(--mono); }
+    .graph-node-class { fill: #63788b; font: 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .graph-node.is-focus rect { fill: #146f66; stroke: #0a554c; }
+    .graph-node.is-focus .graph-node-label { fill: white; }.graph-node.is-focus .graph-node-class { fill: #d3eee7; }
+    .graph-status { padding: 7px 15px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+    .graph-legend { display: flex; flex-wrap: wrap; gap: 7px 20px; padding: 3px 15px 10px; color: var(--muted); font-size: 10px; }
+    .graph-legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .graph-legend span::before { content: ""; width: 23px; border-top: 2px solid #258677; }
+    .graph-legend .graph-dashed-key::before { border-top: 2px dashed #7d899c; }
+    .graph-inspector { padding: 13px 17px; border-top: 1px solid var(--line); overflow: auto; min-height: 0; background: white; scrollbar-width: thin; }
+    .graph-inspector-kind { font-size: 10px; color: var(--teal); font-weight: 650; margin-bottom: 5px; }
+    .graph-method-title { font: 12px/1.6 var(--mono); overflow-wrap: anywhere; }
+    .graph-inspector-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 10px 0; }
+    .graph-inspector-actions > span { font-size: 10px; color: var(--muted); margin-left: 4px; }
+    .graph-open-code { color: var(--teal); border-color: #9fc7bf; }
+    .graph-neighbors { display: flex; gap: 5px; flex-wrap: wrap; }
+    .graph-neighbor { font: 10px/1.4 var(--mono); color: #345c76; background: #f1f5f8; border: 1px solid #d7e3ea; border-radius: 5px; padding: 5px 7px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+    .graph-neighbor:hover { background: #e3edf3; }
+    .graph-relation { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .graph-record-count { color: var(--muted); font-size: 11px; margin: 8px 0; }
+    .graph-callsites summary { cursor: pointer; font-size: 11px; color: #345c76; }
+    .graph-callsite { padding: 8px 0; border-bottom: 1px solid #e5ebef; font-size: 11px; overflow-wrap: anywhere; }
+    .graph-callsite code { color: var(--ink); font-size: 10px; }.graph-callsite p { margin: 3px 0; color: var(--muted); }.graph-callsite span { font-size: 10px; color: var(--teal); }
+    .graph-callsite-list > .button { margin-top: 8px; }
+    .graph-empty { min-height: 400px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 11px; padding: 42px 26px; }
+    .graph-empty > p { max-width: 620px; color: var(--muted); font-size: 13px; }
+    .graph-empty .graph-note { font-size: 11px; }.graph-empty-symbol { font-size: 28px; color: #7194a2; padding: 8px 18px; border: 1px solid #d0dee5; border-radius: 12px; margin-bottom: 5px; }
+    .line-code a { color: #075f8d; text-decoration: underline; text-decoration-color: #8cb2c4; text-underline-offset: 3px; }
+    .line-code a:hover { background: #deedf4; text-decoration-color: #075f8d; }
+    .empty { padding: 38px 24px; color: var(--muted); text-align: center; }
+    .empty strong { color: var(--ink); display: block; font-size: 15px; margin-bottom: 6px; }
+    .empty p { font-size: 12px; max-width: 480px; margin: auto; }
+    .timeline { margin-top: 20px; }
+    .timeline > summary { padding: 17px 22px; cursor: pointer; font-weight: 600; }
+    .timeline-description { margin: 0 22px 15px; color: var(--muted); font-size: 12px; }
+    .timeline-scroll { overflow: auto; max-height: 350px; }
+    .timeline table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .timeline th, .timeline td { padding: 10px 22px; text-align: right; border-top: 1px solid var(--line); white-space: nowrap; }
+    .timeline th:first-child, .timeline td:first-child { text-align: left; }
+    .timeline th { background: #f5f8fa; font-weight: 600; position: sticky; top: 0; }
+    .footer { margin-top: 25px; display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 11px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    @media (max-width: 1050px) { .workspace { grid-template-columns: 250px minmax(0, 1fr); gap: 14px; } }
+    @media (max-width: 760px) {
+      .page { padding: 22px 14px; }.topbar { padding: 15px 18px; }.top-label { font-size: 10px; }
+      .intro { display: block; margin-bottom: 18px; }.metadata { text-align: left; margin-top: 15px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }.metric { padding: 13px; }
+      .workspace { display: block; }.sidebar { height: 300px; margin-bottom: 16px; }
+      #code-explorer { height: max(620px, calc(100vh - 28px)); }
+      .detail-head { padding: 14px; }.toolbar { padding: 9px 14px; }.legend { padding: 8px 14px; }
+      .detail-title { font-size: 17px; }.footer { flex-direction: column; gap: 4px; }
+      .graph-shell { display: block; height: auto; }.graph-sidebar { border-right: 0; border-bottom: 1px solid var(--line); height: 220px; }
+      .graph-content { height: 740px; }.graph-header { padding: 16px; }.graph-gesture-help { font-size: 9px; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+    @media print { .topbar { background: white; color: black; padding: 0; }.top-label, .sidebar, .toolbar, .footer, .skip { display: none; }.page { padding: 10px 0; }.workspace, #code-explorer, #class-detail, .source-surface { display: block; height: auto; }.panel { overflow: visible; }.code-scroll { overflow: visible; }.line-code { white-space: pre-wrap !important; overflow-wrap: anywhere; }.code-table .line-number, .code-table .coverage-gutter { position: static; } }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#code-explorer">Skip to code explorer</a>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>AndroLog</div>
+    <div class="top-label">Execution coverage report</div>
+  </header>
+  <main class="page">
+    <div class="intro">
+      <div><p class="eyebrow">Coverage report</p><h1>See what ran.</h1><p class="app-name" id="app-name"></p></div>
+      <div class="metadata"><p><strong>Generated</strong> <span id="generated-at"></span></p><p><strong>Log identifier</strong> <span id="log-identifier"></span></p></div>
+    </div>
+    <p class="scope" id="scope"></p>
+    <section class="metrics" id="metrics" aria-label="Coverage totals"></section>
+    <div class="view-tabs" role="tablist" aria-label="Report view">
+      <button class="view-tab" id="code-view-tab" type="button" role="tab" aria-selected="true" aria-controls="code-view" data-report-view="code">Code</button>
+      <button class="view-tab" id="graph-view-tab" type="button" role="tab" aria-selected="false" aria-controls="graph-view" data-report-view="graph" tabindex="-1">Dynamic call graph</button>
+    </div>
+    <section class="workspace" id="code-view" role="tabpanel" aria-labelledby="code-view-tab">
+      <aside class="sidebar panel" aria-label="Class navigation">
+        <div class="sidebar-head">
+          <div class="section-heading"><h2>Packages &amp; classes</h2><span class="small" id="class-total"></span></div>
+          <label class="search-label" for="class-search">Find a class or package</label>
+          <input type="search" id="class-search" placeholder="Search packages or classes…" autocomplete="off" spellcheck="false" aria-controls="class-list">
+          <div class="class-scope"><span id="class-scope-label" class="class-scope-label" aria-live="polite">All classes</span><button type="button" class="button" id="clear-class-filter" hidden>Show all classes</button></div>
+        </div>
+        <nav class="class-list" id="class-list" aria-label="Package hierarchy"></nav>
+        <div class="sidebar-foot"><p class="small" id="class-results" aria-live="polite" aria-atomic="true"></p></div>
+      </aside>
+      <section class="panel" id="code-explorer" aria-label="Jimple code explorer" tabindex="-1">
+        <div id="class-detail" hidden>
+          <div class="detail-head">
+            <p class="package-name" id="detail-package"></p><h2 class="detail-title" id="detail-title" tabindex="-1"></h2>
+            <div class="class-badges" id="class-badges"></div>
+            <p class="code-note"><strong>Jimple code</strong> reconstructed from the APK. Listing numbers are not original Java or Kotlin source lines; hover a statement for its method-local Jimple row.</p>
+          </div>
+          <div class="toolbar">
+            <div class="segmented" role="group" aria-label="Filter Jimple statements">
+              <button type="button" data-filter="all" aria-pressed="true">All code</button>
+              <button type="button" data-filter="covered" aria-pressed="false">Covered</button>
+              <button type="button" data-filter="uncovered" aria-pressed="false">Uncovered</button>
+            </div>
+            <a class="class-permalink" id="class-permalink">Link to this class</a>
+            <div class="method-drilldown" id="method-drilldown" hidden><label for="method-select">Jump to method</label><select id="method-select" aria-controls="code-viewport"></select></div>
+          </div>
+          <div class="legend" aria-label="Statement status definitions">
+            <span><i class="key covered" aria-hidden="true"></i>+ Covered: probe observed</span>
+            <span><i class="key uncovered" aria-hidden="true"></i>− Uncovered: probe not observed</span>
+            <span><i class="key" aria-hidden="true"></i>· Excluded / not measured: no probe</span>
+          </div>
+          <p class="sr-only" id="detail-status" aria-live="polite" aria-atomic="true"></p>
+          <div class="source-surface">
+            <div class="source-tab"><span class="source-file" id="source-file"></span><span class="source-language">Jimple</span></div>
+            <div id="code-viewport" class="code-scroll" role="region" tabindex="0" aria-label="Whole-class Jimple source listing">
+              <table id="class-source" class="code-table"><caption class="sr-only">Complete class listing: display line number, coverage marker, and reconstructed Jimple code.</caption><tbody id="source-lines"></tbody></table>
+            </div>
+            <p class="source-status" id="source-status"></p>
+          </div>
+        </div>
+        <div class="empty" id="explorer-empty"><strong>No code to display</strong><p>This report contains no class-level code details. Available coverage totals are shown above.</p></div>
+      </section>
+    </section>
+    <section class="panel" id="graph-view" role="tabpanel" aria-labelledby="graph-view-tab" hidden><div id="graph-root"></div></section>
+    <details class="timeline panel" id="timeline" hidden>
+      <summary>Coverage over time <span class="small">· cumulative observations</span></summary>
+      <p class="timeline-description">Distinct probes observed up to each timestamped minute in the supplied log.</p>
+      <div class="timeline-scroll" id="timeline-table" tabindex="0" role="region" aria-label="Cumulative coverage by minute"></div>
+    </details>
+    <footer class="footer"><p>AndroLog · Android execution coverage</p><p>Self-contained report. No connection required.</p></footer>
+    <noscript><p class="noscript-note">Enable JavaScript to explore this report. All report data is embedded in this file; no network connection is needed.</p></noscript>
+  </main>
+  <script type="application/json" id="report-data">__ANDROLOG_DATA__</script>
+  <script>__ANDROLOG_LINKS__</script>
+  <script>__ANDROLOG_GRAPH__</script>
+  <script>
+    (function () {
+      'use strict';
+      var $ = function (id) { return document.getElementById(id); };
+      var make = function (tag, className, text) {
+        var node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined && text !== null) node.textContent = String(text);
+        return node;
+      };
+      var clear = function (node) { while (node.firstChild) node.removeChild(node.firstChild); };
+      var list = function (value) { return Array.isArray(value) ? value : []; };
+      var number = function (value) { var n = Number(value); return isFinite(n) && n >= 0 ? n : 0; };
+      var format = function (value) { return number(value).toLocaleString('en-US'); };
+      var statusFor = function (value) { return value === true ? 'covered' : value === false ? 'uncovered' : 'unmeasured'; };
+      var labels = { covered: 'Covered', uncovered: 'Not observed', excluded: 'Excluded', unmeasured: 'Not measured' };
+      var knownStatus = function (value) { return Object.prototype.hasOwnProperty.call(labels, value) ? value : 'unmeasured'; };
+      var badge = function (text, status) { return make('span', 'badge ' + knownStatus(status), text); };
+      var empty = function (title, description) { var box = make('div', 'empty'); box.appendChild(make('strong', '', title)); box.appendChild(make('p', '', description)); return box; };
+      var data;
+      try { data = JSON.parse($('report-data').textContent); if (!data || typeof data !== 'object') throw new Error('Invalid report data'); }
+      catch (error) {
+        $('app-name').textContent = 'Report data could not be loaded.';
+        $('explorer-empty').textContent = 'The embedded report data is missing or invalid. Generate this report again with AndroLog.';
+        return;
+      }
+      document.title = String(data.appName || 'AndroLog') + ' · Coverage report';
+      $('app-name').textContent = data.appName || 'Android application';
+      $('generated-at').textContent = data.generatedAt || 'Not recorded';
+      $('log-identifier').textContent = data.logIdentifier || 'Not recorded';
+      $('scope').textContent = data.scope || 'Coverage reflects the instrumentation and execution log supplied for this report.';
+      var categories = list(data.categories), categoryLabels = Object.create(null);
+      var componentTypes = { activities: 'Activity', services: 'Service', 'broadcast-receivers': 'BroadcastReceiver', 'content-providers': 'ContentProvider' };
+      categories.forEach(function (category) {
+        var total = number(category.total), covered = number(category.covered);
+        var percent = total ? Math.min(100, covered / total * 100) : 0;
+        categoryLabels[category.key] = String(category.label || category.key);
+        var card = make('button', 'metric'); card.type = 'button';
+        card.setAttribute('data-metric', String(category.key)); card.setAttribute('aria-pressed', 'false');
+        card.setAttribute('aria-controls', 'code-view');
+        card.setAttribute('aria-label', 'Browse ' + categoryLabels[category.key] + ', ' + format(covered) + ' of ' + format(total) + ' observed');
+        card.title = 'Browse ' + categoryLabels[category.key].toLowerCase() + ' in the code explorer';
+        card.addEventListener('click', function () { selectCategory(String(category.key)); });
+        card.appendChild(make('span', 'metric-label', category.label || category.key));
+        var value = make('span', 'metric-number');
+        value.appendChild(make('strong', '', total ? percent.toFixed(1) + '%' : '—'));
+        value.appendChild(make('span', '', total ? 'covered' : 'no probes'));
+        card.appendChild(value);
+        var meter = make('span', 'meter'); meter.setAttribute('aria-hidden', 'true');
+        var fill = make('span', 'meter-fill'); fill.style.width = percent + '%'; meter.appendChild(fill); card.appendChild(meter);
+        card.appendChild(make('span', 'metric-note', format(covered) + ' of ' + format(total) + ' observed'));
+        $('metrics').appendChild(card);
+      });
+      var classes = list(data.classes).slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+      var codeLinks = window.AndroLogCodeLinks;
+      var codeIndex = codeLinks.createIndex(classes);
+      var classByName = Object.create(null), classPackages = Object.create(null), classMetrics = Object.create(null);
+      var activeCategory = 'classes';
+      var selected = null, activeFilter = 'all', methodTargets = Object.create(null), classTarget = null;
+      var expandedPackages = Object.create(null), searchCollapsed = Object.create(null);
+      var packageLimits = Object.create(null), searchLimits = Object.create(null);
+      var searchQuery = '', nextPackageId = 0, selectedAnchor = null;
+      var filters = document.querySelectorAll('[data-filter]');
+      function packageNode(label, path, parent) {
+        return { label: label, path: path, parent: parent, id: 'package-' + nextPackageId++, children: Object.create(null), classes: [], matches: [], matchedTotal: 0 };
+      }
+      var packageRoot = packageNode('', '', null);
+      classes.forEach(function (item) {
+        var name = String(item.name || ''), packageName = String(item.packageName || '');
+        classByName[name] = item;
+        var methods = list(item.methods);
+        classMetrics[name] = {
+          methods: methods.some(function (method) { return typeof method.covered === 'boolean'; }),
+          statements: methods.some(function (method) { return list(method.statements).some(function (row) { return row.status === 'covered' || row.status === 'uncovered'; }); })
+        };
+        var parts = packageName ? packageName.split('.') : [''], node = packageRoot, path = '';
+        parts.forEach(function (part, index) {
+          path = index ? path + '.' + part : part;
+          if (!node.children[part]) node.children[part] = packageNode(part || '(default package)', path, node);
+          node = node.children[part];
+        });
+        node.classes.push(item); classPackages[name] = node;
+      });
+      $('class-total').textContent = format(classes.length);
+      function matchesQuery(item) {
+        return (String(item.name || '') + ' ' + String(item.packageName || '')).toLowerCase().indexOf(searchQuery) !== -1;
+      }
+      function matchesCategory(item) {
+        if (componentTypes[activeCategory]) return item.componentType === componentTypes[activeCategory];
+        if (activeCategory === 'methods' || activeCategory === 'statements') return classMetrics[String(item.name)][activeCategory];
+        return true;
+      }
+      function matchesFilters(item) { return matchesCategory(item) && matchesQuery(item); }
+      function expandFilteredTree() { return !!searchQuery || !!componentTypes[activeCategory]; }
+      function syncCategoryControls() {
+        var cards = $('metrics').querySelectorAll('[data-metric]');
+        for (var i = 0; i < cards.length; i++) cards[i].setAttribute('aria-pressed', cards[i].getAttribute('data-metric') === activeCategory ? 'true' : 'false');
+        $('class-scope-label').textContent = activeCategory === 'classes' ? 'All classes' : activeCategory === 'methods' ? 'Classes with measured methods' : activeCategory === 'statements' ? 'Classes with measured statements' : categoryLabels[activeCategory] || activeCategory;
+        $('clear-class-filter').hidden = activeCategory === 'classes' && !searchQuery;
+      }
+      function showFilteredEmpty() {
+        selected = null; methodTargets = Object.create(null); classTarget = null;
+        $('class-detail').hidden = true; $('explorer-empty').hidden = false;
+        clear($('source-lines')); clear($('explorer-empty'));
+        $('explorer-empty').appendChild(make('strong', '', 'No matching classes'));
+        $('explorer-empty').appendChild(make('p', '', searchQuery ? 'No classes match this category and your search. Clear the search or show all classes.' : 'No classes are available for this category in this report. Choose another statistic or show all classes.'));
+        $('detail-status').textContent = 'No classes match the current category and search.';
+      }
+      function reconcileSelection(resetListing) {
+        var next = selected && matchesFilters(selected) ? selected : null;
+        if (!next) for (var i = 0; i < classes.length; i++) if (matchesFilters(classes[i])) { next = classes[i]; break; }
+        if (!next) { showFilteredEmpty(); renderClassList(); return; }
+        var changed = selected !== next;
+        selected = next;
+        if (changed || resetListing) { setFilter('all'); renderSelectedClass(); }
+        revealSelectedClass();
+        if (changed || resetListing) window.history.replaceState(null, '', codeLinks.href(String(selected.name)));
+      }
+      function selectCategory(category) {
+        activeCategory = category; searchCollapsed = Object.create(null); searchLimits = Object.create(null);
+        $('class-list').scrollTop = 0;
+        syncCategoryControls(); activateView('code'); reconcileSelection(true);
+        if (activeCategory === 'methods' && selected) $('method-select').focus({ preventScroll: true });
+        else if (selectedAnchor) selectedAnchor.focus({ preventScroll: true });
+      }
+      function updateMatches(node) {
+        node.matches = node.classes.filter(matchesFilters);
+        node.matchedTotal = node.matches.length;
+        Object.keys(node.children).forEach(function (key) { node.matchedTotal += updateMatches(node.children[key]); });
+        return node.matchedTotal;
+      }
+      function updateTreeCount() {
+        var shown = $('class-list').querySelectorAll('.class-choice').length;
+        $('class-results').textContent = format(shown) + ' classes shown · ' + format(packageRoot.matchedTotal) + (searchQuery || activeCategory !== 'classes' ? ' matches' : ' total');
+        $('class-total').textContent = format(packageRoot.matchedTotal);
+        $('class-total').title = format(packageRoot.matchedTotal) + ' of ' + format(classes.length) + ' classes';
+      }
+      function classLink(item) {
+        var link = make('a', 'class-choice');
+        link.href = codeLinks.href(String(item.name));
+        link.setAttribute('data-code-class', String(item.name));
+        link.setAttribute('aria-current', item === selected ? 'true' : 'false');
+        link.setAttribute('aria-controls', 'class-detail');
+        var component = componentTypes[activeCategory];
+        var status = statusFor(component ? item.componentCovered : item.classCovered);
+        link.setAttribute('aria-label', String(item.name) + ', ' + (component || 'class') + ' probe: ' + labels[status]);
+        link.title = String(item.name);
+        var name = make('span', 'class-choice-name'), dot = make('span', 'dot ' + status);
+        dot.setAttribute('aria-hidden', 'true'); name.appendChild(dot);
+        name.appendChild(make('strong', '', String(item.name || 'Unnamed class').split('.').pop())); link.appendChild(name);
+        if (item === selected) selectedAnchor = link;
+        return link;
+      }
+      function renderPackage(node) {
+        var li = make('li'), button = make('button', 'package-toggle'); button.type = 'button';
+        button.title = node.path || '(default package)';
+        button.setAttribute('aria-label', 'Package ' + (node.path || '(default package)') + ', ' + format(node.matchedTotal) + ' classes');
+        button.setAttribute('aria-controls', node.id);
+        var arrow = make('span', 'package-arrow', '›'); arrow.setAttribute('aria-hidden', 'true'); button.appendChild(arrow);
+        button.appendChild(make('span', 'package-label', node.label));
+        button.appendChild(make('span', 'package-count', format(node.matchedTotal)));
+        li.appendChild(button);
+        var children = null;
+        function isOpen() { return expandFilteredTree() ? !searchCollapsed[node.id] : !!expandedPackages[node.id]; }
+        function populate() {
+          if (children) li.removeChild(children);
+          children = make('ul', 'package-children'); children.id = node.id;
+          Object.keys(node.children).sort().forEach(function (key) {
+            var child = node.children[key]; if (child.matchedTotal) children.appendChild(renderPackage(child));
+          });
+          var limits = expandFilteredTree() ? searchLimits : packageLimits;
+          var limit = limits[node.id] || 100, shown = node.matches.slice(0, limit);
+          shown.forEach(function (item) { var row = make('li'); row.appendChild(classLink(item)); children.appendChild(row); });
+          if (selected && classPackages[String(selected.name)] === node && matchesFilters(selected) && shown.indexOf(selected) === -1) {
+            var pinned = make('li', 'selected-beyond-page'); pinned.appendChild(make('p', '', 'Selected class')); pinned.appendChild(classLink(selected)); children.appendChild(pinned);
+          }
+          if (shown.length < node.matches.length) {
+            var moreRow = make('li', 'package-more');
+            var more = make('button', 'button', 'Show next ' + format(Math.min(100, node.matches.length - shown.length)) + ' · ' + format(node.matches.length - shown.length) + ' remaining'); more.type = 'button';
+            more.addEventListener('click', function () {
+              var firstNew = node.matches[limit]; limits[node.id] = limit + 100; populate(); updateTreeCount();
+              var choices = children.querySelectorAll('.class-choice');
+              for (var i = 0; i < choices.length; i++) if (choices[i].getAttribute('data-code-class') === String(firstNew.name)) { choices[i].focus(); break; }
+            });
+            moreRow.appendChild(more); children.appendChild(moreRow);
+          }
+          li.appendChild(children);
+        }
+        function sync() {
+          var open = isOpen(); button.setAttribute('aria-expanded', open ? 'true' : 'false');
+          if (open) populate(); else if (children) { li.removeChild(children); children = null; }
+        }
+        button.addEventListener('click', function () {
+          var open = !isOpen();
+          if (expandFilteredTree()) searchCollapsed[node.id] = !open; else expandedPackages[node.id] = open;
+          sync(); updateTreeCount();
+        });
+        sync(); return li;
+      }
+      function renderClassList() {
+        var previousScroll = $('class-list').scrollTop;
+        clear($('class-list')); selectedAnchor = null;
+        updateMatches(packageRoot);
+        if (!packageRoot.matchedTotal) $('class-list').appendChild(empty('No matching classes', 'Change the statistic, clear the search, or show all classes.'));
+        else {
+          var root = make('ul', 'package-root');
+          Object.keys(packageRoot.children).sort().forEach(function (key) {
+            var node = packageRoot.children[key]; if (node.matchedTotal) root.appendChild(renderPackage(node));
+          });
+          $('class-list').appendChild(root);
+        }
+        $('class-list').scrollTop = previousScroll; updateTreeCount();
+      }
+      function revealSelectedClass() {
+        if (!selected) return;
+        if (!matchesCategory(selected)) activeCategory = 'classes';
+        if (searchQuery && !matchesQuery(selected)) { $('class-search').value = ''; searchQuery = ''; searchCollapsed = Object.create(null); searchLimits = Object.create(null); }
+        syncCategoryControls();
+        var node = classPackages[String(selected.name)];
+        while (node && node !== packageRoot) { expandedPackages[node.id] = true; delete searchCollapsed[node.id]; node = node.parent; }
+        renderClassList();
+        if (selectedAnchor) {
+          var viewport = $('class-list').getBoundingClientRect(), target = selectedAnchor.getBoundingClientRect();
+          if (target.top < viewport.top) $('class-list').scrollTop -= viewport.top - target.top + 8;
+          else if (target.bottom > viewport.bottom) $('class-list').scrollTop += target.bottom - viewport.bottom + 8;
+        }
+      }
+      function setFilter(value) {
+        activeFilter = value;
+        for (var i = 0; i < filters.length; i++) filters[i].setAttribute('aria-pressed', filters[i].getAttribute('data-filter') === value ? 'true' : 'false');
+      }
+      function renderSelectedClass() {
+        if (!selected) return;
+        $('class-detail').hidden = false; $('explorer-empty').hidden = true;
+        $('detail-package').textContent = selected.packageName || '(default package)';
+        $('detail-title').textContent = selected.name || 'Unnamed class';
+        $('class-permalink').href = codeLinks.href(String(selected.name));
+        $('class-permalink').setAttribute('data-code-class', String(selected.name));
+        clear($('class-badges'));
+        var classStatus = statusFor(selected.classCovered);
+        $('class-badges').appendChild(badge('Class · ' + labels[classStatus], classStatus));
+        if (selected.componentType) {
+          var componentStatus = statusFor(selected.componentCovered);
+          $('class-badges').appendChild(badge(String(selected.componentType) + ' · ' + labels[componentStatus], componentStatus));
+        }
+        $('class-badges').appendChild(badge(format(list(selected.methods).length) + ' methods', 'unmeasured'));
+        $('source-file').textContent = String(selected.name || 'Class').split('.').pop() + '.jimple';
+        $('code-viewport').setAttribute('aria-label', 'Reconstructed Jimple listing for ' + String(selected.name));
+        renderMethodChoices(); renderSource();
+      }
+      function renderMethodChoices() {
+        $('method-drilldown').hidden = activeCategory !== 'methods';
+        clear($('method-select'));
+        if (activeCategory !== 'methods' || !selected) return;
+        var methods = list(selected.methods).filter(function (method) { return typeof method.covered === 'boolean'; });
+        var prompt = make('option', '', 'Choose a method · ' + format(methods.length) + ' measured'); prompt.value = '';
+        $('method-select').appendChild(prompt);
+        methods.forEach(function (method) {
+          var signature = String(method.signature), prefix = '<' + String(selected.name) + ': ';
+          var label = signature.indexOf(prefix) === 0 ? signature.slice(prefix.length, -1) : signature;
+          var option = make('option', '', label + ' · ' + labels[statusFor(method.covered)]); option.value = signature;
+          $('method-select').appendChild(option);
+        });
+      }
+      function renderSource() {
+        clear($('source-lines')); methodTargets = Object.create(null); classTarget = null;
+        var methods = list(selected && selected.methods), shownMethods = 0, shownStatements = 0, totalStatements = 0;
+        var sourceLine = 0, fragment = document.createDocumentFragment();
+        var markers = { covered: '+', uncovered: '−', excluded: '·', unmeasured: '·' };
+        function appendLine(text, kind, options) {
+          options = options || {};
+          var lineNumber = ++sourceLine;
+          if (options.visible === false) return null;
+          var tr = make('tr', 'source-row ' + kind);
+          tr.setAttribute('data-source-line', String(lineNumber));
+          var description = 'Listing line ' + lineNumber;
+          if (options.statement) {
+            tr.setAttribute('data-jimple-line', String(options.statement.line));
+            tr.setAttribute('data-jimple-method', options.signature);
+            tr.setAttribute('data-status', options.status);
+            description += ' · Jimple statement ' + String(options.statement.line) + ' within ' + options.signature;
+            if (options.parts > 1) description += ' · part ' + options.part + ' of ' + options.parts;
+          } else if (options.method) {
+            description += ' · Method declaration ' + options.signature;
+          } else {
+            description += ' · Display formatting for reconstructed Jimple';
+          }
+          if (options.status) description += ' · ' + (options.method ? 'Method probe: ' : '') + labels[options.status];
+          tr.title = description;
+          var line = make('th', 'line-number', lineNumber); line.scope = 'row'; line.title = description; tr.appendChild(line);
+          var gutter = make('td', 'coverage-gutter' + (options.status ? ' ' + options.status : ''));
+          if (options.status) {
+            var marker = make('span', '', markers[options.status]); marker.setAttribute('aria-hidden', 'true'); gutter.appendChild(marker);
+            gutter.appendChild(make('span', 'sr-only', (options.method ? 'Method probe: ' : '') + labels[options.status]));
+            gutter.title = (options.method ? 'Method probe: ' : '') + labels[options.status];
+          }
+          tr.appendChild(gutter);
+          var cell = make('td', 'line-code'), code = make('code');
+          if (options.method || options.classDeclaration) {
+            code.appendChild(document.createTextNode(options.method ? '    ' : 'class '));
+            var anchor = make('a', '', text);
+            anchor.href = codeLinks.href(String(selected.name), options.method ? options.signature : undefined);
+            anchor.setAttribute('data-code-class', String(selected.name));
+            if (options.method) anchor.setAttribute('data-code-method', options.signature);
+            code.appendChild(anchor); code.appendChild(document.createTextNode(' {'));
+          } else if (options.statement) {
+            codeLinks.appendCode(code, '        ' + text, codeIndex);
+          } else {
+            code.textContent = text || ' ';
+          }
+          cell.appendChild(code); tr.appendChild(cell); fragment.appendChild(tr);
+          return tr;
+        }
+        classTarget = appendLine(String(selected.name || 'Class'), 'class-declaration declaration', { classDeclaration: true });
+        classTarget.id = 'class-declaration'; classTarget.tabIndex = -1;
+        if (methods.length) appendLine('', 'source-blank');
+        else appendLine('    // No method bodies are available for this class.', 'source-comment');
+        methods.forEach(function (method, index) {
+          var statements = list(method.statements), signature = String(method.signature || 'Unnamed method');
+          totalStatements += statements.length;
+          var matches = statements.filter(function (row) { return activeFilter === 'all' || knownStatus(row.status) === activeFilter; });
+          var visible = activeFilter === 'all' || matches.length > 0;
+          var displaySignature = signature, prefix = '<' + String(selected.name) + ': ';
+          if (displaySignature.indexOf(prefix) === 0 && displaySignature.charAt(displaySignature.length - 1) === '>') displaySignature = displaySignature.slice(prefix.length, -1);
+          var declaration = appendLine(displaySignature, 'method-declaration declaration', { method: true, signature: signature, status: statusFor(method.covered), visible: visible });
+          if (declaration) {
+            declaration.id = 'method-' + index; declaration.tabIndex = -1;
+            declaration.setAttribute('data-method-signature', signature);
+            methodTargets[signature] = declaration; shownMethods++;
+          }
+          if (!statements.length) appendLine('        // No Jimple body is available.', 'source-comment', { visible: visible });
+          statements.forEach(function (row) {
+            var status = knownStatus(row.status), show = activeFilter === 'all' || status === activeFilter;
+            var parts = String(row.text === null || row.text === undefined ? '' : row.text).split(/\r\n|\r|\n/);
+            parts.forEach(function (part, partIndex) {
+              appendLine(part, (partIndex === 0 ? 'statement ' : 'statement-continuation ') + status, { statement: row, signature: signature, status: status, visible: show, part: partIndex + 1, parts: parts.length });
+            });
+            if (show) shownStatements++;
+          });
+          appendLine('    }', 'method-close', { visible: visible });
+          if (index < methods.length - 1) appendLine('', 'source-blank', { visible: visible });
+        });
+        if (methods.length && !shownMethods) {
+          var note = make('tr', 'source-row source-comment filter-note');
+          note.appendChild(make('th', 'line-number'));
+          note.appendChild(make('td', 'coverage-gutter'));
+          var message = make('td', 'line-code'); message.appendChild(make('code', '', '    // No statements match this filter.')); note.appendChild(message); fragment.appendChild(note);
+        }
+        appendLine('}', 'class-close');
+        $('source-lines').appendChild(fragment);
+        $('code-viewport').scrollTop = 0; $('code-viewport').scrollLeft = 0;
+        $('source-status').textContent = format(shownMethods) + ' methods · ' + format(shownStatements) + ' of ' + format(totalStatements) + ' statements shown · ' + format(sourceLine) + ' listing lines';
+        $('detail-status').textContent = String(selected.name) + ': ' + format(shownMethods) + ' methods and ' + format(shownStatements) + ' of ' + format(totalStatements) + ' Jimple statements shown.';
+      }
+      function parseRoute() {
+        var params = new URLSearchParams(window.location.hash.slice(1));
+        return { className: params.get('class'), methodSignature: params.get('method') };
+      }
+      function applyRoute(moveFocus) {
+        var route = parseRoute();
+        if (!route.className) {
+          if (window.location.hash && window.location.hash !== '#' && selected) return;
+          if (!classes.length) { renderClassList(); return; }
+          var first = classes.filter(matchesFilters)[0];
+          if (!first) { showFilteredEmpty(); renderClassList(); return; }
+          route.className = String(first.name);
+        }
+        var item = classByName[route.className];
+        if (!item) {
+          selected = null; $('class-detail').hidden = true; $('explorer-empty').hidden = false;
+          clear($('explorer-empty')); $('explorer-empty').appendChild(make('strong', '', 'Class not found'));
+          $('explorer-empty').appendChild(make('p', '', 'The linked class is not present in this report. Select a class from the package tree.'));
+          renderClassList(); return;
+        }
+        var needsRender = selected !== item || activeFilter !== 'all';
+        selected = item; setFilter('all'); revealSelectedClass();
+        if (needsRender) renderSelectedClass();
+        else {
+          var previousTargets = $('source-lines').querySelectorAll('.navigation-target');
+          for (var i = 0; i < previousTargets.length; i++) previousTargets[i].classList.remove('navigation-target');
+        }
+        $('method-select').value = route.methodSignature || '';
+        var target = route.methodSignature ? methodTargets[route.methodSignature] : classTarget;
+        if (!target) {
+          target = classTarget;
+          $('detail-status').textContent = 'The linked method is not present in this class. All available methods are shown.';
+        }
+        if (route.methodSignature && target !== classTarget) target.classList.add('navigation-target');
+        var viewport = $('code-viewport');
+        viewport.scrollLeft = 0;
+        if (route.methodSignature && target !== classTarget) {
+          var targetTop = target.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop;
+          viewport.scrollTop = Math.max(0, targetTop - 18);
+        } else viewport.scrollTop = 0;
+        if ((moveFocus || route.methodSignature) && target) target.focus({ preventScroll: true });
+      }
+      function navigate(className, methodSignature) {
+        activateView('code');
+        var next = codeLinks.href(className, methodSignature);
+        if (window.location.hash === next) applyRoute(true); else window.location.hash = next;
+      }
+      var graphInstance = null;
+      var viewTabs = document.querySelectorAll('[data-report-view]');
+      function activateView(view) {
+        var showGraph = view === 'graph';
+        $('code-view').hidden = showGraph; $('graph-view').hidden = !showGraph;
+        for (var i = 0; i < viewTabs.length; i++) {
+          var active = viewTabs[i].getAttribute('data-report-view') === view;
+          viewTabs[i].setAttribute('aria-selected', active ? 'true' : 'false'); viewTabs[i].tabIndex = active ? 0 : -1;
+        }
+        if (showGraph && !graphInstance) graphInstance = window.AndroLogGraph.mount($('graph-root'), data.callGraph || { available: false }, { navigate: navigate });
+      }
+      for (var t = 0; t < viewTabs.length; t++) {
+        viewTabs[t].addEventListener('click', function () { activateView(this.getAttribute('data-report-view')); });
+        viewTabs[t].addEventListener('keydown', function (event) {
+          if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].indexOf(event.key) < 0) return;
+          event.preventDefault();
+          var target = event.key === 'Home' ? $('code-view-tab') : event.key === 'End' ? $('graph-view-tab') : this === $('code-view-tab') ? $('graph-view-tab') : $('code-view-tab');
+          activateView(target.getAttribute('data-report-view')); target.focus();
+        });
+      }
+      document.addEventListener('click', function (event) {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        var element = event.target.nodeType === 1 ? event.target : event.target.parentElement;
+        var anchor = element && element.closest('a[data-code-class]');
+        if (!anchor) return;
+        event.preventDefault(); navigate(anchor.getAttribute('data-code-class'), anchor.getAttribute('data-code-method') || undefined);
+      });
+      window.addEventListener('hashchange', function () { activateView('code'); applyRoute(true); });
+      $('class-search').addEventListener('input', function () {
+        searchQuery = $('class-search').value.trim().toLowerCase(); searchCollapsed = Object.create(null); searchLimits = Object.create(null);
+        $('class-list').scrollTop = 0;
+        syncCategoryControls(); reconcileSelection(false);
+      });
+      $('clear-class-filter').addEventListener('click', function () { $('class-search').value = ''; searchQuery = ''; selectCategory('classes'); });
+      $('method-select').addEventListener('change', function () { if (selected && this.value) navigate(String(selected.name), this.value); });
+      syncCategoryControls();
+      for (var f = 0; f < filters.length; f++) filters[f].addEventListener('click', function () { setFilter(this.getAttribute('data-filter')); renderSource(); });
+      var timeline = list(data.timeline);
+      if (timeline.length) {
+        $('timeline').hidden = false;
+        var table = make('table'), thead = make('thead'), header = make('tr');
+        table.appendChild(make('caption', 'sr-only', 'Cumulative distinct observed probes by log minute.'));
+        var minuteHeading = make('th', '', 'Log minute'); minuteHeading.scope = 'col'; header.appendChild(minuteHeading);
+        categories.forEach(function (category) { var heading = make('th', '', category.label || category.key); heading.scope = 'col'; header.appendChild(heading); });
+        thead.appendChild(header); table.appendChild(thead);
+        var body = make('tbody');
+        timeline.forEach(function (point) {
+          var row = make('tr'), minute = make('th', '', point.minute); minute.scope = 'row'; row.appendChild(minute);
+          categories.forEach(function (category) { row.appendChild(make('td', '', format(point.counts && point.counts[category.key]))); });
+          body.appendChild(row);
+        });
+        table.appendChild(body); $('timeline-table').appendChild(table);
+      }
+      applyRoute(false);
+    }());
+  </script>
+</body>
+</html>
