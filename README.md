@@ -12,6 +12,7 @@ AndroLog inserts logging probes into an APK, then compares the original applicat
 - **Dynamic call graphs:** executed callsites and confirmed runtime dispatch targets, including virtual and interface calls.
 - **Interactive HTML reports:** package navigation, continuous class listings, coverage filters, clickable code references, and class-level graph exploration.
 - **Terminal and JSON reports:** aggregate coverage and cumulative coverage by minute.
+- **Integrated capture:** install and launch the instrumented app, collect logs, and generate reports with one command.
 
 [Previews](#report-previews) · [Setup](#build-and-configure) · [Quick start](#instrument-run-and-report) · [Reports](#read-the-reports) · [Dynamic call graph](#dynamic-call-graph) · [Options](#command-line-reference) · [Troubleshooting](#troubleshooting)
 
@@ -104,6 +105,31 @@ androlog_sdk="/absolute/path/to/Android/sdk"
 androlog_apk="/absolute/path/to/app.apk"
 ```
 
+### Automatic capture
+
+With a device or emulator connected, run the complete workflow with `--capture`:
+
+```bash
+androlog \
+  -a "$androlog_apk" -p "$androlog_sdk/platforms" \
+  -o ./out -l ANDROLOG \
+  -c -m -s -cp -mc --capture
+```
+
+AndroLog instruments and signs the APK, installs it, starts log capture, and launches its manifest-declared launcher activity. Exercise the app on the device, then **press Enter in the terminal** to stop capture and generate the HTML and JSON reports, including a cumulative timeline.
+
+Each run creates a fresh `out/capture-…/` session directory containing the instrumented APK under `instrumented/`, `runtime.log`, `coverage.html`, and `coverage.json`. Full build and report diagnostics are saved as `instrumentation.log` and `report-generation.log`. Use `-html` and `-j` to override the report destinations. Probe and scope options are reused automatically for reporting.
+
+- Add `--device <serial>` when more than one device is connected. List devices with `adb devices`.
+- Add `--duration 60` for a timed capture instead of waiting for Enter. The timer starts after launch; launch-time observations are included. Use this option when running without interactive input.
+- Add `--adb /absolute/path/to/adb` if needed. Otherwise, AndroLog looks in the SDK associated with `-p`, then `ANDROID_HOME`, `ANDROID_SDK_ROOT`, and `PATH`.
+
+Capture restarts the target app so its initial probes are recorded. It waits for logcat readiness before launch and excludes older buffered records without clearing the device's logs. Launcher aliases are supported. If the APK declares several launchers, the first sorted by target class and component name is used.
+
+Installation uses `adb install -r`; a signing mismatch is reported without uninstalling the app. **Ctrl+C aborts the workflow and keeps the raw log**; it does not generate reports. A device disconnection or capture failure also keeps the partial log, which can be parsed later with the original APK, log tag, and probe/scope options. `--capture` cannot be combined with `-pa` or `-pam`.
+
+To manage installation and log collection yourself, follow the three manual steps below.
+
 ### 1. Instrument the APK
 
 This example enables all coverage categories and dynamic call tracing:
@@ -152,7 +178,7 @@ androlog \
 
 Report directories are created automatically. Keep the APK version, tag, probes, and scope (`-pkg` and `-n`, if used) consistent between instrumentation and reporting.
 
-To include a cumulative timeline, replace `-pa ./out/runtime.log` with `-pam ./out/runtime.log`. Use one parsing mode at a time. HTML and JSON output options require either `-pa` or `-pam`; they do not capture logs themselves.
+To include a cumulative timeline, replace `-pa ./out/runtime.log` with `-pam ./out/runtime.log`. Use one parsing mode at a time. HTML and JSON output options require `-pa`, `-pam`, or `--capture`.
 
 ## Read the reports
 
@@ -227,7 +253,7 @@ Call tracing captures stack traces and adds runtime overhead. Limit scope with `
 java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 ```
 
-`-a` and `-p` are required except when displaying help. Without `-pa` or `-pam`, AndroLog instruments the APK.
+`-a` and `-p` are required except when displaying help. Without `-pa`, `-pam`, or `--capture`, AndroLog instruments the APK and exits.
 
 ### Inputs and outputs
 
@@ -235,12 +261,23 @@ java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 | --- | --- |
 | `-a`, `--apk <file>` | Input APK. Use the original APK when reporting. |
 | `-p`, `--platforms <path>` | Android SDK platforms directory or Android platform file (`android.jar`). |
-| `-o`, `--output <directory>` | Destination for the instrumented APK. Defaults to a temporary directory. |
+| `-o`, `--output <directory>` | Destination for the instrumented APK, or parent directory for a fresh capture session. Defaults to a temporary directory. |
 | `-l`, `--log-identifier <tag>` | Logcat tag. Defaults to `ANDROLOG`. |
 | `-pa`, `--parse <file>` | Parse a runtime log and report aggregate coverage. |
 | `-pam`, `--parse-per-minute <file>` | Parse a runtime log and include cumulative coverage by minute. |
-| `-html`, `--html <file>` | Write a standalone HTML report. Requires `-pa` or `-pam`. |
-| `-j`, `--json <file>` | Write a JSON report. Requires `-pa` or `-pam`. |
+| `-html`, `--html <file>` | Write a standalone HTML report. Requires `-pa`, `-pam`, or `--capture`. |
+| `-j`, `--json <file>` | Write a JSON report. Requires `-pa`, `-pam`, or `--capture`. |
+
+### Capture
+
+| Option | Description |
+| --- | --- |
+| `-capture`, `--capture` | Instrument, install, launch, capture logs, and generate HTML/JSON reports. Select at least one probe option. |
+| `-device`, `--device <serial>` | Device or emulator to use. Required when multiple devices are online. Capture only. |
+| `-adb`, `--adb <path>` | ADB executable. Discovered from the SDK or `PATH` by default. Capture only. |
+| `-duration`, `--duration <seconds>` | Positive capture duration after launch. Otherwise, press Enter to finish. Capture only. |
+
+Capture log tags may contain letters, digits, underscores, dots, and hyphens, and must start with a letter, digit, or underscore.
 
 ### Probes
 
@@ -252,7 +289,7 @@ java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 | `-cp`, `--components` | Activities, services, broadcast receivers, and content providers. |
 | `-mc`, `--method-calls` | Executed callsites and confirmed runtime targets. |
 
-Select the same probes for instrumentation and reporting. `-html` requires at least one probe option; `-mc` alone supports a graph-only report.
+Select the same probes for instrumentation and reporting. `-html` and `--capture` require at least one probe option; `-mc` alone supports a graph-only report.
 
 ### Scope and diagnostics
 
@@ -276,6 +313,9 @@ The CLI prints timed stages and generated file paths. Errors go to standard erro
 | No dynamic call graph is available | Instrument with `-mc`, install that APK, and capture a new log. Adding `-mc` only when parsing cannot create missing runtime observations. |
 | The graph asks you to choose a starting class | The launcher activity has no matching recorded calls, the app has no launcher declaration, or an older report lacks manifest metadata. Select a class or regenerate the report from the APK. |
 | No timeline entries appear | Use `-pam` with timestamped output such as `adb logcat -v threadtime`. Untimestamped observations count only toward aggregate totals. |
+| Capture cannot select a device | Check `adb devices`, authorize the connection, and use `--device <serial>` if several devices are online. |
+| Capture reports that standard input closed | Use `--duration <seconds>` in non-interactive runs. The raw log is retained in the session directory. |
+| Logcat stops or the device disconnects | Reconnect the device and start a new capture. The partial log remains available for manual reporting. |
 
 For other failures, repeat the command with `-v` to include exception details.
 

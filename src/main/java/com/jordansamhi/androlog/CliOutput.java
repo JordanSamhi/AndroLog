@@ -35,14 +35,22 @@ final class CliOutput {
     }
 
     void stage(String label, Action action) throws Exception {
+        stage(label, action, false);
+    }
+
+    void stageBlock(String label, Action action) throws Exception {
+        stage(label, action, true);
+    }
+
+    private void stage(String label, Action action, boolean block) throws Exception {
         if (stage == 0) out.println();
         activeStage = label;
         long before = System.nanoTime();
-        out.printf("[%d/%d] %s ... ", ++stage, stages, label);
+        out.printf(block ? "[%d/%d] %s%n" : "[%d/%d] %s ... ", ++stage, stages, label);
         out.flush();
         try {
             action.run();
-            out.println(duration(System.nanoTime() - before));
+            out.println(block ? "  Completed in " + duration(System.nanoTime() - before) + "." : duration(System.nanoTime() - before));
             activeStage = null;
         } catch (Exception | LinkageError error) {
             out.println("failed (" + duration(System.nanoTime() - before) + ")");

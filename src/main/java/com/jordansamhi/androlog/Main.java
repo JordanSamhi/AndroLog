@@ -54,6 +54,10 @@ public class Main {
                 throw new UsageException("Unexpected argument: " + command.getArgList().get(0));
             }
             validate(command);
+            if (command.hasOption("capture")) {
+                new CaptureWorkflow(command, System.in, out, err, console).run();
+                return 0;
+            }
             // AndroSpecter's transforms use both cmdLine and the values stored in its definitions.
             // Seed them only after validating arguments, so its legacy System.exit error path is unused.
             CommandLineOptions options = CommandLineOptions.v();
@@ -158,15 +162,30 @@ public class Main {
 
     private static void validate(CommandLine command) throws IOException {
         boolean parsing = command.hasOption("pa") || command.hasOption("pam");
+        boolean capture = command.hasOption("capture");
+        if (capture && parsing) throw new UsageException("--capture cannot be combined with --parse or --parse-per-minute.");
+        for (String flag : Arrays.asList("device", "adb", "duration")) {
+            if (command.hasOption(flag) && !capture) throw new UsageException("--" + flag + " requires --capture.");
+        }
+        if (command.hasOption("duration")) {
+            try {
+                if (Integer.parseInt(command.getOptionValue("duration")) <= 0) throw new NumberFormatException();
+            } catch (NumberFormatException error) {
+                throw new UsageException("--duration must be a positive number of seconds.");
+            }
+        }
+        if (capture && !command.getOptionValue("l", "ANDROLOG").matches("[A-Za-z0-9_][A-Za-z0-9_.-]*")) {
+            throw new UsageException("Capture log tags must contain only letters, digits, underscores, dots or hyphens.");
+        }
         if (command.hasOption("pa") && command.hasOption("pam")) {
             throw new UsageException("Choose either --parse or --parse-per-minute, not both.");
         }
-        if ((command.hasOption("html") || command.hasOption("j")) && !parsing) {
-            throw new UsageException("--html and --json require --parse or --parse-per-minute.");
+        if ((command.hasOption("html") || command.hasOption("j")) && !parsing && !capture) {
+            throw new UsageException("--html and --json require --parse, --parse-per-minute or --capture.");
         }
-        if (command.hasOption("html") && !command.hasOption("c") && !command.hasOption("m")
+        if ((command.hasOption("html") || capture) && !command.hasOption("c") && !command.hasOption("m")
                 && !command.hasOption("s") && !command.hasOption("cp") && !command.hasOption("mc")) {
-            throw new UsageException("Select HTML coverage with -c, -m, -s, -cp or -mc, matching instrumentation.");
+            throw new UsageException("Select probes with -c, -m, -s, -cp or -mc, matching instrumentation.");
         }
         if (command.hasOption("t")) {
             try {
@@ -176,16 +195,17 @@ public class Main {
             }
         }
         Path apk = readableFile(command.getOptionValue("a"), "APK");
+        if (command.hasOption("o")) absolute(command.getOptionValue("o"));
         Path platforms = absolute(command.getOptionValue("p"));
         if (!Files.exists(platforms) || !Files.isReadable(platforms)) {
             throw new UsageException("Android platforms path does not exist or is not readable: " + platforms);
         }
-        if (parsing) {
-            Path log = readableFile(command.getOptionValue(command.hasOption("pa") ? "pa" : "pam"), "Runtime log");
+        if (parsing || capture) {
+            Path log = parsing ? readableFile(command.getOptionValue(command.hasOption("pa") ? "pa" : "pam"), "Runtime log") : null;
             for (String flag : Arrays.asList("html", "j")) {
                 if (command.hasOption(flag)) {
                     Path output = absolute(command.getOptionValue(flag));
-                    if (sameFile(output, apk) || sameFile(output, log)) {
+                    if (sameFile(output, apk) || (log != null && sameFile(output, log))) {
                         throw new UsageException(("j".equals(flag) ? "JSON" : "HTML")
                                 + " output must be separate from the APK and runtime log: " + output);
                     }
@@ -216,7 +236,7 @@ public class Main {
         return Paths.get(value).toAbsolutePath().normalize();
     }
 
-    private static boolean sameFile(Path first, Path second) throws IOException {
+    static boolean sameFile(Path first, Path second) throws IOException {
         return resolvedOutputPath(first).equals(resolvedOutputPath(second))
                 || (Files.exists(first) && Files.exists(second) && Files.isSameFile(first, second));
     }
@@ -249,9 +269,13 @@ public class Main {
                 new CommandLineOption("platforms", "p", "Android SDK platforms directory or platform file", true, true),
                 new CommandLineOption("parse", "pa", "Read runtime log and report aggregate coverage", true, false),
                 new CommandLineOption("parse-per-minute", "pam", "Read runtime log and include cumulative coverage per minute", true, false),
-                new CommandLineOption("output", "o", "Directory for the instrumented APK (default: temporary directory)", true, false),
-                new CommandLineOption("json", "j", "Write coverage JSON (requires -pa or -pam)", true, false),
-                new CommandLineOption("html", "html", "Write a standalone HTML report (requires -pa or -pam)", true, false),
+                new CommandLineOption("capture", "capture", "Instrument, install, capture execution and generate reports", false, false),
+                new CommandLineOption("device", "device", "ADB device serial (capture only; required if multiple devices are online)", true, false),
+                new CommandLineOption("adb", "adb", "ADB executable (capture only; default: discover from SDK or PATH)", true, false),
+                new CommandLineOption("duration", "duration", "Capture for this many seconds instead of waiting for Enter", true, false),
+                new CommandLineOption("output", "o", "APK output directory, or parent for a fresh capture session (default: temporary directory)", true, false),
+                new CommandLineOption("json", "j", "Write coverage JSON (requires -pa, -pam or --capture)", true, false),
+                new CommandLineOption("html", "html", "Write a standalone HTML report (requires -pa, -pam or --capture)", true, false),
                 new CommandLineOption("log-identifier", "l", "Logcat tag (default: ANDROLOG)", true, false),
                 new CommandLineOption("classes", "c", "Instrument or measure classes", false, false),
                 new CommandLineOption("methods", "m", "Instrument or measure methods", false, false),
@@ -282,9 +306,10 @@ public class Main {
         formatter.setOptionComparator(null);
         PrintWriter writer = new PrintWriter(out);
         formatter.printHelp(writer, 100, "java -jar androlog.jar -a <apk> -p <platforms> [options]",
-                "Instrument an APK, or compare its code with runtime logs. --apk and --platforms are required.",
+                "Instrument, capture an Android test run, or parse logs. --apk and --platforms are required.",
                 options, 2, 2, "\nExamples:\n"
                         + "  Instrument: -a app.apk -p /sdk/platforms -o ./instrumented -c -m -s -cp\n"
+                        + "  Capture:    -a app.apk -p /sdk/platforms -o ./out -c -m -s -cp -mc --capture\n"
                         + "  Report:     -a app.apk -p /sdk/platforms -pa runtime.log -c -m -s -cp -html report.html\n"
                         + "  Timeline:   -a app.apk -p /sdk/platforms -pam runtime.log -m -j coverage.json\n\n"
                         + "Reports use the original APK and the same probe/scope options as instrumentation.\n"

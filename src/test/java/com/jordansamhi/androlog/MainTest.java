@@ -21,6 +21,8 @@ public class MainTest {
         assertEquals(0, result.status);
         assertTrue(result.out.contains("--verbose"));
         assertTrue(result.out.contains("--parse-per-minute"));
+        assertTrue(result.out.contains("--capture"));
+        assertTrue(result.out.contains("--duration"));
         assertEquals("", result.err);
     }
 
@@ -58,6 +60,39 @@ public class MainTest {
         Result result = invoke("-a", "unused.apk", "-p", "unused", "-pa", "one.log", "-pam", "two.log");
         assertEquals(2, result.status);
         assertTrue(result.err.contains("either --parse or --parse-per-minute"));
+    }
+
+    @Test public void captureRequiresProbesAndCannotParseAnExistingLog() throws Exception {
+        Result modes = invoke("-a", "unused.apk", "-p", "unused", "--capture", "-pa", "old.log", "-m");
+        assertEquals(2, modes.status);
+        assertTrue(modes.err.contains("cannot be combined"));
+        Result probes = invoke("-a", "unused.apk", "-p", "unused", "--capture");
+        assertEquals(2, probes.status);
+        assertTrue(probes.err.contains("Select probes"));
+    }
+
+    @Test public void captureOnlyArgumentsAndInvalidDurationsAreRejected() throws Exception {
+        for (String flag : new String[]{"--device", "--adb", "--duration"}) {
+            Result result = invoke("-a", "unused.apk", "-p", "unused", flag, "one");
+            assertEquals(2, result.status);
+            assertTrue(result.err.contains("requires --capture"));
+        }
+        for (String seconds : new String[]{"0", "-1", "1.5", "many", "2147483648"}) {
+            Result result = invoke("-a", "unused.apk", "-p", "unused", "--capture", "-m", "--duration", seconds);
+            assertEquals(2, result.status);
+            assertTrue(result.err.contains("positive number of seconds"));
+        }
+        Result tag = invoke("-a", "unused.apk", "-p", "unused", "--capture", "-m", "-l", "unsafe:tag");
+        assertEquals(2, tag.status);
+        assertTrue(tag.err.contains("Capture log tags"));
+    }
+
+    @Test public void captureReportCannotOverwriteTheOriginalApk() throws Exception {
+        Path platforms = temporary.newFolder("platforms").toPath();
+        Path apk = temporary.newFile("input.apk").toPath();
+        Result result = invoke("-a", apk.toString(), "-p", platforms.toString(), "--capture", "-m", "-html", apk.toString());
+        assertEquals(2, result.status);
+        assertTrue(result.err.contains("HTML output must be separate"));
     }
 
     @Test public void jsonOutputCannotOverwriteTheApkOrLogEvenWithoutHtml() throws Exception {

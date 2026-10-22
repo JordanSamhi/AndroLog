@@ -78,6 +78,18 @@ public class LauncherActivitiesTest {
         assertEquals(Collections.singletonList("example.app.Television"), LauncherActivities.fromManifest(manifest, null));
     }
 
+    @Test public void captureLaunchesTheAliasInsteadOfItsTargetClass() {
+        activity(".RealEntry");
+        AXmlNode alias = new AXmlNode("activity-alias", null, application);
+        alias.addAttribute(new AXmlAttribute<>("name", ".LauncherIcon", NS));
+        alias.addAttribute(new AXmlAttribute<>("targetActivity", ".RealEntry", NS));
+        launcher(alias, "LAUNCHER");
+        LauncherActivities.LaunchTarget target = LauncherActivities.launchTargets(manifest, null).get(0);
+        assertEquals("example.app/example.app.LauncherIcon", target.component());
+        assertEquals("example.app.RealEntry", target.className);
+        assertEquals("android.intent.category.LAUNCHER", target.category);
+    }
+
     private AXmlNode activity(String name) {
         AXmlNode node = new AXmlNode("activity", null, application);
         node.addAttribute(new AXmlAttribute<>("name", name, NS)); return node;
