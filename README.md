@@ -13,7 +13,19 @@ AndroLog inserts logging probes into an APK, then compares the original applicat
 - **Interactive HTML reports:** package navigation, continuous class listings, coverage filters, clickable code references, and class-level graph exploration.
 - **Terminal and JSON reports:** aggregate coverage and cumulative coverage by minute.
 
-[Setup](#build-and-configure) · [Quick start](#instrument-run-and-report) · [Reports](#read-the-reports) · [Dynamic call graph](#dynamic-call-graph) · [Options](#command-line-reference) · [Troubleshooting](#troubleshooting)
+[Previews](#report-previews) · [Setup](#build-and-configure) · [Quick start](#instrument-run-and-report) · [Reports](#read-the-reports) · [Dynamic call graph](#dynamic-call-graph) · [Options](#command-line-reference) · [Troubleshooting](#troubleshooting)
+
+## Report previews
+
+These screenshots show a report generated from an instrumented Android demo app running on an emulator. Click either image to view it at full resolution.
+
+**Coverage explorer:** browse packages, open a whole class, and see covered statements in green and unobserved statements in red.
+
+[![HTML coverage report with coverage totals, a package tree, and covered and unobserved Jimple statements](data/screenshots/coverage-report.png)](data/screenshots/coverage-report.png)
+
+**Dynamic call graph:** explore the launcher activity's recorded calls. Solid edges show confirmed runtime targets; dashed edges retain declared targets when dispatch was not confirmed.
+
+[![Dynamic call graph for MainActivity, including the confirmed interface dispatch to DoubleScorePolicy.apply](data/screenshots/dynamic-call-graph.png)](data/screenshots/dynamic-call-graph.png)
 
 ## Requirements
 
