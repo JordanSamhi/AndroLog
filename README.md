@@ -1,172 +1,290 @@
 <p align="center">
-<img width="640" alt="AndroLog — Android execution analysis" src="data/androlog_logo_v2.png">
-</p> 
+  <img width="640" alt="AndroLog — Android execution analysis" src="data/androlog_logo_v2.png">
+</p>
 
 # AndroLog
 
-Welcome to **AndroLog**, your simple solution to insert probes into Android apps with the goal to compute code coverage at runtime.
+**Instrument Android APKs, measure runtime code coverage, and explore dynamic call graphs.**
 
-**AndroLog** offers, so far, several levels of granularity:
-- Classes
-- Methods
-- Statements
-- Activities
-- Services
-- Broadcast Receivers
-- Content Providers
+AndroLog inserts logging probes into an APK, then compares the original application with logs collected while the instrumented app runs. It works from APK bytecode; application source code is not required.
 
-Do not hesitate to contribute or open issues may you need additional levels of granularity.
+- **Coverage:** classes, methods, statements, activities, services, broadcast receivers, and content providers.
+- **Dynamic call graphs:** executed callsites and confirmed runtime dispatch targets, including virtual and interface calls.
+- **Interactive HTML reports:** package navigation, continuous class listings, coverage filters, clickable code references, and class-level graph exploration.
+- **Terminal and JSON reports:** aggregate coverage and cumulative coverage by minute.
 
-## :rocket: Getting started
+[Setup](#build-and-configure) · [Quick start](#instrument-run-and-report) · [Reports](#read-the-reports) · [Dynamic call graph](#dynamic-call-graph) · [Options](#command-line-reference) · [Troubleshooting](#troubleshooting)
 
-### :arrow_down: Downloading the tool
+## Requirements
 
-<pre>
+| Dependency | Used for |
+| --- | --- |
+| A JDK and Apache Maven | Building and running AndroLog. The project targets Java 8 bytecode. |
+| Android SDK Platforms | Resolving Android classes during instrumentation and report generation. Install a platform containing `android.jar`. |
+| Android SDK Build Tools | Aligning and signing instrumented APKs with `zipalign` and `apksigner`. |
+| Android SDK Platform Tools (`adb`) and a device or emulator | Installing the instrumented APK and collecting runtime logs. |
+| A browser | Opening the standalone HTML report offline. |
+
+Node.js is needed only to run the JavaScript regression tests.
+
+## Build and configure
+
+### Build from source
+
+```bash
 git clone https://github.com/JordanSamhi/AndroLog.git
-</pre>
-
-### :wrench: Installing the tool
-
-➡️ For APK instrumentation, configure your local `zipalignPath` and `apksignerPath` in `src/main/resources/config.properties` before compiling. Create this file if it does not exist; these paths depend on your Android SDK installation. Parsing logs and generating reports do not invoke the signing tools.
-
-<pre>
 cd AndroLog
-mvn clean install
-</pre>
-
-### :computer: Using the tool
-
-<pre>
-java -jar AndroLog/target/androlog-0.1-jar-with-dependencies.jar <i>options</i>
-</pre>
-
-Options:
-
-* ```-a``` : The path to the APK to process.
-* ```-p``` : The path to the Android platforms folder.
-* ```-l``` : The log identifier to use.
-* ```-o``` :  The output where to write the instrumented APK.
-* ```-pa``` : Parsing runtime output logs.
-* ```-pam``` : Parsing runtime output logs per minute.
-* ```-j``` : The output where to write the parsed logs in JSON format.
-* ```-html```, ```--html <output-file>``` : Write a standalone HTML coverage report when parsing with `-pa` or `-pam`.
-* ```-c``` : Logging classes.
-* ```-m``` : Logging methods.
-* ```-s``` : Logging statements.
-* ```-cp``` : Logging Android components (Activity, Service, BroadcastReceiver, ContentProvider).
-* ```-mc``` : Record executed callsites and confirm their actual runtime targets, including virtual and interface dispatch.
-* ```-n``` : If set, this flag tells AndroLog to not consider libraries in the process.
-* ```-pkg``` : Sets the package name of classes to be exclusively instrumented.
-* ```-t``` : The number of threads used by Soot.
-* ```-h```, ```--help``` : Show usage and examples.
-* ```-v```, ```--verbose``` : Include exception details when a run fails.
-
-Each run shows its mode, inputs, scope, and selected probes, followed by timed processing stages. Successful runs end with the generated file paths and total elapsed time. Coverage reports print an aligned summary table even when writing JSON or HTML; `-pam` also prints cumulative observations by minute. Categories with no probes display `n/a` in the terminal.
-
-Errors go to standard error and return a nonzero exit status: `2` for invalid arguments and `1` for processing failures. Use `--verbose` for a stack trace when diagnosing a failure. Redirected output remains plain text.
-
-### :information_source: Examples
-
-#### Instrumenting
-
-<pre>
-  java -jar AndroLog/target/androlog-0.1-jar-with-dependencies.jar -p ./Androidplatforms/ -l MY_SUPER_LOG -o ./output/ -a my_app.apk -c -m -cp
-</pre>
-
-#### Computing Code Coverage
-
-<pre>
-  java -jar AndroLog/target/androlog-0.1-jar-with-dependencies.jar -p ./Androidplatforms/ -l MY_SUPER_LOG -a my_app.apk -c -m -cp -pa logs
-</pre>
-
-#### Generating an HTML report
-
-The HTML report combines coverage totals with an expandable package tree and colored Jimple statements. Select a class to open one continuous code listing, with inline method declarations and a single scrollbar for the whole class. It is a single file that opens offline in a browser. Jimple is Soot's intermediate representation of the APK bytecode. Line numbers refer to this reconstructed listing, not the original Java or Kotlin source; statement tooltips identify their position within the Jimple method. Filtering covered or uncovered statements preserves the listing's line numbers.
-
-Click a reference to a class, field, method, or constructor present in the report to navigate to its class or method. References outside the report remain plain text. Following a reference switches to the **All code** filter so the destination is visible; browser Back and Forward return to previous locations.
-
-Click a coverage statistic to explore its entities. **Activities**, **Services**, **Broadcast receivers**, and **Content providers** filter the package tree to the corresponding components, including those not observed during testing. **Methods** offers a method selector for the selected class, and **Statements** shows classes with measured statements. **Classes** returns to class browsing; **Show all classes** also clears the search. Search works within the active category.
-
-Run the following commands from the repository directory. First, instrument the APK with statement and method probes:
-
-```shell
-java -jar target/androlog-0.1-jar-with-dependencies.jar \
-  -p ./Androidplatforms/ -a my_app.apk -o ./output/ \
-  -l MY_SUPER_LOG -s -m
+mvn package
 ```
 
-Install `output/my_app.apk`, exercise the application, and save its logcat output. For example, start this command before testing and stop it with Ctrl+C afterward:
+The executable JAR, including dependencies, is written to:
 
-```shell
-adb logcat -v threadtime MY_SUPER_LOG:D '*:S' > logs.txt
+```text
+target/androlog-0.1-jar-with-dependencies.jar
 ```
 
-Generate the report using the **original APK**, the same log identifier, and the same probe and scope options:
+Check the available options:
 
-```shell
-java -jar target/androlog-0.1-jar-with-dependencies.jar \
-  -p ./Androidplatforms/ -a my_app.apk -l MY_SUPER_LOG \
-  -s -m -pa logs.txt -html ./reports/coverage.html
+```bash
+java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 ```
 
-Open `reports/coverage.html` in a browser. Parent output directories are created automatically. Add `-j ./reports/coverage.json` to also write the JSON report. The terminal coverage summary is printed with or without file outputs.
+### Configure APK signing
 
-Replace `-pa logs.txt` with `-pam logs.txt` to include a cumulative timeline of newly observed probes per minute. Use timestamped logcat output for this view. Tagged messages without timestamps still contribute to aggregate coverage, but these observations cannot be placed on the timeline. Each probe is counted once, in the minute of its first observed log entry.
+APK instrumentation requires the paths to your own Android SDK signing tools. Report generation does not invoke these tools.
 
-The report distinguishes four statement states:
+Keep machine-specific configuration outside the checkout. Create the directory:
 
-| State | Meaning |
-| :---- | :------ |
-| Covered | The matching statement probe was observed in the supplied logs. |
-| Not observed | The statement has a probe in the baseline, but its log was not observed. |
-| Excluded | The statement is an identity, return, or monitor statement, which statement instrumentation skips. |
-| Not measured | Statement probes were not selected, or this statement has no matching probe in the baseline. |
-
-Use `-s` during both instrumentation and reporting to obtain statement coloring, and `-m` during both stages for method coverage. Other categories remain available through `-c` and `-cp`. Keep the original APK version, log identifier, and scope (`-n` and `-pkg`, if used) consistent between both stages; changing them can prevent observations from matching the report baseline.
-
-Statement probes are inserted **after** statements. A statement that throws or transfers control before its probe runs can therefore appear as not observed. Missing logs can have the same effect, so this state does not establish that a statement was never executed. `-mc` can be combined with `-s`: callsites are captured before coverage instrumentation, and call hooks are added afterward to preserve the original statement identities.
-
-`-html` requires either `-pa` or `-pam`; it does not instrument an APK or collect runtime logs by itself.
-
-#### Recording and exploring the dynamic call graph
-
-Add `-mc` when instrumenting, then collect a **new** log from that APK. Existing coverage-only logs do not contain dispatch information.
-
-```shell
-java -jar target/androlog-0.1-jar-with-dependencies.jar \
-  -p ./Androidplatforms/ -a my_app.apk -o ./output/ \
-  -l MY_SUPER_LOG -s -m -mc
-
-# Install output/my_app.apk, start capture, then exercise the application.
-adb logcat -v threadtime MY_SUPER_LOG:D '*:S' > logs.txt
-
-java -jar target/androlog-0.1-jar-with-dependencies.jar \
-  -p ./Androidplatforms/ -a my_app.apk -l MY_SUPER_LOG \
-  -s -m -mc -pa logs.txt -html ./reports/coverage.html -j ./reports/coverage.json
+```bash
+mkdir -p "$HOME/.config/androlog"
 ```
 
-The **Dynamic call graph** tab starts with the launcher activity's class graph, identified from the APK manifest's `MAIN` and `LAUNCHER` intent filter (or `LEANBACK_LAUNCHER` on TV). Activity aliases resolve to their target classes. If multiple launcher classes have recorded calls, the first in alphabetical order opens; launcher classes appear first in the sidebar. If launcher metadata or matching calls are unavailable, select a class explicitly; the report never opens the whole application graph by default.
+Create `$HOME/.config/androlog/config.properties` with the following content, replacing both paths with executables from an installed Build Tools version:
 
-Each class graph contains its recorded methods and their direct incoming and outgoing calls, with callers and callees from other classes as endpoints. Clicking a node highlights its incoming and outgoing edges and fades the other edges. Every node and edge stays in place, and the zoom and pan position are preserved. **Reset graph** clears the highlighting. Selecting another class switches the graph to that class. Search classes or methods, zoom or pan, and inspect individual callsites. **Open code** jumps to the exact method in the continuous class listing. `-mc` also works without coverage probes for a graph-only report. JSON exports include the full recorded `callGraph` nodes, edges, callsites, statistics, and resolved `launcherActivities`.
+```properties
+zipalignPath=/absolute/path/to/Android/sdk/build-tools/VERSION/zipalign
+apksignerPath=/absolute/path/to/Android/sdk/build-tools/VERSION/apksigner
+```
 
-- **Confirmed edges** identify the method whose entry was observed. For example, a call declared as `Base.work()` can resolve to `Child.work()` or several overrides across executions.
-- **Declared edges** retain the bytecode target for executed callsites with no confirmed entry. Constructors, dynamic invokes, and calls into uninstrumented code remain in this category. A declared edge can also represent a call that threw before entering its target, such as a null receiver.
+Use absolute paths without surrounding quotes. Java properties do not expand `~` or shell variables such as `$HOME`.
 
-The runtime matches calls and entries within the same thread, using the exact method subsignature, receiver identity for instance calls, and the direct caller stack. It handles nested calls, recursion, and exceptional returns; it does not assume that the next log line is the target. Reflection, framework callbacks, asynchronous work, and uninstrumented intermediaries are not inferred as direct edges. Stack matching deliberately leaves a target unconfirmed when it cannot establish a direct call.
+Define this helper in your terminal, from the repository root. The configuration directory comes first on the classpath, so it overrides the bundled configuration:
 
-Each callsite declaration and each callsite/actual-target pair is logged once per process. Counts indicate **distinct records, not invocation frequencies**. The graph only represents observations in the supplied logs; it is not a complete static call graph. Legacy `CALL=` logs can be displayed as declared-only relationships, without recovering their dispatch targets. Use the original APK and identical scope options when generating a report.
+```bash
+androlog() {
+  java -cp "$HOME/.config/androlog:target/androlog-0.1-jar-with-dependencies.jar" \
+    com.jordansamhi.androlog.Main "$@"
+}
+```
 
-Call tracing collects stack traces and adds runtime overhead. Use `-pkg` or `-n` to limit the scope when appropriate. Complete, independently parseable `MC2` records prevent lost or interleaved log lines from being paired into spurious edges. Duplicate records are ignored when logs are merged; missing records can still leave relationships absent or unconfirmed.
+The examples below use this helper in the same terminal. The shell examples use Bash/Zsh syntax and the Unix classpath separator (`:`).
 
-## :hammer: Built With
+Alternatively, configure `src/main/resources/config.properties`, rebuild, and run with `java -jar`. That file is tracked: do not commit local SDK paths. A JAR built with those paths also contains them; the external configuration above avoids embedding them in the JAR.
 
-* [Maven](https://maven.apache.org/) - Dependency Management
+## Instrument, run, and report
 
-## :page_with_curl: License
+The workflow is: **instrument an APK → exercise it on a device → collect logs → report against the original APK**.
 
-This project is licensed under the GNU LESSER GENERAL PUBLIC LICENSE 2.1 - see the [LICENSE](LICENSE) file for details
+Run these commands from the repository root. Set the two input paths for your environment:
 
-## :email: Contact
+```bash
+androlog_sdk="/absolute/path/to/Android/sdk"
+androlog_apk="/absolute/path/to/app.apk"
+```
 
-For any question regarding this study, please contact us at:
-[Jordan Samhi](mailto:j.samhi@me.com)
+### 1. Instrument the APK
+
+This example enables all coverage categories and dynamic call tracing:
+
+```bash
+androlog \
+  -a "$androlog_apk" -p "$androlog_sdk/platforms" \
+  -o ./out/instrumented -l ANDROLOG \
+  -c -m -s -cp -mc
+```
+
+AndroLog writes an aligned, signed APK to `out/instrumented/`, using the input APK's filename. The original APK stays unchanged. The output uses the bundled test signing key, so use a test device or emulator where it will not conflict with an installation signed by the original publisher.
+
+Select only the probes you need. For example, use `-m` for method coverage or `-mc` alone for a dynamic-call-graph-only run. Adding `-pkg com.example.app` restricts the scope to a package prefix; `-n` excludes known libraries.
+
+### 2. Install the APK and capture a test run
+
+```bash
+adb install -r "./out/instrumented/$(basename "$androlog_apk")"
+adb logcat -c
+adb logcat -v threadtime ANDROLOG:D '*:S' > ./out/runtime.log
+```
+
+`adb logcat -c` clears the device's existing log buffers for this capture. Leave the last command running, then launch the app and exercise the behavior you want to measure. Stop capture with **Ctrl+C** when finished.
+
+Start capture before launching a fresh app process. Some probes and call records are emitted only once per process, so starting capture after the app has already run can miss them. Use the same tag in the logcat filter and AndroLog's `-l` option.
+
+### 3. Generate the reports
+
+Use the **original APK**, the same log tag, and the same probe and scope options used for instrumentation:
+
+```bash
+androlog \
+  -a "$androlog_apk" -p "$androlog_sdk/platforms" \
+  -l ANDROLOG -c -m -s -cp -mc \
+  -pa ./out/runtime.log \
+  -html ./out/reports/coverage.html \
+  -j ./out/reports/coverage.json
+```
+
+| Output | Contents |
+| --- | --- |
+| Terminal | Coverage totals and dynamic call graph statistics, with or without file outputs. |
+| `out/reports/coverage.html` | A standalone report with embedded data and scripts. Open it locally in a browser; no server or network connection is needed. |
+| `out/reports/coverage.json` | Structured coverage totals and the full recorded dynamic call graph. |
+
+Report directories are created automatically. Keep the APK version, tag, probes, and scope (`-pkg` and `-n`, if used) consistent between instrumentation and reporting.
+
+To include a cumulative timeline, replace `-pa ./out/runtime.log` with `-pam ./out/runtime.log`. Use one parsing mode at a time. HTML and JSON output options require either `-pa` or `-pam`; they do not capture logs themselves.
+
+## Read the reports
+
+### Explore coverage
+
+The HTML report provides:
+
+- An expandable **package tree** for choosing classes.
+- One continuous **class listing**, with inline method declarations and a single scrollbar.
+- Filters for **all, covered, or not-observed statements**.
+- Links to classes, fields, methods, and constructors present in the report. Browser Back and Forward follow navigation history.
+- Clickable statistics: component cards filter the class list; **Methods** adds an exact method selector; **Statements** selects classes with measured statements. Search works within the selected category.
+
+**Classes** returns to class browsing. **Show all classes** also clears the search. Components that were not observed remain selectable.
+
+The listing uses **Jimple**, Soot's intermediate representation of APK bytecode. Its line numbers identify the reconstructed listing, not the original Java or Kotlin source. Statement tooltips show their position within each method. Following a code reference switches to **All code** so the destination is visible.
+
+### Interpret coverage states
+
+| Statement state | Meaning |
+| --- | --- |
+| Covered | The matching probe was observed in the supplied logs. |
+| Not observed | The baseline contains a probe, but its log was not observed. |
+| Excluded | Identity, return, and monitor statements are excluded from statement instrumentation. |
+| Not measured | Statement coverage was not selected, or the statement has no matching baseline probe. |
+
+Use `-s` in both stages for statement coverage and `-m` for method coverage. Class and Android component coverage are measured by their own probes; one does not automatically imply the other. Terminal percentages display `n/a` when the denominator is zero.
+
+Statement probes run **after** statements. A statement that throws or transfers control before its probe executes can appear as not observed. Missing logs can have the same effect: absence of a probe does not establish that the statement never executed.
+
+### Interpret the timeline and JSON
+
+With `-pam`, each distinct probe contributes to the timeline in the minute of its first matching log entry. The timeline accumulates newly observed probes, rather than counting repeated executions. Matching observations without usable timestamps still contribute to aggregate totals but cannot appear on the timeline.
+
+JSON reports contain `coverageSummary`; `-pam` also adds `perMinuteSummaries`. When call tracing is requested or call records are available, `callGraph` contains the recorded nodes, edges, callsite metadata, statistics, and manifest-derived `launcherActivities`.
+
+## Dynamic call graph
+
+Enable **`-mc` when instrumenting**, install that APK, and collect a new log. Coverage-only logs cannot provide dynamic dispatch targets. Keep `-mc` enabled when generating the report.
+
+### Navigate the graph
+
+The graph opens on the **launcher activity's class graph**, identified from the APK manifest's `MAIN` and `LAUNCHER` intent filter, or `LEANBACK_LAUNCHER` for TV. Activity aliases resolve to their target classes. If several launcher classes have recorded calls, the first in alphabetical order opens. Launcher classes appear first in the sidebar.
+
+- **Select a class** to see its recorded methods and their direct incoming and outgoing relationships. Callers and callees from other classes appear as endpoints; unrelated relationships are excluded.
+- **Click a node** to highlight its incoming and outgoing edges and fade the others. All nodes, edges, positions, zoom, and pan remain in place.
+- **Reset graph** clears the highlighting; **Fit** fits the current class graph to the canvas.
+- **Select an edge** to inspect its callsites. **Open code** jumps to a method's listing when its code is available.
+
+Search covers all recorded classes and methods. If launcher metadata or matching calls are unavailable, the report asks you to select a class; it never falls back to showing the entire application graph by default.
+
+### Understand the edges
+
+| Edge | Meaning |
+| --- | --- |
+| Solid: confirmed runtime target | A matching instrumented method entry established the actual target. A call declared as `Base.work()` may resolve to `Child.work()`, or to different overrides across runs. |
+| Dashed: declared target | The callsite was reached, but no target entry was confirmed. The edge retains the bytecode target. |
+
+Runtime matching uses the same thread, exact method subsignature, receiver identity for instance calls, and direct caller stack. It supports nested calls, recursion, and exceptional returns. It does not pair a call with the next log line.
+
+Constructors, dynamic invokes, and calls into uninstrumented code remain declared-only. A declared edge can also represent a call that failed before entering its target, such as a null receiver. Reflection, framework callbacks, asynchronous work, and uninstrumented intermediaries are not inferred as direct edges. Legacy `CALL=` records can be displayed as declared-only edges but cannot recover actual dispatch targets.
+
+Each callsite declaration and callsite/actual-target pair is logged once per process. **Counts are distinct records, not invocation frequencies.** The graph describes observations in the supplied logs; it is not a complete static call graph.
+
+Call tracing captures stack traces and adds runtime overhead. Limit scope with `-pkg` or `-n` where appropriate. Complete `MC2` records avoid pairing unrelated log lines, and duplicate records are ignored when logs are merged. Missing logs can still leave relationships absent or unconfirmed. `-mc` can be combined with statement coverage: callsites are captured before coverage instrumentation to preserve the original statement identities.
+
+## Command-line reference
+
+```bash
+java -jar target/androlog-0.1-jar-with-dependencies.jar --help
+```
+
+`-a` and `-p` are required except when displaying help. Without `-pa` or `-pam`, AndroLog instruments the APK.
+
+### Inputs and outputs
+
+| Option | Description |
+| --- | --- |
+| `-a`, `--apk <file>` | Input APK. Use the original APK when reporting. |
+| `-p`, `--platforms <path>` | Android SDK platforms directory or Android platform file (`android.jar`). |
+| `-o`, `--output <directory>` | Destination for the instrumented APK. Defaults to a temporary directory. |
+| `-l`, `--log-identifier <tag>` | Logcat tag. Defaults to `ANDROLOG`. |
+| `-pa`, `--parse <file>` | Parse a runtime log and report aggregate coverage. |
+| `-pam`, `--parse-per-minute <file>` | Parse a runtime log and include cumulative coverage by minute. |
+| `-html`, `--html <file>` | Write a standalone HTML report. Requires `-pa` or `-pam`. |
+| `-j`, `--json <file>` | Write a JSON report. Requires `-pa` or `-pam`. |
+
+### Probes
+
+| Option | Measures |
+| --- | --- |
+| `-c`, `--classes` | Classes. |
+| `-m`, `--methods` | Methods. |
+| `-s`, `--statements` | Eligible Jimple statements. |
+| `-cp`, `--components` | Activities, services, broadcast receivers, and content providers. |
+| `-mc`, `--method-calls` | Executed callsites and confirmed runtime targets. |
+
+Select the same probes for instrumentation and reporting. `-html` requires at least one probe option; `-mc` alone supports a graph-only report.
+
+### Scope and diagnostics
+
+| Option | Description |
+| --- | --- |
+| `-pkg`, `--package <prefix>` | Restrict instrumentation and coverage to a package prefix. |
+| `-n`, `--non-libraries` | Exclude known libraries. Bundled libraries are included by default. |
+| `-t`, `--threads <count>` | Positive Soot thread count. Defaults to Soot's configuration. |
+| `-v`, `--verbose` | Include exception details when a run fails. |
+| `-h`, `--help` | Show usage and examples. |
+
+The CLI prints timed stages and generated file paths. Errors go to standard error. Exit codes are `0` for success, `1` for processing failures, and `2` for invalid arguments.
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| `Signing tool not configured` or tool not executable | Check both paths in your external `config.properties` and use the classpath helper. The files must exist and be executable. |
+| Installation fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | The installed app and instrumented APK have different signing certificates. Use a clean test device or emulator installation. |
+| Coverage is unexpectedly empty or incomplete | Check the original APK version, log tag, probe flags, and scope. Capture before starting a fresh app process and exercise the relevant code. |
+| No dynamic call graph is available | Instrument with `-mc`, install that APK, and capture a new log. Adding `-mc` only when parsing cannot create missing runtime observations. |
+| The graph asks you to choose a starting class | The launcher activity has no matching recorded calls, the app has no launcher declaration, or an older report lacks manifest metadata. Select a class or regenerate the report from the APK. |
+| No timeline entries appear | Use `-pam` with timestamped output such as `adb logcat -v threadtime`. Untimestamped observations count only toward aggregate totals. |
+
+For other failures, repeat the command with `-v` to include exception details.
+
+## Development and contributions
+
+AndroLog uses [AndroSpecter](https://github.com/JordanSamhi/AndroSpecter) for instrumentation support and Soot for bytecode analysis. Maven manages the Java build and dependencies.
+
+Run the Java tests:
+
+```bash
+mvn test
+```
+
+Run the report's JavaScript regression tests with Node.js:
+
+```bash
+node --test src/test/js/report-links.test.js src/test/js/report-graph.test.js
+```
+
+Issues and pull requests are welcome. For a bug report, include the command, Java and Android SDK versions, the relevant error output, and a minimal reproducible example when possible. Use the [issue tracker](https://github.com/JordanSamhi/AndroLog/issues).
+
+## License and contact
+
+AndroLog is licensed under the **GNU Lesser General Public License v2.1**. See [LICENSE](LICENSE).
+
+For questions, contact [Jordan Samhi](mailto:j.samhi@me.com).
