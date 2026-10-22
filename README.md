@@ -169,7 +169,9 @@ The listing uses **Jimple**, Soot's intermediate representation of APK bytecode.
 
 Use `-s` in both stages for statement coverage and `-m` for method coverage. Class and Android component coverage are measured by their own probes; one does not automatically imply the other. Terminal percentages display `n/a` when the denominator is zero.
 
-Statement probes run **after** statements. A statement that throws or transfers control before its probe executes can appear as not observed. Missing logs can have the same effect: absence of a probe does not establish that the statement never executed.
+Statement probes run **before** eligible statements, including branches, jumps, and operations that may throw. Covered means execution reached the statement; it does not imply that the statement completed successfully. Incoming branches pass through the destination's probe, and exception handlers keep their required caught-exception identity first. Missing logs can still leave executed statements marked as not observed.
+
+APKs instrumented with older versions used after-statement probes. Reinstrument the original APK and collect fresh logs to benefit from the improved coverage. Existing logs remain readable, with their original measurement limitations.
 
 ### Interpret the timeline and JSON
 

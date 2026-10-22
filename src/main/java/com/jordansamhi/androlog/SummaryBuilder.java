@@ -1,6 +1,7 @@
 package com.jordansamhi.androlog;
 
 import com.jordansamhi.androspecter.SootUtils;
+import com.jordansamhi.androlog.instrumentation.StatementInstrumenter;
 import com.jordansamhi.androspecter.commandlineoptions.CommandLineOptions;
 import com.jordansamhi.androspecter.files.LibrariesManager;
 import com.jordansamhi.androspecter.utils.Constants;
@@ -122,13 +123,6 @@ public class SummaryBuilder {
         return includeLibraries || !LibrariesManager.v().isLibrary(clazz);
     }
 
-    private boolean isEligibleStatement(Stmt statement) {
-        return !(statement instanceof IdentityStmt
-                || statement instanceof ReturnStmt
-                || statement instanceof ReturnVoidStmt
-                || statement instanceof MonitorStmt);
-    }
-
     private void collectCodeMethods(boolean includeLibraries) {
         addTransformation("jtp.coverageCode", body -> {
             SootMethod method = body.getMethod();
@@ -140,7 +134,7 @@ public class SummaryBuilder {
             for (Unit unit : body.getUnits()) {
                 Stmt statement = (Stmt) unit;
                 statements.add(new CoverageMethod.Statement(++line, statement.toString(),
-                        isEligibleStatement(statement)));
+                        StatementInstrumenter.isEligible(statement)));
             }
             SootClass clazz = method.getDeclaringClass();
             String componentType = su.getComponentType(clazz);
@@ -257,7 +251,7 @@ public class SummaryBuilder {
             for (Unit u : units) {
                 cnt++;
                 Stmt stmt = (Stmt) u;
-                if (!isEligibleStatement(stmt)) {
+                if (!StatementInstrumenter.isEligible(stmt)) {
                     continue;
                 }
                 String stmt_log = String.format("STATEMENT=%s|%s|%d", b.getMethod(), stmt, cnt);

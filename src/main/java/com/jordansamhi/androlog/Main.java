@@ -2,6 +2,7 @@ package com.jordansamhi.androlog;
 
 import com.jordansamhi.androlog.utils.Constants;
 import com.jordansamhi.androlog.instrumentation.MethodCallInstrumenter;
+import com.jordansamhi.androlog.instrumentation.StatementInstrumenter;
 import com.jordansamhi.androspecter.SootUtils;
 import com.jordansamhi.androspecter.TmpFolder;
 import com.jordansamhi.androspecter.commandlineoptions.CommandLineOption;
@@ -125,7 +126,7 @@ public class Main {
                 console.stage("Insert probes", () -> {
                     if (calls != null) calls.registerCapture();
                     Logger.v().setTargetPackage(packageName);
-                    if (command.hasOption("s")) Logger.v().logAllStatements(logIdentifier, includeLibraries);
+                    if (command.hasOption("s")) new StatementInstrumenter(logIdentifier, includeLibraries, packageName).register();
                     if (command.hasOption("m")) Logger.v().logAllMethods(logIdentifier, includeLibraries);
                     if (command.hasOption("c")) Logger.v().logAllClasses(logIdentifier, includeLibraries);
                     if (command.hasOption("cp")) {

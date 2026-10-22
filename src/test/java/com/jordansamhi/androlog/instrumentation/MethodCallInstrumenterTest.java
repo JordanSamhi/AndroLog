@@ -131,6 +131,33 @@ public class MethodCallInstrumenterTest {
         body.validate();
     }
 
+    @Test public void statementProbesAndCallHooksPreserveIdsAndLoopEntrySemantics() {
+        SootClass logger = addClass(com.jordansamhi.androspecter.utils.Constants.LOG_CHECKER_CLASS, object);
+        addMethod(logger, "log", Arrays.asList(string(), string()), VoidType.v());
+        SootMethod target = addMethod(application, "target", Collections.emptyList(), VoidType.v());
+        JimpleBody body = body("combined");
+        Unit invocation = Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(target.makeRef()));
+        GotoStmt loop = Jimple.v().newGotoStmt(invocation);
+        body.getUnits().add(invocation);
+        body.getUnits().add(loop);
+        body.getUnits().add(Jimple.v().newReturnVoidStmt());
+        String message = "STATEMENT=" + body.getMethod().getSignature() + "|" + invocation + "|1";
+
+        instrumenter.capture(body);
+        new StatementInstrumenter("TAG", true, "example").instrument(body);
+        instrumenter.instrument(body);
+
+        assertEquals(1, callsTo(body, "before").size());
+        assertEquals(1, ((IntConstant) callsTo(body, "before").get(0).getArg(2)).value);
+        InvokeExpr destination = ((Stmt) loop.getTarget()).getInvokeExpr();
+        assertEquals("log", destination.getMethodRef().name());
+        assertEquals(message, ((StringConstant) destination.getArg(0)).value);
+        assertEquals("enter", ((Stmt) body.getUnits().getFirst()).getInvokeExpr().getMethodRef().name());
+        assertNotSame(body.getUnits().getFirst(), loop.getTarget());
+        assertEquals(2, callsTo(body, "log").size());
+        body.validate();
+    }
+
     private JimpleBody body(String name) {
         SootMethod method = addMethod(application, name, Collections.emptyList(), VoidType.v());
         JimpleBody body = Jimple.v().newBody(method);

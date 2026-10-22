@@ -82,7 +82,7 @@ public class HtmlReportWriter {
         if (!totals.containsKey("statements")) {
             warnings.add("Statement coverage was not selected. Use -s during both instrumentation and reporting to highlight individual Jimple statements.");
         } else {
-            warnings.add("Statement coverage follows AndroLog's existing probes. Probes after branches, jumps or throwing operations may not execute. Identity, return and monitor instructions are excluded.");
+            warnings.add("Newly instrumented APKs record arrival before each eligible statement, including branches and throwing operations; this does not imply successful completion. Identity, return and monitor instructions are excluded. Older APKs used after-statement probes; reinstrument and collect fresh logs for the improved coverage.");
         }
         if (perMinute && observations.getUnattributedCount() > 0) {
             warnings.add(observations.getUnattributedCount()
