@@ -1,5 +1,5 @@
 <p align="center">
-<img width="1200px" src="https://github.com/JordanSamhi/AndroLog/blob/main/data/androlog_logo.png">
+<img width="640" alt="AndroLog — Android execution analysis" src="data/androlog_logo_v2.png">
 </p> 
 
 # AndroLog
