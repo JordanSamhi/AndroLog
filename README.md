@@ -14,7 +14,9 @@ AndroLog inserts logging probes into an APK, then compares the original applicat
 - **Terminal and JSON reports:** aggregate coverage and cumulative coverage by minute.
 - **Integrated capture:** install and launch the instrumented app, collect logs, and generate reports with one command.
 
-[Previews](#report-previews) · [Setup](#build-and-configure) · [Quick start](#instrument-run-and-report) · [Reports](#read-the-reports) · [Dynamic call graph](#dynamic-call-graph) · [Options](#command-line-reference) · [Troubleshooting](#troubleshooting)
+[Wiki](https://github.com/JordanSamhi/AndroLog/wiki) · [Previews](#report-previews) · [Setup](#build-and-configure) · [Quick start](#instrument-run-and-report) · [Reports](#read-the-reports) · [Dynamic call graph](#dynamic-call-graph) · [Options](#command-line-reference) · [Troubleshooting](#troubleshooting)
+
+The [AndroLog wiki](https://github.com/JordanSamhi/AndroLog/wiki) provides complete user and developer guides, including capture workflows, report navigation, coverage semantics, dynamic dispatch, JSON/log formats, and troubleshooting.
 
 ## Report previews
 
