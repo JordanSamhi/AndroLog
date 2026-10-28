@@ -1,5 +1,6 @@
 package com.jordansamhi.androlog.gui;
 
+import com.jordansamhi.androlog.CustomLogPlan;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -21,6 +22,7 @@ final class RuntimeLog {
     final Map<String, Map<String, Long>> entries = new LinkedHashMap<>();
     final Map<String, Long> minutes = new TreeMap<>();
     long lines, tagged, recognized;
+    String sourceHash;
     RuntimeLog() { for (String type : TYPES.keySet()) entries.put(type, new LinkedHashMap<>()); }
 
     static RuntimeLog read(Path path, String tag) throws IOException {
@@ -30,7 +32,7 @@ final class RuntimeLog {
                 + Pattern.quote(tag) + "\\s*:\\s*|(?:" + timestamp + "\\s+)?[VDIWEFA]/" + Pattern.quote(tag)
                 + "(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)(.*)$");
         Pattern minute = Pattern.compile("^((?:\\d{4}-)?\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}):\\d{2}");
-        RuntimeLog result = new RuntimeLog();
+        RuntimeLog result = new RuntimeLog(); String initialHash = CustomLogPlan.sha256(path);
         try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -51,6 +53,7 @@ final class RuntimeLog {
                 Matcher time = minute.matcher(line); if (time.find()) result.minutes.merge(time.group(1), 1L, Long::sum);
             }
         }
-        return result;
+        if (!initialHash.equals(CustomLogPlan.sha256(path))) throw new IOException("The log changed while it was being read. Reload it.");
+        result.sourceHash = initialHash; return result;
     }
 }

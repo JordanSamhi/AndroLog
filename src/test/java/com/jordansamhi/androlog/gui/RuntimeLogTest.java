@@ -35,6 +35,6 @@ public class RuntimeLogTest {
         catch (java.io.IOException expected) { assertTrue(expected.getMessage().contains("tag")); }
     }
     @Test public void dashboardCanBeConstructed() throws Exception {
-        javax.swing.SwingUtilities.invokeAndWait(() -> assertNotNull(new RuntimeDashboard(null)));
+        javax.swing.SwingUtilities.invokeAndWait(() -> assertNotNull(new RuntimeDashboard(null, new GuiSettings())));
     }
 }

@@ -111,7 +111,7 @@ public final class AndroLogGui {
         instrumentWorkspace.add(content, BorderLayout.CENTER); instrumentWorkspace.add(footer(), BorderLayout.SOUTH);
         tabs.setUI(new WorkspaceTabs()); tabs.setOpaque(false); tabs.setFont(font(14, true));
         tabs.addTab("Instrument APK", instrumentWorkspace);
-        tabs.addTab("Execution dashboard", new RuntimeDashboard(frame));
+        tabs.addTab("Execution dashboard", new RuntimeDashboard(frame, settings));
         tabs.addChangeListener(event -> { steps.setVisible(tabs.getSelectedIndex() == 0); });
         workspace.add(tabs, BorderLayout.CENTER);
         root.add(workspace, BorderLayout.CENTER); frame.setContentPane(root);
