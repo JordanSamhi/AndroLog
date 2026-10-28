@@ -20,10 +20,11 @@ public final class AndroLogGui {
     private final JFrame frame = new JFrame("AndroLog");
     private final GuiSettings settings = GuiSettings.load();
     private final JPanel content = panel(new BorderLayout());
-    private final JPanel[] pages = new JPanel[4];
+    private final JPanel[] pages = new JPanel[5];
     private final JButton primary = button("Choose an APK", true);
     private final JButton back = button("Back", false);
     private final JButton settingsButton = button("SDK settings", false);
+    private final JButton dashboardButton = button("Execution dashboard", false);
     private final JLabel sdkStatus = label("", 12, MUTED, false);
     private final JLabel footnote = muted(" ");
     private final JLabel apkName = label("Drop your APK here", 23, INK, true);
@@ -53,7 +54,7 @@ public final class AndroLogGui {
     private volatile InstrumentationJob job;
     private volatile boolean cancelRequested;
     private boolean working, saving, closing, unsaved;
-    private int page;
+    private int page, instrumentationPage;
     private long started;
 
     public static void main(String[] args) {
@@ -105,12 +106,14 @@ public final class AndroLogGui {
         workspace.setBorder(new EmptyBorder(17, 30, 10, 22));
         pages[0] = inputPage(); pages[1] = optionsPage();
         pages[2] = progressPage(); pages[3] = resultPage();
+        pages[4] = new RuntimeDashboard(frame);
         workspace.add(content, BorderLayout.CENTER);
         workspace.add(footer(), BorderLayout.SOUTH);
         root.add(workspace, BorderLayout.CENTER); frame.setContentPane(root);
         primary.addActionListener(event -> primaryAction());
         back.addActionListener(event -> { if (page == 3) startAnother(); else showPage(0); });
         settingsButton.addActionListener(event -> showSettings());
+        dashboardButton.addActionListener(event -> showPage(page == 4 ? instrumentationPage : 4));
         browse.addActionListener(event -> chooseApk());
         logButton.addActionListener(event -> showLog());
         logButton.setToolTipText("Open the instrumentation log for troubleshooting");
@@ -160,7 +163,9 @@ public final class AndroLogGui {
             stepLabels[i] = step("0" + (i + 1) + "   " + names[i]);
             steps.add(stepLabels[i]);
         }
-        upper.add(steps, BorderLayout.CENTER); side.add(upper, BorderLayout.NORTH);
+        JPanel navigation = panel(new BorderLayout(0, 16));
+        navigation.add(steps, BorderLayout.NORTH); navigation.add(dashboardButton, BorderLayout.SOUTH);
+        upper.add(navigation, BorderLayout.CENTER); side.add(upper, BorderLayout.NORTH);
         JPanel bottom = panel(new BorderLayout(0, 9));
         sdkStatus.setBorder(new EmptyBorder(0, 8, 0, 0)); bottom.add(sdkStatus, BorderLayout.NORTH);
         JPanel sdkActions = panel(new BorderLayout(4, 0));
@@ -292,6 +297,7 @@ public final class AndroLogGui {
     }
 
     private void showPage(int next) {
+        if (next == 4 && page != 4) instrumentationPage = page;
         page = next;
         // Keep inactive pages out of the accessibility tree as well as out of sight.
         content.removeAll(); content.add(pages[next], BorderLayout.CENTER); content.revalidate(); content.repaint();
@@ -302,12 +308,16 @@ public final class AndroLogGui {
             stepLabels[i].putClientProperty("active", i == next); stepLabels[i].repaint();
         }
         back.setVisible(next == 1 || next == 3); back.setText(next == 3 ? "Instrument another APK" : "Back");
+        primary.setVisible(next != 4);
+        dashboardButton.setText(next == 4 ? "←  Instrument APK" : "Execution dashboard");
+        dashboardButton.setEnabled(!working && !saving);
         settingsButton.setEnabled(!working && !saving);
-        footnote.setText(next >= 2 ? "The APK uses AndroLog’s test signing key. Use a test device or emulator." : " ");
+        footnote.setText(next == 2 || next == 3 ? "The APK uses AndroLog’s test signing key. Use a test device or emulator." : " ");
         updatePrimary();
     }
 
     private void updatePrimary() {
+        if (page == 4) return;
         String[] labels = {apk == null ? "Choose an APK" : "Choose logging  →", "Instrument APK  →", "Cancel", "Save APK as…"};
         primary.setText(labels[page]);
         boolean any = false; for (JToggleButton probe : probes) if (probe != null && probe.isSelected()) any = true;
@@ -334,11 +344,11 @@ public final class AndroLogGui {
     }
 
     private void selectApk(Path candidate) {
-        working = true; primary.setEnabled(false); browse.setEnabled(false); settingsButton.setEnabled(false);
+        working = true; primary.setEnabled(false); browse.setEnabled(false); settingsButton.setEnabled(false); dashboardButton.setEnabled(false);
         new SwingWorker<Long, Void>() {
             protected Long doInBackground() throws Exception { InstrumentationJob.validateApk(candidate); return Files.size(candidate); }
             protected void done() {
-                working = false; browse.setEnabled(true); settingsButton.setEnabled(true);
+                working = false; browse.setEnabled(true); settingsButton.setEnabled(true); dashboardButton.setEnabled(true);
                 try {
                     long bytes = get(); apk = candidate.toAbsolutePath().normalize(); customLogs = null; refreshCustomLogs();
                     String name = apk.getFileName().toString();
@@ -442,7 +452,7 @@ public final class AndroLogGui {
         boolean exists = Files.exists(destination);
         if (exists && JOptionPane.showConfirmDialog(frame, "Replace “" + destination.getFileName() + "”?", "Replace existing file?",
                 JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
-        saving = true; primary.setEnabled(false); primary.setText("Saving…"); back.setEnabled(false); settingsButton.setEnabled(false); reveal.setEnabled(false);
+        saving = true; primary.setEnabled(false); primary.setText("Saving…"); back.setEnabled(false); settingsButton.setEnabled(false); dashboardButton.setEnabled(false); reveal.setEnabled(false);
         new SwingWorker<Void, Void>() {
             protected Void doInBackground() throws Exception { job.saveApk(destination, exists); return null; }
             protected void done() {
