@@ -34,7 +34,7 @@ final class InstrumentationAnimation extends JPanel {
         double scale = Math.min(1.0, Math.min(getWidth() / 580.0, getHeight() / 250.0));
         g.scale(scale, scale);
         g.setPaint(new RadialGradientPaint(new Point2D.Double(0, 0), 155, new float[]{0, 1},
-                new Color[]{new Color(0xD9F2EC), new Color(0xF6F8FA)}));
+                new Color[]{new Color(127, 220, 207, 65), new Color(127, 220, 207, 0)}));
         g.fill(new Ellipse2D.Double(-170, -126, 340, 245));
         g.setColor(new Color(0xD6E6E6)); g.setStroke(new BasicStroke(1));
         g.draw(new Line2D.Double(-250, 6, -112, 6)); g.draw(new Line2D.Double(112, 6, 250, 6));
@@ -49,8 +49,10 @@ final class InstrumentationAnimation extends JPanel {
             double y = (layer - 1.5) * 23;
             Path2D shape = new Path2D.Double();
             shape.moveTo(0, y - 48); shape.lineTo(111, y); shape.lineTo(0, y + 48); shape.lineTo(-111, y); shape.closePath();
-            g.setColor(layer == 0 ? new Color(0xFDFEFE) : new Color(0xE6F3EF)); g.fill(shape);
-            g.setColor(layer == 0 ? new Color(0x9ECABE) : new Color(0x9ABDB8)); g.draw(shape);
+            g.setPaint(new GradientPaint(-100, (float) y - 48, new Color(255, 255, 255, 245),
+                    100, (float) y + 48, layer == 0 ? new Color(217, 244, 245, 220) : new Color(199, 232, 235, 200)));
+            g.fill(shape);
+            g.setColor(layer == 0 ? new Color(0x79BFB8) : new Color(0x9ABEC7)); g.draw(shape);
             for (int row = 0; row < 5; row++) {
                 double x = -52 + row * 22;
                 double yLine = y + 18 + x * 0.43;

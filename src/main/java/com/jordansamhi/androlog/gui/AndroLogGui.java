@@ -6,6 +6,7 @@ import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.event.*;
 import java.io.*;
+import java.net.URI;
 import java.nio.file.*;
 import java.util.List;
 import java.util.Locale;
@@ -22,8 +23,8 @@ public final class AndroLogGui {
     private final JButton primary = button("Choose an APK", true);
     private final JButton back = button("Back", false);
     private final JButton settingsButton = button("SDK settings", false);
-    private final JLabel sdkStatus = label("", 12, new Color(0xA7CDC5), false);
-    private final JLabel footnote = muted("Everything runs locally on your computer.");
+    private final JLabel sdkStatus = label("", 12, MUTED, false);
+    private final JLabel footnote = muted(" ");
     private final JLabel apkName = label("Drop your APK here", 23, INK, true);
     private final JLabel apkDetail = muted("or choose a file to get started");
     private final JButton browse = button("Choose APK…", false);
@@ -37,7 +38,7 @@ public final class AndroLogGui {
     private final JLabel resultDetail = muted("Choose where to save your instrumented application.");
     private final JTextArea resultPath = new JTextArea();
     private final JButton reveal = button("Open destination folder", false);
-    private final JButton logButton = button("View run log", false);
+    private final JButton logButton = textButton("Run details…");
     private final JToggleButton[] probes = new JToggleButton[5];
     private final JCheckBox excludeLibraries = new JCheckBox("Exclude known libraries");
     private final JTextField packagePrefix = field("", 18);
@@ -75,10 +76,18 @@ public final class AndroLogGui {
         frame.setMinimumSize(new Dimension(1000, 760));
         frame.setSize(1110, 810);
         frame.setLocationRelativeTo(null);
-        JPanel root = new JPanel(new BorderLayout()); root.setBackground(BACKGROUND);
+        AppIcon.install(frame);
+        boolean mac = System.getProperty("os.name").startsWith("Mac");
+        if (mac) {
+            frame.getRootPane().putClientProperty("apple.awt.fullWindowContent", true);
+            frame.getRootPane().putClientProperty("apple.awt.transparentTitleBar", true);
+            frame.getRootPane().putClientProperty("apple.awt.windowTitleVisible", false);
+        }
+        JPanel root = new Background(new BorderLayout());
+        root.setBorder(new EmptyBorder(mac ? 36 : 14, 14, 14, 14));
         root.add(sidebar(), BorderLayout.WEST);
         JPanel workspace = panel(new BorderLayout(0, 14));
-        workspace.setBorder(new EmptyBorder(30, 34, 24, 34));
+        workspace.setBorder(new EmptyBorder(17, 30, 10, 22));
         pages[0] = inputPage(); pages[1] = optionsPage();
         pages[2] = progressPage(); pages[3] = resultPage();
         workspace.add(content, BorderLayout.CENTER);
@@ -89,6 +98,7 @@ public final class AndroLogGui {
         settingsButton.addActionListener(event -> showSettings());
         browse.addActionListener(event -> chooseApk());
         logButton.addActionListener(event -> showLog());
+        logButton.setToolTipText("Open the instrumentation log for troubleshooting");
         reveal.addActionListener(event -> revealOutput());
         frame.addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent event) { closeWindow(); }
@@ -119,23 +129,33 @@ public final class AndroLogGui {
     }
 
     private JPanel sidebar() {
-        JPanel side = new JPanel(new BorderLayout()); side.setBackground(SIDEBAR);
-        side.setPreferredSize(new Dimension(226, 0)); side.setBorder(new EmptyBorder(38, 24, 25, 24));
-        JPanel upper = panel(new BorderLayout(0, 48));
-        JPanel brand = panel(new GridLayout(0, 1, 0, 7));
-        brand.add(label("AndroLog", 30, WHITE, true));
-        brand.add(label("INSTRUMENTATION STUDIO", 10, new Color(0x8CB5B4), true));
+        JPanel side = new Card(new BorderLayout());
+        side.setPreferredSize(new Dimension(236, 0)); side.setBorder(new EmptyBorder(26, 18, 25, 18));
+        JPanel upper = panel(new BorderLayout(0, 38));
+        JPanel brand = panel(new BorderLayout(0, 12));
+        JLabel icon = new JLabel(AppIcon.icon(76)); icon.setHorizontalAlignment(SwingConstants.LEFT);
+        icon.getAccessibleContext().setAccessibleName("AndroLog icon"); brand.add(icon, BorderLayout.NORTH);
+        brand.add(label("AndroLog", 29, INK, true), BorderLayout.CENTER);
+        brand.add(label("APK instrumentation", 12, MUTED, false), BorderLayout.SOUTH);
+        brand.setBorder(new EmptyBorder(0, 10, 0, 0));
         upper.add(brand, BorderLayout.NORTH);
-        JPanel steps = panel(new GridLayout(0, 1, 0, 25));
+        JPanel steps = panel(new GridLayout(0, 1, 0, 9));
         String[] names = {"Choose an APK", "Choose your logs", "Instrument", "Save your APK"};
         for (int i = 0; i < names.length; i++) {
-            stepLabels[i] = label("0" + (i + 1) + "   " + names[i], 14, WHITE, false);
+            stepLabels[i] = step("0" + (i + 1) + "   " + names[i]);
             steps.add(stepLabels[i]);
         }
         upper.add(steps, BorderLayout.CENTER); side.add(upper, BorderLayout.NORTH);
-        JPanel bottom = panel(new GridLayout(0, 1, 0, 12));
-        bottom.add(sdkStatus); bottom.add(settingsButton);
-        bottom.add(label("LOCAL BY DESIGN  /  v0.1", 10, new Color(0x83A5AA), false));
+        JPanel bottom = panel(new BorderLayout(0, 9));
+        sdkStatus.setBorder(new EmptyBorder(0, 8, 0, 0)); bottom.add(sdkStatus, BorderLayout.NORTH);
+        JPanel sdkActions = panel(new BorderLayout(4, 0));
+        sdkActions.add(settingsButton, BorderLayout.CENTER);
+        JButton help = button("?", false); help.setBorder(new EmptyBorder(13, 15, 13, 15));
+        help.setToolTipText("What is the Android SDK, and how do I set it up?");
+        help.getAccessibleContext().setAccessibleName("Android SDK help");
+        help.addActionListener(event -> showSdkHelp(frame)); sdkActions.add(help, BorderLayout.EAST);
+        bottom.add(sdkActions, BorderLayout.CENTER);
+        bottom.add(label("AndroLog 0.1", 11, MUTED, false), BorderLayout.SOUTH);
         side.add(bottom, BorderLayout.SOUTH); return side;
     }
 
@@ -149,8 +169,8 @@ public final class AndroLogGui {
 
     private JPanel inputPage() {
         JPanel page = panel(new BorderLayout(0, 20));
-        page.add(header("A LITTLE VISIBILITY GOES A LONG WAY", "See what your app does.",
-                "Add runtime logging to an Android app. No source code needed."), BorderLayout.NORTH);
+        page.add(header("APK INSTRUMENTATION", "See inside your app.",
+                "Choose an APK, add logging, and save a signed copy."), BorderLayout.NORTH);
         Card drop = new Card(new GridBagLayout());
         JPanel center = panel(new GridBagLayout()); GridBagConstraints c = new GridBagConstraints();
         c.gridx = 0; c.insets = new Insets(7, 0, 7, 0);
@@ -193,7 +213,7 @@ public final class AndroLogGui {
         page.add(choices, BorderLayout.CENTER);
         JPanel advanced = panel(new BorderLayout(0, 10));
         JPanel fields = panel(new GridLayout(1, 2, 14, 0));
-        fields.add(labeledField("Package prefix (optional)", packagePrefix)); fields.add(labeledField("Logcat tag", logTag));
+        fields.add(labeledField("Package and subpackages (optional)", packagePrefix)); fields.add(labeledField("Logcat tag", logTag));
         advanced.add(fields, BorderLayout.CENTER);
         excludeLibraries.setOpaque(false); excludeLibraries.setForeground(INK);
         excludeLibraries.setToolTipText("Maps to -n. Known library packages are excluded; unrecognized libraries may still be instrumented.");
@@ -236,8 +256,9 @@ public final class AndroLogGui {
         resultPath.setOpaque(false); resultPath.setFont(font(13, false)); resultPath.setForeground(MUTED);
         resultPath.setRows(3); resultPath.getAccessibleContext().setAccessibleName("Output APK location");
         details.add(resultPath, BorderLayout.CENTER);
-        JPanel actions = panel(new FlowLayout(FlowLayout.LEFT, 0, 0)); actions.add(reveal);
-        JButton logs = button("View run log", false); logs.addActionListener(event -> showLog()); actions.add(logs);
+        JPanel actions = panel(new BorderLayout()); actions.add(reveal, BorderLayout.WEST);
+        JButton logs = textButton("Run details…"); logs.setToolTipText("Open the instrumentation log for troubleshooting");
+        logs.addActionListener(event -> showLog()); actions.add(logs, BorderLayout.EAST);
         details.add(actions, BorderLayout.SOUTH); page.add(details, BorderLayout.SOUTH); return page;
     }
 
@@ -254,12 +275,13 @@ public final class AndroLogGui {
         content.removeAll(); content.add(pages[next], BorderLayout.CENTER); content.revalidate(); content.repaint();
         processing.setAnimationEnabled(next == 2 && settings.animations);
         for (int i = 0; i < stepLabels.length; i++) {
-            stepLabels[i].setForeground(i == next ? new Color(0x89E2CD) : i < next ? WHITE : new Color(0x83A5AA));
-            stepLabels[i].setFont(font(14, i == next));
+            stepLabels[i].setForeground(i == next ? ACCENT : MUTED);
+            stepLabels[i].setFont(font(13, i == next));
+            stepLabels[i].putClientProperty("active", i == next); stepLabels[i].repaint();
         }
         back.setVisible(next == 1 || next == 3); back.setText(next == 3 ? "Instrument another APK" : "Back");
         settingsButton.setEnabled(!working && !saving);
-        footnote.setText(next >= 2 ? "The APK uses AndroLog’s test signing key. Use a test device or emulator." : "Everything runs locally on your computer.");
+        footnote.setText(next >= 2 ? "The APK uses AndroLog’s test signing key. Use a test device or emulator." : " ");
         updatePrimary();
     }
 
@@ -269,7 +291,7 @@ public final class AndroLogGui {
         boolean any = false; for (JToggleButton probe : probes) if (probe != null && probe.isSelected()) any = true;
         primary.setEnabled(!saving && (page != 1 || any));
         if (page == 1 && !any) footnote.setText("Select at least one kind of logging to continue.");
-        else if (page < 2) footnote.setText("Everything runs locally on your computer.");
+        else if (page < 2) footnote.setText(" ");
     }
 
     private void primaryAction() {
@@ -341,7 +363,7 @@ public final class AndroLogGui {
                     showPage(1);
                     if (cancelRequested || failure instanceof CancellationException) footnote.setText("Instrumentation cancelled. Your original APK is unchanged.");
                     else {
-                        Object[] options = {"View run log", "OK"};
+                        Object[] options = {"Show details", "OK"};
                         int choice = JOptionPane.showOptionDialog(frame, readableMessage(message(failure)), "Could not instrument APK", JOptionPane.DEFAULT_OPTION,
                                 JOptionPane.ERROR_MESSAGE, null, options, options[1]);
                         if (choice == 0) showLog();
@@ -414,45 +436,125 @@ public final class AndroLogGui {
 
     private void refreshSettings() {
         sdkStatus.setText(settings.ready() ? "●  Android SDK ready" : "○  Android SDK setup needed");
-        processing.setAnimationEnabled(settings.animations);
+        GuiTheme.animationsEnabled = settings.animations;
+        processing.setAnimationEnabled(page == 2 && settings.animations);
     }
 
     private void showSettings() {
+        JDialog dialog = new JDialog(frame, "Android SDK settings", true);
+        JPanel root = new Background(new BorderLayout(0, 18)); root.setBorder(new EmptyBorder(25, 26, 24, 26));
+        JPanel heading = panel(new BorderLayout(12, 7));
+        heading.add(label("Connect your Android SDK", 24, INK, true), BorderLayout.CENTER);
+        JButton help = textButton("What do I need?"); help.addActionListener(event -> showSdkHelp(dialog));
+        heading.add(help, BorderLayout.EAST);
+        heading.add(muted("Choose your SDK once. AndroLog remembers it on this computer."), BorderLayout.SOUTH);
+        root.add(heading, BorderLayout.NORTH);
         JTextField platforms = field(settings.platforms == null ? "" : settings.platforms.toString(), 32);
         JTextField build = field(settings.buildTools == null ? "" : settings.buildTools.toString(), 32);
-        JCheckBox animations = new JCheckBox("Animate instrumentation", settings.animations); animations.setOpaque(false);
-        JPanel form = panel(new GridLayout(0, 1, 0, 12));
-        form.add(muted("Select your Android SDK once. These paths stay on this computer."));
+        platforms.setToolTipText("The platforms folder containing android-XX/android.jar");
+        build.setToolTipText("A build-tools version folder containing zipalign and apksigner");
+        JCheckBox animations = new JCheckBox("Animate the interface", settings.animations);
+        animations.setOpaque(false); animations.setForeground(INK);
+        JPanel form = new Card(new GridBagLayout()); GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; c.anchor = GridBagConstraints.WEST;
+        c.insets = new Insets(0, 0, 14, 0);
         JButton detect = button("Choose Android SDK folder…", false);
         detect.addActionListener(event -> {
-            Path sdk = chooseDirectory("Choose Android SDK folder", settings.platforms == null ? null : settings.platforms.getParent());
+            Path sdk = chooseDirectory("Choose Android SDK folder", settings.platforms == null ? null : settings.platforms.getParent(), dialog);
             if (sdk != null) {
                 platforms.setText(sdk.resolve("platforms").toString());
                 Path tools = GuiSettings.discoverBuildTools(sdk); build.setText(tools == null ? "" : tools.toString());
             }
         });
-        form.add(detect); form.add(pathRow("Platforms folder", platforms)); form.add(pathRow("Build Tools version folder", build)); form.add(animations);
-        while (JOptionPane.showConfirmDialog(frame, form, "Android SDK settings", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
-            GuiSettings candidate = new GuiSettings(); candidate.platforms = GuiSettings.path(platforms.getText()); candidate.buildTools = GuiSettings.path(build.getText()); candidate.animations = animations.isSelected();
+        c.gridy = 0; form.add(detect, c);
+        c.gridy++; form.add(muted("Selecting the SDK folder fills both paths below automatically."), c);
+        c.gridy++; form.add(pathRow("Platforms folder", platforms, dialog), c);
+        c.gridy++; form.add(pathRow("Build Tools version folder", build, dialog), c);
+        c.gridy++; c.insets = new Insets(2, 0, 0, 0); form.add(animations, c);
+        root.add(form, BorderLayout.CENTER);
+        JPanel bottom = panel(new BorderLayout(0, 12));
+        JLabel validation = label(" ", 12, new Color(0xA13D43), false);
+        validation.getAccessibleContext().setAccessibleName("SDK validation result"); bottom.add(validation, BorderLayout.NORTH);
+        JPanel actions = panel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JButton cancel = button("Cancel", false), save = button("Save settings", true);
+        cancel.addActionListener(event -> dialog.dispose());
+        save.addActionListener(event -> {
+            GuiSettings candidate = new GuiSettings(); candidate.platforms = GuiSettings.path(platforms.getText());
+            candidate.buildTools = GuiSettings.path(build.getText()); candidate.animations = animations.isSelected();
             try {
                 candidate.validate(); candidate.save();
                 settings.platforms = candidate.platforms; settings.buildTools = candidate.buildTools; settings.animations = candidate.animations;
-                refreshSettings(); return;
-            } catch (IOException failure) { error(failure.getMessage()); }
-        }
+                refreshSettings(); dialog.dispose();
+            } catch (IOException failure) {
+                validation.setText("<html><div style='width:480px'>" + html(failure.getMessage()) + "</div></html>");
+                dialog.pack();
+            }
+        });
+        actions.add(cancel); actions.add(save); bottom.add(actions, BorderLayout.SOUTH); root.add(bottom, BorderLayout.SOUTH);
+        dialog.setContentPane(root); prepareDialog(dialog, save); dialog.setVisible(true);
     }
 
-    private JPanel pathRow(String name, JTextField field) {
+    private void showSdkHelp(Window owner) {
+        JDialog dialog = new JDialog(owner, "Android SDK help", Dialog.ModalityType.DOCUMENT_MODAL);
+        JPanel root = new Background(new BorderLayout(0, 18)); root.setBorder(new EmptyBorder(26, 28, 24, 28));
+        JPanel heading = panel(new BorderLayout(14, 6));
+        heading.add(new JLabel(AppIcon.icon(55)), BorderLayout.WEST);
+        JPanel title = panel(new BorderLayout(0, 6));
+        title.add(label("A quick SDK setup guide", 24, INK, true), BorderLayout.NORTH);
+        title.add(muted("The Android tools AndroLog needs to read and sign your APK."), BorderLayout.SOUTH);
+        heading.add(title, BorderLayout.CENTER); root.add(heading, BorderLayout.NORTH);
+        JPanel body = new Card(new BorderLayout());
+        JLabel guide = new JLabel("<html><div style='width:500px; color:#183441; font-family:sans-serif; font-size:12px'>"
+                + "<b>1. Install the two SDK packages</b><br>"
+                + "In Android Studio, open <b>Tools → SDK Manager</b>. In <b>SDK Platforms</b>, install an Android platform. "
+                + "In <b>SDK Tools</b>, install <b>Android SDK Build-Tools</b>.<br><br>"
+                + "<b>2. Choose your Android SDK folder</b><br>"
+                + "Copy the <b>Android SDK Location</b> shown in SDK Manager. Back in AndroLog, use "
+                + "<b>Choose Android SDK folder…</b>. Both paths are filled automatically.<br><br>"
+                + "<b>3. If you select the folders separately</b><br>"
+                + "<b>Platforms folder:</b> choose <code>sdk/platforms</code>. It contains folders such as "
+                + "<code>android-36</code>, each with an <code>android.jar</code> file.<br><br>"
+                + "<b>Build Tools version folder:</b> choose a version inside <code>sdk/build-tools</code>, "
+                + "for example <code>sdk/build-tools/36.1.0</code>. It must contain <code>apksigner</code> and "
+                + "<code>zipalign</code>. Choose the version folder, not the parent <code>build-tools</code> folder.<br><br>"
+                + "<b>Already says “Android SDK ready”?</b> You are all set. An emulator is not needed to instrument an APK."
+                + "</div></html>");
+        body.add(guide); root.add(body, BorderLayout.CENTER);
+        JPanel actions = panel(new BorderLayout(15, 0));
+        JButton docs = textButton("Android's SDK setup guide ↗");
+        docs.setToolTipText("Open the official Android SDK documentation in your browser");
+        docs.addActionListener(event -> {
+            try {
+                if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                    throw new IOException("Open developer.android.com/studio/intro/update in a browser to read the SDK setup guide.");
+                }
+                Desktop.getDesktop().browse(URI.create("https://developer.android.com/studio/intro/update#sdk-manager"));
+            } catch (Exception failure) { JOptionPane.showMessageDialog(dialog, readableMessage(failure.getMessage()), "SDK setup guide", JOptionPane.INFORMATION_MESSAGE); }
+        });
+        JButton done = button("Got it", true); done.addActionListener(event -> dialog.dispose());
+        actions.add(docs, BorderLayout.WEST); actions.add(done, BorderLayout.EAST); root.add(actions, BorderLayout.SOUTH);
+        dialog.setContentPane(root); prepareDialog(dialog, done); dialog.setVisible(true);
+    }
+
+    private void prepareDialog(JDialog dialog, JButton defaultButton) {
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.getRootPane().setDefaultButton(defaultButton);
+        dialog.getRootPane().registerKeyboardAction(event -> dialog.dispose(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        dialog.pack(); dialog.setResizable(false); dialog.setLocationRelativeTo(dialog.getOwner());
+    }
+
+    private JPanel pathRow(String name, JTextField field, Component owner) {
         JPanel row = panel(new BorderLayout(10, 0)); row.add(labeledField(name, field), BorderLayout.CENTER);
         JButton choose = button("Browse…", false);
-        choose.addActionListener(event -> { Path path = chooseDirectory(name, GuiSettings.path(field.getText())); if (path != null) field.setText(path.toString()); });
-        row.add(choose, BorderLayout.EAST); return row;
+        choose.addActionListener(event -> { Path path = chooseDirectory(name, GuiSettings.path(field.getText()), owner); if (path != null) field.setText(path.toString()); });
+        JPanel action = panel(new BorderLayout()); action.add(choose, BorderLayout.SOUTH);
+        row.add(action, BorderLayout.EAST); return row;
     }
 
-    private Path chooseDirectory(String title, Path initial) {
+    private Path chooseDirectory(String title, Path initial, Component owner) {
         JFileChooser chooser = new JFileChooser(initial == null ? null : initial.toFile());
         chooser.setDialogTitle(title); chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY); chooser.setAcceptAllFileFilterUsed(false);
-        return chooser.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile().toPath() : null;
+        return chooser.showOpenDialog(owner) == JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile().toPath() : null;
     }
 
     private void showLog() {

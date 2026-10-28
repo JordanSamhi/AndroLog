@@ -15,6 +15,11 @@ trap 'rm -rf "$androlog_input" "$androlog_stage"' EXIT HUP INT TERM
 androlog_destination=${1:-"$androlog_root/target/desktop"}
 androlog_app=AndroLog
 androlog_output=AndroLog
+androlog_icon="$androlog_root/src/main/resources/gui/androlog-icon.png"
+case "$(uname -s)" in
+    Darwin) androlog_icon="$androlog_root/data/icons/androlog.icns" ;;
+    MINGW*|MSYS*|CYGWIN*) androlog_icon="$androlog_root/data/icons/androlog.ico" ;;
+esac
 if [ "$(uname -s)" = Darwin ]; then androlog_app=AndroLog.app; androlog_output=AndroLog-macos.zip; fi
 if [ -e "$androlog_destination/$androlog_output" ]; then
     printf '%s\n' "Destination already exists: $androlog_destination/$androlog_output. Choose a new output folder as the first argument." >&2
@@ -24,6 +29,7 @@ cp "$androlog_jar" "$androlog_input/androlog-gui-0.1.jar"
 # Native bundle build number (macOS requires a positive first component).
 set -- --type app-image --name AndroLog --app-version 1 --vendor "Jordan Samhi" \
     --description "Android APK instrumentation studio" \
+    --icon "$androlog_icon" \
     --input "$androlog_input" --main-jar androlog-gui-0.1.jar \
     --dest "$androlog_stage" \
     --add-modules java.se,jdk.unsupported,jdk.crypto.ec,jdk.zipfs \
