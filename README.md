@@ -96,7 +96,7 @@ Each APK is processed in a separate JVM, keeping the interface responsive and is
 
 ### Explore a recorded run
 
-Choose **Execution dashboard** in the sidebar, enter the same Logcat tag used for instrumentation, and open a captured runtime log. The dashboard shows distinct observed classes, methods, statements and custom messages; select a card or category to browse and filter the observations. Android components and raw dynamic call records are available in the category selector. The activity chart shows the number of matching records in each recorded minute, omitting empty intervals; **Reload** reads the file again after more logs have been collected. You can return to instrumentation without losing the current setup.
+Choose the **Execution dashboard** tab, enter the same Logcat tag used for instrumentation, and open a captured runtime log. The dashboard shows distinct observed classes, methods, statements and custom messages; select a card or category to browse and filter the observations. Android components and raw dynamic call records are available in the category selector. The activity chart shows the number of matching records in each recorded minute, omitting empty intervals; **Reload** reads the file again after more logs have been collected. You can return to instrumentation without losing the current setup.
 
 The dashboard reads the log alone: its counts are observations, not APK coverage percentages, and repeated automatic probe records are not execution frequencies. Custom-message record counts are occurrences in the file. Raw call records are not validated call-graph edges. For coverage against the original APK, code listings, and the dynamic call graph, use the [HTML report workflow](#read-the-reports).
 
