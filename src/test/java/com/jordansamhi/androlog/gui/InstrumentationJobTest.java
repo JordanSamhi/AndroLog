@@ -1,5 +1,6 @@
 package com.jordansamhi.androlog.gui;
 
+import com.jordansamhi.androlog.CustomLogPlan;
 import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 import java.io.*;
@@ -128,6 +129,40 @@ public class InstrumentationJobTest {
         catch (IOException expected) { assertTrue(expected.getMessage().contains("log tag")); }
     }
 
+    @Test public void customOnlyWorkerSerializesLiteralMessageAndUsesCustomFlag() throws Exception {
+        Assume.assumeFalse(GuiSettings.windows());
+        Path input = apk("custom app.apk", true);
+        String message = "reached this point: \"quoted\" $literal {value} — done";
+        CustomLogPlan plan = plan(input, message);
+        try (InstrumentationJob job = fakeJob(input, settings(), new boolean[5],
+                "printf '%s\\n' \"$@\"\n"
+                + "while [ \"$#\" -gt 0 ]; do\ncase \"$1\" in -o) output=\"$2\"; shift 2;; -a) apk=\"$2\"; shift 2;; *) shift;; esac\ndone\n"
+                + "mkdir -p \"$output\"\ncp \"$apk\" \"$output/$(basename \"$apk\")\"\n", plan)) {
+            CustomLogPlan stored = CustomLogPlan.read(job.directory.resolve("custom-logs.json"));
+            assertEquals(message, stored.points.get(0).message);
+            assertEquals(plan.apkSha256, stored.apkSha256);
+            job.run(stage -> {});
+            List<String> log = Files.readAllLines(job.log, StandardCharsets.UTF_8);
+            log = log.subList(log.indexOf("com.jordansamhi.androlog.Main") + 1, log.size());
+            assertTrue(log.contains("--custom-logs"));
+            assertTrue(log.contains(job.directory.resolve("custom-logs.json").toString()));
+            for (String flag : InstrumentationJob.FLAGS) assertFalse(log.contains(flag));
+        }
+    }
+
+    @Test public void rejectsCustomPlanForDifferentApkBeforeStartingWorker() throws Exception {
+        Path input = apk("custom.apk", true);
+        CustomLogPlan plan = plan(input, "reached this point");
+        plan.apkSha256 = String.join("", Collections.nCopies(64, "0"));
+        try { new InstrumentationJob(input, settings(), new boolean[5], false, "", "ANDROLOG", plan); fail(); }
+        catch (IOException expected) { assertTrue(expected.getMessage().contains("APK has changed")); }
+    }
+
+    private CustomLogPlan plan(Path input, String message) throws IOException {
+        return new CustomLogPlan(CustomLogPlan.sha256(input), Collections.singletonList(
+                new CustomLogPlan.Point("<com.example.Main: void run()>", 1, "return", message)));
+    }
+
     @Test public void discoversLatestUsableBuildToolsNumericallyAndSkipsIncompleteVersions() throws Exception {
         Path sdk = temporary.newFolder("sdk").toPath();
         tools(sdk.resolve("build-tools/9.0.0")); tools(sdk.resolve("build-tools/10.0.0")); tools(sdk.resolve("build-tools/10.0.0-rc1"));
@@ -136,12 +171,16 @@ public class InstrumentationJobTest {
     }
 
     private InstrumentationJob fakeJob(Path apk, GuiSettings settings, boolean[] flags, String script) throws Exception {
+        return fakeJob(apk, settings, flags, script, null);
+    }
+
+    private InstrumentationJob fakeJob(Path apk, GuiSettings settings, boolean[] flags, String script, CustomLogPlan customLogs) throws Exception {
         Path javaHome = temporary.newFolder().toPath(); Files.createDirectories(javaHome.resolve("bin"));
         executable(javaHome.resolve("bin/java"), script);
         String original = System.getProperty("java.home");
         try {
             System.setProperty("java.home", javaHome.toString());
-            return new InstrumentationJob(apk, settings, flags, true, "com.example", "MY_TAG");
+            return new InstrumentationJob(apk, settings, flags, true, "com.example", "MY_TAG", customLogs);
         } finally { System.setProperty("java.home", original); }
     }
 

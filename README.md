@@ -86,13 +86,23 @@ java -jar target/androlog-gui-0.1.jar
 ```
 
 1. **Choose an APK.** Browse for a file or drop one onto the window. Use a complete application APK, rather than a resource-only split.
-2. **Choose your logs.** Toggle classes, methods, statements, Android components, and dynamic call tracing. **Essentials** selects classes, methods, and components; **Everything** selects all five. A package prefix, custom log tag, and exclusion of known libraries are also available.
+2. **Choose your logs.** Toggle classes, methods, statements, Android components, and dynamic call tracing. **Essentials** selects classes, methods, and components; **Everything** selects all five. Use **Custom only** to turn off automatic probes and place your own messages at specific code points. A package prefix, custom log tag, and exclusion of known libraries are also available for automatic logging.
 3. **Instrument.** An APK package opens to reveal its code, receives logging statements, closes during rebuilding, and gains a signing seal. The animation follows the actual worker stages and can be disabled in SDK settings. The display shows elapsed time, without estimating a completion percentage. You can cancel, or open **Run details…** to inspect and save the full run log.
 4. **Save your APK.** Choose a filename and destination in the save dialog. AndroLog protects the original APK and asks before replacing another file. You can open the destination folder or instrument another app.
 
 The GUI discovers the Android SDK from `ANDROID_HOME`, `ANDROID_SDK_ROOT`, and common installation locations. Use **SDK settings** to choose the SDK, or the Platforms and Build Tools folders separately. The **?** button beside SDK settings and **What do I need?** inside the dialog explain which packages to install, which folders to select, and link to Android's setup guide. Animations can also be disabled in SDK settings. Preferences are stored in `~/.config/androlog/gui.properties`; signing paths are passed to the worker through temporary configuration, outside the repository. The GUI does not require the CLI configuration described below.
 
 Each APK is processed in a separate JVM, keeping the interface responsive and isolating Soot state between runs. The signed APK and diagnostics stay in a temporary session until you start another run or close the app; save the files you want to keep. APKs use the same bundled test signing key as the CLI. Installation, capture, and report generation remain available through the [command line workflow](#instrument-run-and-report).
+
+### Place your own log messages
+
+On **Choose your logs**, open **Your own messages → Choose…**, or choose **Custom only**. AndroLog reads the APK in a separate process and shows a searchable package/class tree. Selecting a class opens its whole Jimple code, with method headings and statement numbers.
+
+Select a statement and type a message such as `reached this point`, then click **Use these log points**. A marked row identifies each configured point; select it again to edit its message, clear the text to remove it, or use **Next log point** to review the selections. **Cancel** discards changes made in the code browser.
+
+Messages are literal single-line text, without variable selection or expression evaluation. Every visit to the point emits `CUSTOM=reached this point` under the chosen Logcat tag, immediately **before** the selected statement executes. This includes repeated visits in a loop and visits to statements that subsequently throw. Messages support up to 1,000 UTF-8 bytes. Setup and monitor statements cannot be selected. Explicit custom points are independent of the automatic package/library filters and can be combined with coverage and dynamic-call probes.
+
+The selections are tied to the APK's SHA-256 fingerprint and checked against the original method and statement. If the APK changes, browse it again. Selecting a new APK clears the previous points. Custom messages appear in Logcat; they are not coverage events. Code browsing and instrumentation both use AndroLog's existing Soot/Jimple pipeline.
 
 ### Package a desktop application
 
@@ -302,7 +312,7 @@ Call tracing captures stack traces and adds runtime overhead. Limit scope with `
 java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 ```
 
-`-a` and `-p` are required except when displaying help. Without `-pa`, `-pam`, or `--capture`, AndroLog instruments the APK and exits.
+`-a` and `-p` are required except when displaying help. Without `-pa`, `-pam`, `--capture`, or `--inspect-code`, AndroLog instruments the APK and exits.
 
 ### Inputs and outputs
 
@@ -316,6 +326,8 @@ java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 | `-pam`, `--parse-per-minute <file>` | Parse a runtime log and include cumulative coverage by minute. |
 | `-html`, `--html <file>` | Write a standalone HTML report. Requires `-pa`, `-pam`, or `--capture`. |
 | `-j`, `--json <file>` | Write a JSON report. Requires `-pa`, `-pam`, or `--capture`. |
+| `--inspect-code <file>` | Export the original Jimple statements to a JSON catalog without changing or signing the APK. |
+| `--custom-logs <file>` | Instrument the exact points in an APK-bound JSON plan. May be used alone or with automatic probes; cannot be combined with capture or reporting. |
 
 ### Capture
 

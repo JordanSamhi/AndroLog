@@ -147,6 +147,25 @@ public class MainTest {
         assertFalse(Files.exists(html));
     }
 
+    @Test public void codeInspectionAndCustomLogsRejectConflictingModes() throws Exception {
+        for (String[] mode : new String[][]{{"--inspect-code", "code.json", "-m"},
+                {"--inspect-code", "code.json", "--custom-logs", "points.json"},
+                {"--custom-logs", "points.json", "-pa", "runtime.log"},
+                {"--custom-logs", "points.json", "--capture", "-m"}}) {
+            String[] args = new String[mode.length + 4];
+            System.arraycopy(new String[]{"-a", "unused.apk", "-p", "unused"}, 0, args, 0, 4);
+            System.arraycopy(mode, 0, args, 4, mode.length);
+            assertEquals(2, invoke(args).status);
+        }
+    }
+
+    @Test public void codeCatalogCannotOverwriteOriginalApk() throws Exception {
+        Path apk = temporary.newFile("input.apk").toPath();
+        Path platforms = temporary.newFolder("platforms").toPath();
+        Result result = invoke("-a", apk.toString(), "-p", platforms.toString(), "--inspect-code", apk.toString());
+        assertEquals(2, result.status); assertTrue(result.err.contains("separate from the APK"));
+    }
+
     private static Result invoke(String... args) throws Exception {
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         ByteArrayOutputStream stderr = new ByteArrayOutputStream();

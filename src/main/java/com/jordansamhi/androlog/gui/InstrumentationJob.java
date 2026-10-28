@@ -1,6 +1,7 @@
 package com.jordansamhi.androlog.gui;
 
 import com.jordansamhi.androlog.Main;
+import com.jordansamhi.androlog.CustomLogPlan;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -26,10 +27,18 @@ final class InstrumentationJob implements AutoCloseable {
 
     InstrumentationJob(Path input, GuiSettings settings, boolean[] probes, boolean excludeLibraries,
                        String packagePrefix, String tag) throws IOException {
+        this(input, settings, probes, excludeLibraries, packagePrefix, tag, null);
+    }
+
+    InstrumentationJob(Path input, GuiSettings settings, boolean[] probes, boolean excludeLibraries,
+                       String packagePrefix, String tag, CustomLogPlan customLogs) throws IOException {
         validateApk(input);
         settings.validate();
         if (probes.length != FLAGS.length) throw new IllegalArgumentException("Invalid probe selection.");
-        if (!any(probes)) throw new IOException("Select at least one kind of logging.");
+        if (customLogs != null) { customLogs.validate(); customLogs.verifyApk(input); }
+        if (!any(probes) && (customLogs == null || customLogs.points.isEmpty())) {
+            throw new IOException("Select at least one kind of logging or add a custom log point.");
+        }
         if (!tag.matches("[A-Za-z0-9_][A-Za-z0-9_.-]*")) throw new IOException("The log tag can contain letters, numbers, dots, underscores and hyphens.");
         if (!packagePrefix.isEmpty() && !packagePrefix.matches("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*\\.?")) {
             throw new IOException("Enter a package prefix such as com.example.app, or leave it empty.");
@@ -45,11 +54,16 @@ final class InstrumentationJob implements AutoCloseable {
             }
             arguments = new ArrayList<>(Arrays.asList(
                     Paths.get(System.getProperty("java.home"), "bin", GuiSettings.windows() ? "java.exe" : "java").toString(),
-                    "-Dandrolog.gui.progress=true", "-cp", config + File.pathSeparator + absoluteClasspath(), Main.class.getName(),
+                    "-Djava.awt.headless=true", "-Dandrolog.gui.progress=true", "-cp", config + File.pathSeparator + absoluteClasspath(), Main.class.getName(),
                     "-a", this.input.toString(), "-p", settings.platforms.toString(), "-o", output.getParent().toString(), "-l", tag, "-v"));
             for (int i = 0; i < FLAGS.length; i++) if (probes[i]) arguments.add(FLAGS[i]);
             if (excludeLibraries) arguments.add("-n");
             if (!packagePrefix.isEmpty()) arguments.addAll(Arrays.asList("-pkg", packagePrefix));
+            if (customLogs != null && !customLogs.points.isEmpty()) {
+                Path plan = directory.resolve("custom-logs.json");
+                customLogs.write(plan);
+                arguments.addAll(Arrays.asList("--custom-logs", plan.toString()));
+            }
         } catch (IOException | RuntimeException error) {
             removeDirectory(directory);
             throw error;

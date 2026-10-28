@@ -1,5 +1,6 @@
 package com.jordansamhi.androlog.gui;
 
+import com.jordansamhi.androlog.CustomLogPlan;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -43,6 +44,8 @@ public final class AndroLogGui {
     private final JCheckBox excludeLibraries = new JCheckBox("Exclude known libraries");
     private final JTextField packagePrefix = field("", 18);
     private final JTextField logTag = field("ANDROLOG", 12);
+    private final JLabel customLogCount = muted("Choose a point and type a message.");
+    private CustomLogPlan customLogs;
     private final InstrumentationAnimation processing = new InstrumentationAnimation();
     private final InstrumentationAnimation complete = new InstrumentationAnimation();
     private final Timer clock;
@@ -67,6 +70,18 @@ public final class AndroLogGui {
             install();
             AndroLogGui gui = new AndroLogGui();
             gui.frame.setVisible(true);
+            // A packaged macOS app may start in the background, leaving even
+            // editable Swing fields without a native key window.
+            if (System.getProperty("os.name").startsWith("Mac") && Desktop.isDesktopSupported()) {
+                try {
+                    Desktop desktop = Desktop.getDesktop();
+                    if (desktop.isSupported(Desktop.Action.APP_REQUEST_FOREGROUND)) desktop.requestForeground(true);
+                } catch (UnsupportedOperationException | SecurityException ignored) {
+                    // The window remains usable on desktops without this action.
+                }
+                gui.frame.toFront();
+                gui.frame.requestFocus();
+            }
             if (args.length == 1) gui.selectApk(Paths.get(args[0]));
         });
     }
@@ -188,13 +203,15 @@ public final class AndroLogGui {
 
     private JPanel optionsPage() {
         JPanel page = panel(new BorderLayout(0, 16));
-        page.add(header("MAKE IT YOURS", "Choose what to observe.", "Select the events you want AndroLog to record when the app runs."), BorderLayout.NORTH);
+        page.add(header("MAKE IT YOURS", "Choose what to observe.", "Use automatic logging or add your own messages at selected code points."), BorderLayout.NORTH);
         JPanel choices = panel(new BorderLayout(0, 14));
         JPanel presets = panel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        JButton light = button("Essentials", false), all = button("Everything", false);
+        JButton light = button("Essentials", false), all = button("Everything", false), customOnly = button("Custom only", false);
         light.addActionListener(event -> preset(new boolean[]{true, true, false, true, false}));
         all.addActionListener(event -> preset(new boolean[]{true, true, true, true, true}));
-        presets.add(light); presets.add(all);
+        customOnly.addActionListener(event -> { preset(new boolean[probes.length]); if (customLogs == null) chooseCustomLogs(); });
+        customOnly.setToolTipText("Turn off automatic probes and use only the messages you place in the code");
+        presets.add(light); presets.add(all); presets.add(customOnly);
         choices.add(presets, BorderLayout.NORTH);
         JPanel grid = panel(new GridLayout(3, 2, 12, 12));
         String[][] details = {
@@ -207,13 +224,18 @@ public final class AndroLogGui {
             probes[i] = probe(details[i][0], details[i][1], details[i][2], i != 2 && i != 4);
             probes[i].addActionListener(event -> updatePrimary()); grid.add(probes[i]);
         }
-        JPanel tip = panel(new BorderLayout()); tip.setBorder(new EmptyBorder(15, 12, 15, 8));
-        tip.add(new JLabel("<html><font color='#647681'>Start with Essentials for lighter logging.<br><br>Statements and call tracing add more overhead.</font></html>"));
-        grid.add(tip); choices.add(grid, BorderLayout.CENTER);
+        JPanel custom = new Card(new BorderLayout(8, 0)); custom.setBorder(new EmptyBorder(13, 15, 13, 12));
+        JPanel description = panel(new BorderLayout(0, 6)); description.add(label("Your own messages", 15, INK, true), BorderLayout.NORTH);
+        description.add(customLogCount, BorderLayout.CENTER); custom.add(description, BorderLayout.CENTER);
+        JButton choosePoints = textButton("Choose…"); choosePoints.getAccessibleContext().setAccessibleName("Choose custom log points");
+        choosePoints.setToolTipText("Browse class code and type a message at a selected statement");
+        choosePoints.addActionListener(event -> chooseCustomLogs()); custom.add(choosePoints, BorderLayout.EAST);
+        grid.add(custom); choices.add(grid, BorderLayout.CENTER);
         page.add(choices, BorderLayout.CENTER);
         JPanel advanced = panel(new BorderLayout(0, 10));
         JPanel fields = panel(new GridLayout(1, 2, 14, 0));
-        fields.add(labeledField("Package and subpackages (optional)", packagePrefix)); fields.add(labeledField("Logcat tag", logTag));
+        fields.add(labeledField("Automatic logging package (optional)", packagePrefix)); fields.add(labeledField("Logcat tag", logTag));
+        packagePrefix.setToolTipText("Limit automatic probes to this package and its subpackages. Custom points remain explicitly selected.");
         advanced.add(fields, BorderLayout.CENTER);
         excludeLibraries.setOpaque(false); excludeLibraries.setForeground(INK);
         excludeLibraries.setToolTipText("Maps to -n. Known library packages are excluded; unrecognized libraries may still be instrumented.");
@@ -289,8 +311,9 @@ public final class AndroLogGui {
         String[] labels = {apk == null ? "Choose an APK" : "Choose logging  →", "Instrument APK  →", "Cancel", "Save APK as…"};
         primary.setText(labels[page]);
         boolean any = false; for (JToggleButton probe : probes) if (probe != null && probe.isSelected()) any = true;
+        any |= customLogs != null && !customLogs.points.isEmpty();
         primary.setEnabled(!saving && (page != 1 || any));
-        if (page == 1 && !any) footnote.setText("Select at least one kind of logging to continue.");
+        if (page == 1 && !any) footnote.setText("Select automatic logging or add a custom log point to continue.");
         else if (page < 2) footnote.setText(" ");
     }
 
@@ -317,7 +340,7 @@ public final class AndroLogGui {
             protected void done() {
                 working = false; browse.setEnabled(true); settingsButton.setEnabled(true);
                 try {
-                    long bytes = get(); apk = candidate.toAbsolutePath().normalize();
+                    long bytes = get(); apk = candidate.toAbsolutePath().normalize(); customLogs = null; refreshCustomLogs();
                     String name = apk.getFileName().toString();
                     apkName.setText(name.length() > 40 ? name.substring(0, 37) + "…" : name); apkName.setToolTipText(name);
                     apkDetail.setText((bytes < 1048576 ? String.format(Locale.ROOT, "%.1f KB", bytes / 1024.0)
@@ -332,6 +355,19 @@ public final class AndroLogGui {
 
     private void preset(boolean[] selected) { for (int i = 0; i < selected.length; i++) probes[i].setSelected(selected[i]); updatePrimary(); }
 
+    private void chooseCustomLogs() {
+        if (apk == null) return;
+        if (!GuiSettings.validPlatforms(settings.platforms)) { showSettings(); if (!GuiSettings.validPlatforms(settings.platforms)) return; }
+        CustomLogDialog.open(frame, apk, settings, customLogs, plan -> {
+            customLogs = plan; refreshCustomLogs(); updatePrimary();
+        });
+    }
+
+    private void refreshCustomLogs() {
+        int count = customLogs == null ? 0 : customLogs.points.size();
+        customLogCount.setText(count == 0 ? "<html>Select code.<br>Type your message.</html>" : count + (count == 1 ? " log point selected" : " log points selected"));
+    }
+
     private void instrument() {
         try { settings.validate(); }
         catch (IOException missing) { showSettings(); return; }
@@ -339,13 +375,14 @@ public final class AndroLogGui {
         for (int i = 0; i < selected.length; i++) selected[i] = probes[i].isSelected();
         String prefix = packagePrefix.getText().trim(), tag = logTag.getText().trim();
         boolean exclude = excludeLibraries.isSelected();
+        CustomLogPlan logPlan = customLogs;
         working = true; cancelRequested = false; savedApk = null; unsaved = false;
         started = System.nanoTime(); elapsed.setText("0:00 elapsed"); clock.start();
         setStage(0); showPage(2);
         new SwingWorker<Void, Integer>() {
             protected Void doInBackground() throws Exception {
                 if (job != null) job.close();
-                job = new InstrumentationJob(apk, settings, selected, exclude, prefix, tag);
+                job = new InstrumentationJob(apk, settings, selected, exclude, prefix, tag, logPlan);
                 if (cancelRequested) job.cancel();
                 job.run(stage -> publish(stage)); return null;
             }

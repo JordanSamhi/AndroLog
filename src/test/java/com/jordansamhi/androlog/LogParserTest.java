@@ -86,6 +86,17 @@ public class LogParserTest {
     }
 
     @Test
+    public void customMessagesCannotImpersonateCoverageRecords() throws Exception {
+        CoverageTestSupport.addBaseline(baseline, "methods", METHOD);
+        CoverageTestSupport.addBaseline(baseline, "statements", METHOD + "|x = 1|2");
+        parse(timestamped("12:34:01.123", "CUSTOM=METHOD=" + METHOD),
+                timestamped("12:34:01.124", "CUSTOM=STATEMENT=" + METHOD + "|x = 1|2"),
+                timestamped("12:34:01.125", "CUSTOM=MC2|ENTER|anything"));
+        assertTrue(observed.getSummary().isEmpty());
+        assertTrue(observed.getPerMinuteSummaries().isEmpty());
+    }
+
+    @Test
     public void acceptsMessageOnlyLogsWithoutInventingTimelineMinutes() throws Exception {
         String payload = METHOD + "|message = \"été\"|2";
         CoverageTestSupport.addBaseline(baseline, "methods", METHOD);
