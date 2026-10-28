@@ -1,6 +1,7 @@
 package com.jordansamhi.androlog.instrumentation;
 
 import com.jordansamhi.androspecter.files.LibrariesManager;
+import com.jordansamhi.androlog.utils.PackageScope;
 import com.jordansamhi.androspecter.utils.Constants;
 import soot.Body;
 import soot.BodyTransformer;
@@ -33,7 +34,7 @@ public final class StatementInstrumenter {
     public StatementInstrumenter(String tag, boolean includeLibraries, String targetPackage) {
         this.tag = tag;
         this.includeLibraries = includeLibraries;
-        this.targetPackage = targetPackage;
+        this.targetPackage = PackageScope.normalize(targetPackage);
         this.logger = Scene.v().getSootClass(Constants.LOG_CHECKER_CLASS).getMethod(Constants.SUB_SIG_LOG).makeRef();
     }
 
@@ -58,7 +59,7 @@ public final class StatementInstrumenter {
         if (!body.getMethod().isConcrete() || name.equals(Constants.LOG_CHECKER_CLASS)
                 || name.equals(MethodCallInstrumenter.RUNTIME_CLASS)
                 || name.startsWith(MethodCallInstrumenter.RUNTIME_CLASS + "$")
-                || (targetPackage != null && !owner.getPackageName().startsWith(targetPackage))
+                || !PackageScope.includes(targetPackage, owner.getPackageName())
                 || (!includeLibraries && LibrariesManager.v().isLibrary(owner))) return;
 
         List<Unit> originals = new ArrayList<>();

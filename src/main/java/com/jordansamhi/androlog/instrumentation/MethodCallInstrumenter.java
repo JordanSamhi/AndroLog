@@ -2,6 +2,7 @@ package com.jordansamhi.androlog.instrumentation;
 
 import com.jordansamhi.androlog.runtime.CallTraceRuntime;
 import com.jordansamhi.androspecter.files.LibrariesManager;
+import com.jordansamhi.androlog.utils.PackageScope;
 import com.jordansamhi.androspecter.utils.Constants;
 import soot.Body;
 import soot.BodyTransformer;
@@ -57,7 +58,7 @@ public final class MethodCallInstrumenter {
     public MethodCallInstrumenter(String tag, boolean includeLibraries, String targetPackage) {
         this.tag = tag;
         this.includeLibraries = includeLibraries;
-        this.targetPackage = targetPackage;
+        this.targetPackage = PackageScope.normalize(targetPackage);
     }
 
     /** Register before existing coverage transformers, preserving their original statement identifiers. */
@@ -90,7 +91,7 @@ public final class MethodCallInstrumenter {
         String name = declaring.getName();
         return method.isConcrete() && !name.equals(Constants.LOG_CHECKER_CLASS)
                 && !name.equals(RUNTIME_CLASS) && !name.startsWith(RUNTIME_CLASS + "$")
-                && (targetPackage == null || declaring.getPackageName().startsWith(targetPackage))
+                && PackageScope.includes(targetPackage, declaring.getPackageName())
                 && (includeLibraries || !LibrariesManager.v().isLibrary(declaring));
     }
 

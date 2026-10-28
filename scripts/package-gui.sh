@@ -1,5 +1,5 @@
 #!/bin/sh
-# Optional self-contained desktop app. Run with a JDK that provides jpackage (17+ recommended).
+# Optional self-contained desktop app. Run with JDK 17+ providing jpackage.
 set -eu
 androlog_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 androlog_jar="$androlog_root/target/androlog-gui-0.1.jar"

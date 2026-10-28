@@ -5,6 +5,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.net.URLDecoder;
@@ -33,6 +34,16 @@ public class CallTraceRuntimeTest {
     }
 
     @After public void restoreOutput() { System.setOut(original); }
+
+    @Test public void bundledAndroidHelpersKeepJava8BytecodeDespiteTheJava17HostDependency() throws Exception {
+        for (String name : new String[]{"CallTraceRuntime", "CallTraceRuntime$State", "CallTraceRuntime$Pending"}) {
+            try (DataInputStream input = new DataInputStream(CallTraceRuntime.class.getResourceAsStream(name + ".class"))) {
+                assertEquals(0xCAFEBABE, input.readInt());
+                input.readUnsignedShort();
+                assertEquals(name, 52, input.readUnsignedShort());
+            }
+        }
+    }
 
     @Test public void confirmsOverrideAndInheritedImplementationRatherThanReceiverClass() throws Exception {
         Dispatch.invoke(new Override(), 11);

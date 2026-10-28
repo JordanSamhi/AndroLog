@@ -1,6 +1,5 @@
 package com.jordansamhi.androlog;
 
-import org.xmlpull.v1.XmlPullParserException;
 import soot.jimple.infoflow.android.axml.AXmlAttribute;
 import soot.jimple.infoflow.android.axml.AXmlNode;
 import soot.jimple.infoflow.android.manifest.ProcessManifest;
@@ -20,14 +19,14 @@ import java.util.TreeSet;
 public final class LauncherActivities {
     private LauncherActivities() { }
 
-    public static List<String> read(Path apk) throws IOException, XmlPullParserException {
+    public static List<String> read(Path apk) throws IOException {
         try (ProcessManifest manifest = new ProcessManifest(apk.toFile())) {
             return fromManifest(manifest.getManifest(), manifest.getArscParser());
         }
     }
 
     /** Preserve the manifest component name: an activity alias must be launched through its alias. */
-    static LaunchTarget readLaunchTarget(Path apk) throws IOException, XmlPullParserException {
+    static LaunchTarget readLaunchTarget(Path apk) throws IOException {
         try (ProcessManifest manifest = new ProcessManifest(apk.toFile())) {
             List<LaunchTarget> targets = launchTargets(manifest.getManifest(), manifest.getArscParser());
             if (targets.isEmpty()) throw new IOException("The APK has no enabled launcher activity to start.");

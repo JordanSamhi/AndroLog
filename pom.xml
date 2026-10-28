@@ -19,6 +19,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.7.0</version>
                 <configuration>
+                    <!-- The host requires Java 17+ through AndroSpecter. Keep the bundled
+                         CallTraceRuntime compatible with Android when Soot converts it to DEX. -->
                     <source>1.8</source>
                     <target>1.8</target>
                 </configuration>
@@ -61,7 +63,25 @@
         </plugins>
     </build>
 
+    <dependencyManagement>
+        <dependencies>
+            <!-- Heros declares an open-ended Guava range; constrain transitive resolution too. -->
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>33.4.8-jre</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
+        <!-- Soot 4.7.1 rewrites valid APKs into invalid array/constructor and register
+             code. Keep the tested DEX backend while using AndroSpecter 2.0.0. -->
+        <dependency>
+            <groupId>org.soot-oss</groupId>
+            <artifactId>soot</artifactId>
+            <version>4.6.0</version>
+        </dependency>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -71,12 +91,12 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>2.0.9</version>
+            <version>2.0.17</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
-            <version>2.0.9</version>
+            <version>2.0.17</version>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
@@ -86,12 +106,12 @@
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
-            <version>2.8.9</version>
+            <version>2.14.0</version>
         </dependency>
         <dependency>
             <groupId>com.jordansamhi</groupId>
             <artifactId>androspecter</artifactId>
-            <version>1.1.5</version>
+            <version>2.0.0</version>
         </dependency>
     </dependencies>
 </project>

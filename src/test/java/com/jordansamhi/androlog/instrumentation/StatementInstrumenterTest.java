@@ -208,6 +208,20 @@ public class StatementInstrumenterTest {
         assertEquals(originalSize, helper.getUnits().size());
     }
 
+    @Test public void packageScopeMatchesWholeSegmentsAndNormalizesATrailingDot() throws Exception {
+        for (String packageName : Arrays.asList("example", "example.nested", "exampleother")) {
+            application = addClass(packageName + ".PackageFixture", object);
+            application.setApplicationClass();
+            JimpleBody body = body("value", Collections.emptyList(), IntType.v());
+            Local value = local(body, "value", IntType.v());
+            Collections.addAll(body.getUnits(), Jimple.v().newAssignStmt(value, IntConstant.v(42)), Jimple.v().newReturnStmt(value));
+            new StatementInstrumenter("TEST", true, "example.").instrument(body);
+            observations.clear();
+            assertEquals(42, loadFixture().getMethod("value").invoke(null));
+            assertEquals(packageName, "exampleother".equals(packageName) ? 0 : 1, observations.size());
+        }
+    }
+
     private Map<Unit, String> messages(Body body) {
         Map<Unit, String> result = new IdentityHashMap<>();
         int index = 0;

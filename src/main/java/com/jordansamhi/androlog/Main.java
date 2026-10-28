@@ -1,6 +1,7 @@
 package com.jordansamhi.androlog;
 
 import com.jordansamhi.androlog.utils.Constants;
+import com.jordansamhi.androlog.utils.PackageScope;
 import com.jordansamhi.androlog.instrumentation.MethodCallInstrumenter;
 import com.jordansamhi.androlog.instrumentation.StatementInstrumenter;
 import com.jordansamhi.androspecter.SootUtils;
@@ -69,7 +70,7 @@ public class Main {
             boolean perMinute = command.hasOption("pam");
             boolean includeLibraries = !command.hasOption("n");
             String logIdentifier = command.getOptionValue("l", "ANDROLOG");
-            String packageName = command.getOptionValue("pkg");
+            String packageName = PackageScope.normalize(command.getOptionValue("pkg"));
             Path apk = absolute(command.getOptionValue("a"));
             Path outputDirectory = absolute(command.getOptionValue("o", TmpFolder.v().get()));
             Path exportedApk = outputDirectory.resolve(apk.getFileName());
@@ -88,7 +89,7 @@ public class Main {
             ApkPreparator preparator = parsing ? null : new ApkPreparator(exportedApk.toString());
             SootUtils su = new SootUtils();
             console.stage("Load APK", () -> {
-                su.setupSootWithOutput(command.getOptionValue("p"), apk.toString(), outputDirectory.toString(), true);
+                ApkAnalysisSetup.initialize(command.getOptionValue("p"), apk, outputDirectory);
                 Options.v().set_wrong_staticness(Options.wrong_staticness_ignore);
                 if (command.hasOption("t")) Options.v().set_num_threads(Integer.parseInt(command.getOptionValue("t")));
             });
@@ -282,7 +283,7 @@ public class Main {
                 new CommandLineOption("statements", "s", "Instrument or measure statements", false, false),
                 new CommandLineOption("components", "cp", "Instrument or measure Android components", false, false),
                 new CommandLineOption("non-libraries", "n", "Exclude known libraries (default: include bundled libraries)", false, false),
-                new CommandLineOption("package", "pkg", "Restrict instrumentation and coverage to this package prefix", true, false),
+                new CommandLineOption("package", "pkg", "Select this exact package and its subpackages", true, false),
                 new CommandLineOption("method-calls", "mc", "Record a dynamic call graph with confirmed runtime dispatch targets", false, false),
                 new CommandLineOption("threads", "t", "Positive Soot thread count (default: Soot configuration)", true, false),
                 new CommandLineOption("verbose", "v", "Include stack traces when a run fails", false, false));

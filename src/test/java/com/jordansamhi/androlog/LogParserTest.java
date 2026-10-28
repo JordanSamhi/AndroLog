@@ -128,6 +128,26 @@ public class LogParserTest {
     }
 
     @Test
+    public void acceptsAndroSpecter2CallbacksWithoutCountingAComponentMoreThanOnce() throws Exception {
+        String[][] components = {
+                {"activities", "ACTIVITY", "example.MainActivity", "void onCreate(android.os.Bundle)", "void onResume()"},
+                {"services", "SERVICE", "example.SyncService", "void onCreate()", "void onDestroy()"},
+                {"broadcast-receivers", "BROADCASTRECEIVER", "example.Receiver", "void onReceive(android.content.Context,android.content.Intent)", "void onReceive(android.content.Context,android.content.Intent)"},
+                {"content-providers", "CONTENTPROVIDER", "example.Provider", "boolean onCreate()", "java.lang.String getType(android.net.Uri)"}
+        };
+        for (String[] component : components) {
+            CoverageTestSupport.addBaseline(baseline, component[0], component[2]);
+            parse(timestamped("12:34:01.123", component[1] + "=" + component[2] + "|" + component[3]),
+                    timestamped("12:35:01.123", component[1] + "=" + component[2] + "|" + component[4]),
+                    timestamped("12:35:02.123", component[1] + "=" + component[2]),
+                    timestamped("12:35:03.123", component[1] + "=other.Component|" + component[3]));
+            assertEquals(Integer.valueOf(1), observed.getSummary().get(component[0]));
+            assertEquals(Integer.valueOf(1), observed.getPerMinuteSummaries().get("10-22 12:34").get(component[0]));
+        }
+        assertTrue(observed.getPerMinuteSummaries().get("10-22 12:35").isEmpty());
+    }
+
+    @Test
     public void reportsUnreadableLogsInsteadOfProducingAnEmptyCoverageResult() {
         Path missing = temporary.getRoot().toPath().resolve("missing.log");
 

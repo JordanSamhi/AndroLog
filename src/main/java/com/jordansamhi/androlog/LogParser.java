@@ -77,6 +77,12 @@ public class LogParser {
                 if (matcher.find()) {
                     String type = TYPES.get(matcher.group(1));
                     String payload = matcher.group(2);
+                    // AndroSpecter 2 adds a callback subsignature to component messages.
+                    // Coverage remains per component class, including for older class-only logs.
+                    if (isAndroidComponent(type)) {
+                        int callback = payload.indexOf('|');
+                        if (callback >= 0) payload = payload.substring(0, callback);
+                    }
                     if (baseline.get(type).contains(payload)) {
                         summaryLogBuilder.record(type, payload, line);
                     }
@@ -85,5 +91,10 @@ public class LogParser {
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot read runtime logs: " + filePath, e);
         }
+    }
+
+    private static boolean isAndroidComponent(String type) {
+        return "activities".equals(type) || "services".equals(type)
+                || "broadcast-receivers".equals(type) || "content-providers".equals(type);
     }
 }

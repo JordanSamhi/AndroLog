@@ -158,6 +158,25 @@ public class MethodCallInstrumenterTest {
         body.validate();
     }
 
+    @Test public void packageScopeExcludesAdjacentNamesAndKeepsSubpackages() throws Exception {
+        for (String packageName : Arrays.asList("example", "example.nested", "exampleother")) {
+            application = addClass(packageName + ".CallScopeFixture", object);
+            application.setApplicationClass();
+            SootMethod target = addMethod(application, "target", Collections.emptyList(), VoidType.v());
+            JimpleBody body = body("caller");
+            body.getUnits().add(Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(target.makeRef())));
+            body.getUnits().add(Jimple.v().newReturnVoidStmt());
+            MethodCallInstrumenter scoped = new MethodCallInstrumenter("TAG", true, "example.");
+            for (String name : Arrays.asList("before", "enter", "after", "caught")) {
+                Field field = MethodCallInstrumenter.class.getDeclaredField(name);
+                field.setAccessible(true); field.set(scoped, field.get(instrumenter));
+            }
+            scoped.capture(body); scoped.instrument(body);
+            assertEquals(packageName, "exampleother".equals(packageName) ? 0 : 1, callsTo(body, "before").size());
+            assertEquals(packageName, "exampleother".equals(packageName) ? 0 : 1, callsTo(body, "enter").size());
+        }
+    }
+
     private JimpleBody body(String name) {
         SootMethod method = addMethod(application, name, Collections.emptyList(), VoidType.v());
         JimpleBody body = Jimple.v().newBody(method);

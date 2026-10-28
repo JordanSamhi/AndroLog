@@ -35,13 +35,15 @@ These screenshots show a report generated from an instrumented Android demo app 
 
 | Dependency | Used for |
 | --- | --- |
-| A JDK and Apache Maven | Building and running AndroLog. The project targets Java 8 bytecode. |
+| JDK 17 or newer and Apache Maven | Building and running AndroLog, including its AndroSpecter 2.0.0 dependency. The helper inserted into APKs retains Java 8 bytecode for Android compatibility. |
 | Android SDK Platforms | Resolving Android classes during instrumentation and report generation. Install a platform containing `android.jar`. |
 | Android SDK Build Tools | Aligning and signing instrumented APKs with `zipalign` and `apksigner`. |
 | Android SDK Platform Tools (`adb`) and a device or emulator | Installing the instrumented APK and collecting runtime logs. |
 | A browser | Opening the standalone HTML report offline. |
 
 Node.js is needed only to run the JavaScript regression tests.
+
+AndroLog uses AndroSpecter 2.0.0 with Soot 4.6.0 pinned for APK compatibility. The transitive Soot 4.7.1 backend caused constructor and register-verification failures in Word Snake runtime checks. Keep the Soot pin when rebuilding; upgrading it requires testing the resulting APKs on Android, as compilation alone does not catch these failures.
 
 ## Build and configure
 
@@ -94,7 +96,7 @@ Each APK is processed in a separate JVM, keeping the interface responsive and is
 
 ### Package a desktop application
 
-With a JDK providing `jpackage` (JDK 17 or newer recommended), build a self-contained app for the current operating system:
+With JDK 17 or newer providing `jpackage`, build a self-contained app for the current operating system:
 
 ```bash
 mvn package
@@ -188,7 +190,7 @@ androlog \
 
 AndroLog writes an aligned, signed APK to `out/instrumented/`, using the input APK's filename. The original APK stays unchanged. The output uses the bundled test signing key, so use a test device or emulator where it will not conflict with an installation signed by the original publisher.
 
-Select only the probes you need. For example, use `-m` for method coverage or `-mc` alone for a dynamic-call-graph-only run. Adding `-pkg com.example.app` restricts the scope to a package prefix; `-n` excludes known libraries.
+Select only the probes you need. For example, use `-m` for method coverage or `-mc` alone for a dynamic-call-graph-only run. Adding `-pkg com.example.app` selects that exact package and its subpackages, excluding similarly named packages such as `com.example.application`; a trailing dot is accepted and normalized. This scope applies consistently to all probes and reports. `-n` excludes known libraries.
 
 ### 2. Install the APK and capture a test run
 
@@ -259,6 +261,8 @@ APKs instrumented with older versions used after-statement probes. Reinstrument 
 ### Interpret the timeline and JSON
 
 With `-pam`, each distinct probe contributes to the timeline in the minute of its first matching log entry. The timeline accumulates newly observed probes, rather than counting repeated executions. Matching observations without usable timestamps still contribute to aggregate totals but cannot appear on the timeline.
+
+AndroSpecter 2.0.0 includes the callback signature in component messages, for example `ACTIVITY=com.example.MainActivity|void onResume()`. AndroLog counts each component class once, regardless of how many callbacks were observed, and continues to accept older class-only component messages. After upgrading the analysis dependencies, reinstrument the original APK and collect fresh logs: statement identities can change with the Soot version.
 
 JSON reports contain `coverageSummary`; `-pam` also adds `perMinuteSummaries`. When call tracing is requested or call records are available, `callGraph` contains the recorded nodes, edges, callsite metadata, statistics, and manifest-derived `launcherActivities`.
 
@@ -340,7 +344,7 @@ Select the same probes for instrumentation and reporting. `-html` and `--capture
 
 | Option | Description |
 | --- | --- |
-| `-pkg`, `--package <prefix>` | Restrict instrumentation and coverage to a package prefix. |
+| `-pkg`, `--package <prefix>` | Select the exact package and its subpackages; a trailing dot is normalized. |
 | `-n`, `--non-libraries` | Exclude known libraries. Bundled libraries are included by default. |
 | `-t`, `--threads <count>` | Positive Soot thread count. Defaults to Soot's configuration. |
 | `-v`, `--verbose` | Include exception details when a run fails. |

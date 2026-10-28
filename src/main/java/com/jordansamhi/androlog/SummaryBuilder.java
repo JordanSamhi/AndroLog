@@ -1,6 +1,7 @@
 package com.jordansamhi.androlog;
 
 import com.jordansamhi.androspecter.SootUtils;
+import com.jordansamhi.androlog.utils.PackageScope;
 import com.jordansamhi.androlog.instrumentation.StatementInstrumenter;
 import com.jordansamhi.androspecter.commandlineoptions.CommandLineOptions;
 import com.jordansamhi.androspecter.files.LibrariesManager;
@@ -102,10 +103,10 @@ public class SummaryBuilder {
     }
 
     /**
-     * Restricts collection and counts using the same package prefix as instrumentation.
+     * Restricts collection and counts to the same exact package and subpackages as instrumentation.
      */
     public void setTargetPackage(String targetPackage) {
-        this.targetPackage = targetPackage;
+        this.targetPackage = PackageScope.normalize(targetPackage);
     }
 
     public String getTargetPackage() {
@@ -117,7 +118,7 @@ public class SummaryBuilder {
             return false;
         }
         SootClass clazz = method.getDeclaringClass();
-        if (targetPackage != null && !clazz.getPackageName().startsWith(targetPackage)) {
+        if (!PackageScope.includes(targetPackage, clazz.getPackageName())) {
             return false;
         }
         return includeLibraries || !LibrariesManager.v().isLibrary(clazz);

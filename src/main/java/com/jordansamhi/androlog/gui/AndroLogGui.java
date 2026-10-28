@@ -54,7 +54,7 @@ public final class AndroLogGui {
 
     public static void main(String[] args) {
         if (args.length > 1 || (args.length == 1 && ("--help".equals(args[0]) || "-h".equals(args[0])))) {
-            System.out.println("AndroLog GUI\nUsage: androlog-gui [path/to/application.apk]\nRequires a desktop session, Java, Android SDK Platforms and Build Tools.");
+            System.out.println("AndroLog GUI\nUsage: androlog-gui [path/to/application.apk]\nRequires a desktop session, Java 17+, Android SDK Platforms and Build Tools.");
             return;
         }
         if (GraphicsEnvironment.isHeadless()) {
