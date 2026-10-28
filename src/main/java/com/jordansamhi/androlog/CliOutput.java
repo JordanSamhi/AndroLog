@@ -46,6 +46,7 @@ final class CliOutput {
         if (stage == 0) out.println();
         activeStage = label;
         long before = System.nanoTime();
+        if (Boolean.getBoolean("androlog.gui.progress")) out.println("@@ANDROLOG_STAGE " + (stage + 1));
         out.printf(block ? "[%d/%d] %s%n" : "[%d/%d] %s ... ", ++stage, stages, label);
         out.flush();
         try {

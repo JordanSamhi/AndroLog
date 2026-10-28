@@ -1,0 +1,13 @@
+#!/bin/sh
+# Works from any directory, including checkouts whose path contains spaces.
+set -eu
+androlog_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+androlog_jar="$androlog_root/target/androlog-gui-0.1.jar"
+if [ ! -f "$androlog_jar" ]; then
+    printf '%s\n' "Build AndroLog first: run 'mvn package' in $androlog_root" >&2
+    exit 1
+fi
+if [ -n "${JAVA_HOME:-}" ]; then
+    exec "$JAVA_HOME/bin/java" -jar "$androlog_jar" "$@"
+fi
+exec java -jar "$androlog_jar" "$@"

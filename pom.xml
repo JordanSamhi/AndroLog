@@ -32,6 +32,18 @@
                             <goal>single</goal>
                         </goals>
                     </execution>
+                    <execution>
+                        <id>desktop-gui</id>
+                        <phase>package</phase>
+                        <goals><goal>single</goal></goals>
+                        <configuration>
+                            <finalName>androlog-gui-${project.version}</finalName>
+                            <appendAssemblyId>false</appendAssemblyId>
+                            <archive>
+                                <manifest><mainClass>com.jordansamhi.androlog.gui.AndroLogGui</mainClass></manifest>
+                            </archive>
+                        </configuration>
+                    </execution>
                 </executions>
                 <configuration>
                     <descriptorRefs>

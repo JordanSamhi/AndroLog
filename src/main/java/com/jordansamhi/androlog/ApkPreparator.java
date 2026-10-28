@@ -115,6 +115,9 @@ public class ApkPreparator {
         }
         ByteArrayOutputStream diagnostic = new ByteArrayOutputStream();
         boolean truncated = false;
+        // A desktop cancellation terminates this JVM; stop an active signing tool as well.
+        Thread cleanup = new Thread(process::destroyForcibly, "androlog-signing-cleanup");
+        Runtime.getRuntime().addShutdownHook(cleanup);
         try {
             try (InputStream input = process.getInputStream()) {
                 byte[] buffer = new byte[8192];
@@ -142,6 +145,8 @@ public class ApkPreparator {
             throw new IOException("Interrupted while running " + name + ".", error);
         } finally {
             if (process.isAlive()) process.destroyForcibly();
+            try { Runtime.getRuntime().removeShutdownHook(cleanup); }
+            catch (IllegalStateException ignored) { /* JVM shutdown is already in progress. */ }
         }
     }
 

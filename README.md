@@ -13,8 +13,9 @@ AndroLog inserts logging probes into an APK, then compares the original applicat
 - **Interactive HTML reports:** package navigation, continuous class listings, coverage filters, clickable code references, and class-level graph exploration.
 - **Terminal and JSON reports:** aggregate coverage and cumulative coverage by minute.
 - **Integrated capture:** install and launch the instrumented app, collect logs, and generate reports with one command.
+- **Desktop GUI:** choose an APK, select logging probes, follow instrumentation, and save a signed copy without composing a command.
 
-[Wiki](https://github.com/JordanSamhi/AndroLog/wiki) · [Previews](#report-previews) · [Setup](#build-and-configure) · [Quick start](#instrument-run-and-report) · [Reports](#read-the-reports) · [Dynamic call graph](#dynamic-call-graph) · [Options](#command-line-reference) · [Troubleshooting](#troubleshooting)
+[Wiki](https://github.com/JordanSamhi/AndroLog/wiki) · [Desktop GUI](#desktop-gui) · [Previews](#report-previews) · [Setup](#build-and-configure) · [Quick start](#instrument-run-and-report) · [Reports](#read-the-reports) · [Dynamic call graph](#dynamic-call-graph) · [Options](#command-line-reference) · [Troubleshooting](#troubleshooting)
 
 The [AndroLog wiki](https://github.com/JordanSamhi/AndroLog/wiki) provides complete user and developer guides, including capture workflows, report navigation, coverage semantics, dynamic dispatch, JSON/log formats, and troubleshooting.
 
@@ -64,7 +65,49 @@ Check the available options:
 java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 ```
 
-### Configure APK signing
+## Desktop GUI
+
+[![AndroLog desktop GUI with an APK drop area, setup steps, and SDK settings](data/screenshots/androlog-gui.png)](data/screenshots/androlog-gui.png)
+
+Build with `mvn package`, then launch from the repository:
+
+```bash
+./androlog-gui
+# Optionally open an APK immediately:
+./androlog-gui /path/to/application.apk
+```
+
+On Windows, use `androlog-gui.bat`. The portable desktop JAR can also be launched directly:
+
+```bash
+java -jar target/androlog-gui-0.1.jar
+```
+
+1. **Choose an APK.** Browse for a file or drop one onto the window. Use a complete application APK, rather than a resource-only split.
+2. **Choose your logs.** Toggle classes, methods, statements, Android components, and dynamic call tracing. **Essentials** selects classes, methods, and components; **Everything** selects all five. A package prefix, custom log tag, and exclusion of known libraries are also available.
+3. **Instrument.** A floating bytecode-stack animation accompanies the actual loading, probe insertion, export, and signing stages. The display shows elapsed time, without estimating a completion percentage. You can cancel or inspect and save the full run log.
+4. **Save your APK.** Choose a filename and destination in the save dialog. AndroLog protects the original APK and asks before replacing another file. You can open the destination folder or instrument another app.
+
+The GUI discovers the Android SDK from `ANDROID_HOME`, `ANDROID_SDK_ROOT`, and common installation locations. Use **SDK settings** to choose the SDK, or the Platforms and Build Tools folders separately. Animations can also be disabled there. Preferences are stored in `~/.config/androlog/gui.properties`; signing paths are passed to the worker through temporary configuration, outside the repository. The GUI does not require the CLI configuration described below.
+
+Each APK is processed in a separate JVM, keeping the interface responsive and isolating Soot state between runs. The signed APK and diagnostics stay in a temporary session until you start another run or close the app; save the files you want to keep. APKs use the same bundled test signing key as the CLI. Installation, capture, and report generation remain available through the [command line workflow](#instrument-run-and-report).
+
+### Package a desktop application
+
+With a JDK providing `jpackage` (JDK 17 or newer recommended), build a self-contained app for the current operating system:
+
+```bash
+mvn package
+./scripts/package-gui.sh
+# Or choose a destination folder:
+./scripts/package-gui.sh /path/to/desktop-build
+```
+
+The script runs on macOS and Linux. On macOS it creates `target/desktop/AndroLog-macos.zip`: extract the archive into a local folder, such as Applications, and open `AndroLog.app`. Keeping the build archived prevents cloud-synced checkouts from attaching metadata that invalidates the app signature. On Linux the output is `target/desktop/AndroLog/`. Both bundle Java, including the executable used by instrumentation workers and SDK signing tools. Android SDK Platforms and Build Tools must still be installed separately. Existing packages are not overwritten. macOS packaging uses native bundle build number `1`, while the AndroLog engine remains version `0.1`.
+
+This creates a local application image; it is not a Developer ID signed or notarized public installer. The macOS flow has been tested; the Windows launcher and Linux packaging still need validation on those systems.
+
+## Configure command-line APK signing
 
 APK instrumentation requires the paths to your own Android SDK signing tools. Report generation does not invoke these tools.
 
