@@ -112,13 +112,14 @@
     if (!result) return;
     const points = result.summary?.points || [];
     $('messages-summary').textContent = result.notice || (points.length ? 'Points found in the instrumented APK.' : 'No custom log points were found in this APK.');
-    const kindOf = point => point.kind === 'marker' || point.kind === 'value' ? point.kind
-      : point.dynamic === true || typeof point.latestValue === 'string' || (Array.isArray(point.samples) && point.samples.length) ? 'value' : 'marker';
-    for (const kind of ['marker', 'value']) {
+    const kindOf = point => ['reached', 'message', 'value'].includes(point.kind) ? point.kind : point.kind === 'marker' ? 'message'
+      : point.dynamic === true || typeof point.latestValue === 'string' || (Array.isArray(point.samples) && point.samples.length) ? 'value' : 'message';
+    const groupNames = { reached: 'Statement reached', message: 'Custom messages', value: 'Variable values' };
+    for (const kind of ['reached', 'message', 'value']) {
       const matching = points.filter(point => kindOf(point) === kind);
       if (!matching.length) continue;
       const group = document.createElement('section'); group.className = 'custom-log-group';
-      const heading = document.createElement('h4'); heading.textContent = kind === 'marker' ? 'Statement markers' : 'Variable values'; group.appendChild(heading);
+      const heading = document.createElement('h4'); heading.textContent = groupNames[kind]; group.appendChild(heading);
       for (const point of matching) {
       const statusName = point.status || (point.count == null ? 'unknown' : point.count > 0 ? 'covered' : 'uncovered');
       const observed = statusName === 'covered', unknown = statusName === 'unknown';
@@ -136,8 +137,8 @@
           message.className = 'point-value point-sample'; message.textContent = latest === '' ? '(empty string)' : latest;
           if (samples.length) message.title = `Recent distinct values:\n${samples.map(value => value === '' ? '(empty string)' : value).join('\n')}`;
         } else { message.className = 'point-label'; message.textContent = point.message; }
-      } else message.textContent = point.message;
-      const location = document.createElement('small'); location.textContent = `${point.method} · statement ${point.index}`; location.title = point.statement;
+      } else message.textContent = kind === 'reached' ? `Statement ${point.index}` : point.message;
+      const location = document.createElement('small'); location.textContent = kind === 'reached' ? point.method : `${point.method} · statement ${point.index}`; location.title = point.statement;
       const status = document.createElement('span'); status.className = 'point-status'; status.textContent = unknown ? 'Unconfirmed' : observed ? kind === 'value' && !captured ? 'Reached · value not captured' : 'Reached' : 'Not reached';
       status.title = unknown ? 'These legacy logs do not distinguish this point from another point with the same message.' : observed ? 'A matching point was observed in this log.' : 'No matching point was observed in this log.';
       detail.append(message, location);
@@ -362,7 +363,8 @@
   $('settings-save').addEventListener('click', async () => { try { const settings = {}; for (const key of ['platforms','buildTools','java']) settings[key] = $(`settings-${key}`).value; updateSettings(await api.saveSettings(settings)); $('settings-status').textContent = 'Settings saved on this computer.'; toast('Settings saved.'); } catch (e) { toast(e.message, true); } });
   const identity = (method, index) => `${method}\n${index}`;
   const editorDrafts = new Map();
-  const pointKind = point => point?.kind || (point?.variables?.length ? 'value' : 'marker');
+  const logKinds = ['reached', 'message', 'value'];
+  const pointKind = point => !point ? 'reached' : point.kind === 'marker' ? 'message' : point.kind || (point.variables?.length ? 'value' : 'message');
   async function browseCode() {
     if (!state.apk) { toast('Choose the original APK first.', true); return; }
     const catalog = await run('inspect', () => api.inspectCode()); if (!catalog) return;
@@ -500,11 +502,12 @@
   function selectPoint(method, statement, row, number) {
     $('code-lines').querySelectorAll('.code-line.active').forEach(el => el.classList.remove('active')); row.classList.add('active');
     const key = identity(method.signature, statement.index), point = state.draft.get(key);
-    if (!editorDrafts.has(key)) { const mode = pointKind(point); editorDrafts.set(key, { mode, marker: null, value: null, [mode]: point || null }); }
+    if (!editorDrafts.has(key)) { const mode = pointKind(point); editorDrafts.set(key, { mode, reached: null, message: null, value: null, [mode]: point || null }); }
     state.selected = { key, method, statement, number, editor: editorDrafts.get(key) };
+    if (state.selected.editor.mode === 'reached' && !point) saveSelectedPoint(reachedPoint());
     $('point-label').textContent = `Before statement ${statement.index}`; $('point-label').title = method.signature;
     renderPointEditor(); readSelectedVariables();
-    if (state.selected.editor.mode === 'marker') $('point-message').focus();
+    if (state.selected.editor.mode === 'message') $('point-message').focus();
   }
   function readSelectedVariables() {
     const selection = state.selected, view = codeBrowser.view;
@@ -523,8 +526,8 @@
   }
   function renderPointEditor() {
     const selected = state.selected;
-    $('point-message').value = selected?.editor.marker?.message || '';
-    $('point-message').disabled = !selected;
+    $('point-message').value = selected?.editor.message?.message || '';
+    $('point-message').disabled = !selected || selected.editor.mode !== 'message';
     $('remove-point').disabled = !selected || !state.draft.has(selected.key);
     updateVariables();
   }
@@ -534,18 +537,24 @@
     if (point) state.draft.set(key, point); else state.draft.delete(key);
     const marked = Boolean(point); number.textContent = `${marked ? '● ' : ''}${statement.index}`; number.classList.toggle('marked', marked); $('remove-point').disabled = !marked; updateDraftCount();
   }
+  function reachedPoint() {
+    const { method, statement } = state.selected;
+    return { kind: 'reached', method: method.signature, index: statement.index, statement: statement.text };
+  }
   function chooseLogKind(mode) {
     if (!state.selected) return;
     state.selected.editor.mode = mode;
-    saveSelectedPoint(state.selected.editor[mode]);
+    saveSelectedPoint(mode === 'reached' ? reachedPoint() : state.selected.editor[mode]);
     renderPointEditor(); readSelectedVariables();
-    if (mode === 'marker') $('point-message').focus();
+    if (mode === 'message') $('point-message').focus();
   }
-  $('log-kind-marker').addEventListener('click', () => chooseLogKind('marker'));
-  $('log-kind-value').addEventListener('click', () => chooseLogKind('value'));
-  $('log-kind-marker').parentElement.addEventListener('keydown', event => {
+  for (const kind of logKinds) $(`log-kind-${kind}`).addEventListener('click', () => chooseLogKind(kind));
+  $('log-kind-reached').parentElement.addEventListener('keydown', event => {
     if (!['ArrowLeft', 'ArrowRight'].includes(event.key) || !state.selected) return;
-    event.preventDefault(); const mode = state.selected.editor.mode === 'marker' ? 'value' : 'marker'; chooseLogKind(mode); $(`log-kind-${mode}`).focus();
+    event.preventDefault();
+    const index = logKinds.indexOf(state.selected.editor.mode), direction = event.key === 'ArrowRight' ? 1 : -1;
+    const mode = logKinds[(index + direction + logKinds.length) % logKinds.length];
+    chooseLogKind(mode); $(`log-kind-${mode}`).focus();
   });
   function availableVariables() {
     const unique = new Map();
@@ -575,9 +584,9 @@
   }
   function updateVariables() {
     closeVariables();
-    const selected = state.selected, mode = selected?.editor.mode || 'marker', value = selected?.editor.value;
-    for (const kind of ['marker', 'value']) { const button = $(`log-kind-${kind}`); button.disabled = !selected; button.setAttribute('aria-checked', String(kind === mode)); button.tabIndex = kind === mode ? 0 : -1; }
-    $('marker-editor').hidden = mode !== 'marker'; $('value-editor').hidden = mode !== 'value';
+    const selected = state.selected, mode = selected?.editor.mode || 'reached', value = selected?.editor.value;
+    for (const kind of logKinds) { const button = $(`log-kind-${kind}`); button.disabled = !selected; button.setAttribute('aria-checked', String(kind === mode)); button.tabIndex = kind === mode ? 0 : -1; }
+    $('message-editor-panel').hidden = mode !== 'message'; $('value-editor').hidden = mode !== 'value';
     const available = mode !== 'value' || selected?.variablesPending || selected?.variablesError ? [] : availableVariables(); $('insert-variable').disabled = !available.length;
     const variable = value?.variables?.length === 1 ? value.variables[0] : null;
     $('variable-name').textContent = variable?.name || (value?.variables?.length ? `${value.variables.length} saved variables` : 'No variable selected');
@@ -585,7 +594,7 @@
     $('insert-variable').textContent = value ? 'Change variable' : 'Choose variable';
     const legacy = mode === 'value' && value && !value.kind && (!variable || value.message !== `{${variable.name}}`);
     $('legacy-template').hidden = !legacy; $('legacy-template').textContent = legacy ? `Saved template: ${value.message} · Choose a variable to replace it.` : '';
-    $('variable-hint').textContent = !selected ? 'Select a statement to place a log.' : mode === 'marker' ? 'Coverage will show whether this statement was reached.' : selected.variablesPending ? 'Reading available variables…' : selected.variablesError ? `${selected.variablesError} Select this statement again to retry.` : available.length ? 'Coverage will show the values recorded before this statement.' : 'No initialized supported local is available here.';
+    $('variable-hint').textContent = !selected ? 'Select a statement to place a log.' : mode === 'reached' ? state.draft.has(selected.key) ? 'This statement is tracked internally. No message is needed.' : 'Marker removed. Choose Statement reached to add it again.' : mode === 'message' ? 'Your message will be printed whenever this point is reached.' : selected.variablesPending ? 'Reading available variables…' : selected.variablesError ? `${selected.variablesError} Select this statement again to retry.` : available.length ? 'Coverage will show the values recorded before this statement.' : 'No initialized supported local is available here.';
     $('insert-variable').title = $('variable-hint').textContent;
   }
   function variableTypeLabel(type) { return type === 'java.lang.String' ? 'String' : localTypes.has(type) ? type : `${type} · uses toString()`; }
@@ -620,15 +629,15 @@
   });
   function updateDraftCount() { $('dialog-count').textContent = state.draft.size ? `${state.draft.size} log ${state.draft.size === 1 ? 'point' : 'points'} selected` : 'No log points selected'; }
   $('point-message').addEventListener('input', () => {
-    if (!state.selected || state.selected.editor.mode !== 'marker') return; const { method, statement } = state.selected; const message = $('point-message').value;
-    saveSelectedPoint(message.trim() ? { kind: 'marker', method: method.signature, index: statement.index, statement: statement.text, message } : null);
+    if (!state.selected || state.selected.editor.mode !== 'message') return; const { method, statement } = state.selected; const message = $('point-message').value;
+    saveSelectedPoint(message.trim() ? { kind: 'message', method: method.signature, index: statement.index, statement: statement.text, message } : null);
   });
-  $('remove-point').addEventListener('click', () => { if (state.selected) { state.selected.editor.marker = null; state.selected.editor.value = null; saveSelectedPoint(null); renderPointEditor(); } });
+  $('remove-point').addEventListener('click', () => { if (state.selected) { for (const kind of logKinds) state.selected.editor[kind] = null; saveSelectedPoint(null); renderPointEditor(); } });
   function closeCode() { codeBrowser.view++; closeVariables(); $('code-dialog').close(); }
   $('code-close').addEventListener('click', closeCode); $('code-cancel').addEventListener('click', closeCode);
   $('code-dialog').addEventListener('cancel', event => { event.preventDefault(); closeCode(); });
   $('code-apply').addEventListener('click', () => {
-    for (const point of state.draft.values()) if (/[\n\r\0]/.test(point.message) || new TextEncoder().encode(point.message).length > 1000) { toast('Each message must fit on one line and within 1,000 UTF-8 bytes.', true); return; }
+    for (const point of state.draft.values()) if (point.kind !== 'reached' && (/[\n\r\0]/.test(point.message) || new TextEncoder().encode(point.message).length > 1000)) { toast('Each message must fit on one line and within 1,000 UTF-8 bytes.', true); return; }
     state.points = new Map(state.draft); $('custom-count').textContent = state.points.size ? `${state.points.size} log ${state.points.size === 1 ? 'point' : 'points'} selected` : 'Place a log in the code'; closeCode();
   });
   drawMetrics(null); updateAvailability();

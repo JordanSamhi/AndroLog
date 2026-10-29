@@ -76,10 +76,13 @@ function validatePlan(plan) {
   const seen = new Set();
   for (const point of plan.points) {
     if (!point || typeof point.method !== 'string' || !point.method.trim() || !Number.isSafeInteger(point.index) || point.index < 1 || typeof point.statement !== 'string' || !point.statement.trim()) throw new Error('A custom log point is incomplete.');
-    if (typeof point.message !== 'string' || !point.message.trim() || /[\n\r\0]/.test(point.message) || Buffer.byteLength(point.message, 'utf8') > 1000) throw new Error('Use a nonempty single-line message of at most 1,000 UTF-8 bytes.');
-    if (point.kind != null && !['marker', 'value'].includes(point.kind)) throw new Error('Choose a statement marker or a variable value log.');
+    if (point.kind != null && !['reached', 'message', 'value', 'marker'].includes(point.kind)) throw new Error('Choose statement reached, a custom message, or a variable value log.');
+    if (point.kind === 'reached') {
+      if (point.message != null && point.message !== '') throw new Error('Statement reached uses an internal marker and needs no message.');
+    } else if (typeof point.message !== 'string' || !point.message.trim() || /[\n\r\0]/.test(point.message) || Buffer.byteLength(point.message, 'utf8') > 1000) throw new Error('Use a nonempty single-line message of at most 1,000 UTF-8 bytes.');
     if (point.variables != null) {
       if (!Array.isArray(point.variables)) throw new Error('The custom log variables are invalid. Browse the statement again.');
+      if (point.kind === 'reached' && point.variables.length) throw new Error('Statement reached cannot bind variables.');
       const variables = new Set();
       for (const variable of point.variables) {
         if (!variable || typeof variable.name !== 'string' || !/^[^\s{}\u0000-\u001f\u007f]{1,200}$/u.test(variable.name) || !supportedLocalType(variable.type)) throw new Error('Choose a supported local variable from Insert variable.');
@@ -88,7 +91,7 @@ function validatePlan(plan) {
         variables.add(variable.name);
       }
     }
-    if (point.kind === 'marker' && point.variables?.length) throw new Error('Statement markers use a literal message and cannot bind variables.');
+    if (['marker', 'message'].includes(point.kind) && point.variables?.length) throw new Error('Custom messages use a literal message and cannot bind variables.');
     if (point.kind === 'value' && (point.variables?.length !== 1 || point.message !== `{${point.variables[0].name}}`)) throw new Error('A variable value log must select exactly one variable without additional message text.');
     const key = `${point.method}\n${point.index}`; if (seen.has(key)) throw new Error('Only one message can be attached to a statement.'); seen.add(key);
   }
@@ -99,7 +102,7 @@ async function readCustomMessages(file, tag, limit = 1000) {
   const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const timestamp = '(?:\\d{4}-)?\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?';
   const tagged = new RegExp(`^(?:(?:${timestamp}\\s+\\d+\\s+\\d+\\s+[VDIWEFA]\\s+)?${escaped}\\s*:\\s*|(?:${timestamp}\\s+)?[VDIWEFA]/${escaped}(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)(?:CUSTOM=|CUSTOM_VALUE=[a-f0-9]{32}\\|)(.*)$`, 's');
-  const markerPattern = new RegExp(`^(?:(?:${timestamp}\\s+\\d+\\s+\\d+\\s+[VDIWEFA]\\s+)?${escaped}\\s*:\\s*|(?:${timestamp}\\s+)?[VDIWEFA]/${escaped}(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)CUSTOM_POINT=([a-f0-9]{32})$`);
+  const markerPattern = new RegExp(`^(?:(?:${timestamp}\\s+\\d+\\s+\\d+\\s+[VDIWEFA]\\s+)?${escaped}\\s*:\\s*|(?:${timestamp}\\s+)?[VDIWEFA]/${escaped}(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)CUSTOM_(?:POINT|REACHED)=([a-f0-9]{32})$`);
   const markers = {}; const messages = new Map(); let total = 0, omitted = 0;
   const consume = line => {
     const marker = markerPattern.exec(line); if (marker) { markers[marker[1]] = (markers[marker[1]] || 0) + 1; return; }

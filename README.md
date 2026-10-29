@@ -39,7 +39,11 @@ Open the **original APK** in **Instrument**. Select classes, methods, statements
 
 [![Instrument view: choose an APK, logging options, and a Logcat tag](data/screenshots/gui-instrument.png)](data/screenshots/gui-instrument.png)
 
-Open **Custom logging**, browse the package → class → method tree, and select a statement. Choose **Statement reached** to attach a message such as `reached this point`, or **Variable value** to record a local number, boolean, string, or object. Objects use their `toString()` representation.
+Open **Custom logging**, browse the package → class → method tree, and select a statement:
+
+- **Statement reached** records whether execution reaches that point. Nothing to type.
+- **Custom message** logs a string you choose, such as `starting checkout`.
+- **Variable value** records a local number, boolean, string, or object. Objects use their `toString()` representation.
 
 <details>
 <summary>See custom log selection</summary>

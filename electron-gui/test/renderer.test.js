@@ -49,6 +49,7 @@ test('a custom message is bound to an exact selected statement and sent to the J
   doc.getElementById('open-custom').click(); await tick();
   assert.equal(doc.getElementById('code-dialog').open, true);
   doc.querySelector('.code-line').click();
+  doc.getElementById('log-kind-message').click();
   const input = doc.getElementById('point-message'); input.value = 'reached this point'; input.dispatchEvent(new window.Event('input', { bubbles: true }));
   doc.getElementById('code-apply').click(); assert.match(doc.getElementById('custom-count').textContent, /1 log point/);
   doc.getElementById('instrument').click(); await tick();
@@ -161,6 +162,7 @@ test('custom-only APK instructions do not claim coverage probes were enabled', a
   const { dom, window, doc } = createUi(); t.after(() => dom.window.close());
   doc.getElementById('choose-apk').click(); await tick();
   doc.getElementById('open-custom').click(); await tick(); doc.querySelector('.code-line').click();
+  doc.getElementById('log-kind-message').click();
   const field = doc.getElementById('point-message'); field.value = 'here'; field.dispatchEvent(new window.Event('input', { bubbles: true }));
   doc.getElementById('code-apply').click(); doc.querySelectorAll('[data-probe]').forEach(input => { input.checked = false; });
   doc.getElementById('instrument').click(); await tick(); doc.getElementById('save-apk').click(); await tick();
@@ -425,6 +427,7 @@ async function openVariableEditor(doc) {
   doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('open-custom').click(); await tick();
 }
 function enterMessage(window, doc, message) {
+  doc.getElementById('log-kind-message').click();
   const input = doc.getElementById('point-message'); input.value = message; input.dispatchEvent(new window.Event('input', { bubbles: true })); return input;
 }
 function insertVariable(doc, name) {
@@ -546,11 +549,12 @@ test('lazy browsing analyzes variables only in value mode and caches them across
   assert.deepEqual(classCalls, ['org.example.Main']); assert.equal(doc.querySelectorAll('.code-line').length, 4);
   assert.equal(doc.querySelectorAll('.tree-method').length, 2); assert.deepEqual(variableCalls, []);
   doc.querySelectorAll('.code-line')[0].click(); await tick();
-  assert.equal(doc.getElementById('point-message').disabled, false);
+  assert.equal(doc.getElementById('point-message').disabled, true);
+  assert.equal(doc.getElementById('message-editor-panel').hidden, true);
   assert.equal(variableCalls.length, 0, 'Statement markers do not analyze variable availability');
   enterMessage(window, doc, 'first'); doc.getElementById('log-kind-value').click(); await tick();
   assert.match(doc.getElementById('variable-hint').textContent, /Reading available variables/);
-  doc.getElementById('log-kind-marker').click(); doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('log-kind-value').click(); await tick();
+  doc.getElementById('log-kind-message').click(); doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('log-kind-value').click(); await tick();
   assert.equal(variableCalls.length, 1, 'Two points in the same method share one pending analysis');
   variables.resolve(lazyVariables(variableCalls[0])); await tick();
   insertVariable(doc, 'value');
@@ -558,7 +562,7 @@ test('lazy browsing analyzes variables only in value mode and caches them across
   chooseClass(doc, 'Main'); await tick(); doc.querySelectorAll('.code-line')[1].click(); await tick();
   assert.equal(classCalls.length, 1); assert.equal(variableCalls.length, 1);
   assert.equal(doc.getElementById('variable-name').textContent, 'value');
-  assert.equal(doc.getElementById('marker-editor').hidden, true);
+  assert.equal(doc.getElementById('message-editor-panel').hidden, true);
   doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
   assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[1].variables)), [{ name: 'value', type: 'int' }]);
 });
@@ -606,10 +610,10 @@ test('lazy class and variable failures can be retried without blocking custom te
   doc.querySelector('.code-line').click(); doc.getElementById('log-kind-value').click(); await tick();
   assert.match(doc.getElementById('variable-hint').textContent, /Read failed/);
   assert.match(doc.getElementById('variable-hint').textContent, /Select this statement again to retry/);
-  doc.getElementById('log-kind-marker').click(); enterMessage(window, doc, 'still usable');
+  doc.getElementById('log-kind-message').click(); enterMessage(window, doc, 'still usable');
   doc.getElementById('log-kind-value').click(); await tick();
   assert.equal(doc.getElementById('insert-variable').disabled, false);
-  doc.getElementById('log-kind-marker').click(); assert.equal(doc.getElementById('point-message').value, 'still usable');
+  doc.getElementById('log-kind-message').click(); assert.equal(doc.getElementById('point-message').value, 'still usable');
   assert.equal(classCalls, 2); assert.equal(variableCalls, 2);
 });
 test('closing lazy browsing suppresses late UI updates and changing APK invalidates cached code', async t => {
@@ -631,7 +635,7 @@ test('choosing a variable records exactly one typed value without a message temp
   const { dom, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
   await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();
   insertVariable(doc, 'i0');
-  assert.equal(doc.getElementById('marker-editor').hidden, true);
+  assert.equal(doc.getElementById('message-editor-panel').hidden, true);
   assert.equal(doc.getElementById('variable-name').textContent, 'i0'); assert.equal(doc.getElementById('variable-type').textContent, 'int');
   assert.equal(doc.activeElement, doc.getElementById('insert-variable'));
   insertVariable(doc, 'z0'); insertVariable(doc, '$r1');
@@ -652,21 +656,21 @@ test('typed variable bindings survive point changes and reopening while Cancel p
   assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[0].variables)), [{ name: 'i0', type: 'int' }]);
   assert.equal(calls[0].plan.points[0].message, '{i0}');
 });
-test('switching modes restores separate drafts and marker braces stay literal', async t => {
+test('switching modes restores separate drafts and custom message braces stay literal', async t => {
   const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
   await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();
   enterMessage(window, doc, 'literal {i0}');
   assert.equal(doc.getElementById('value-editor').hidden, true);
   doc.getElementById('log-kind-value').click(); assert.equal(doc.getElementById('dialog-count').textContent, 'No log points selected');
-  insertVariable(doc, 'i0'); doc.getElementById('log-kind-marker').click();
+  insertVariable(doc, 'i0'); doc.getElementById('log-kind-message').click();
   assert.equal(doc.getElementById('point-message').value, 'literal {i0}');
-  assert.equal(doc.getElementById('marker-editor').hidden, false);
-  doc.querySelectorAll('.code-line')[2].click(); doc.querySelectorAll('.code-line')[1].click();
-  assert.equal(doc.getElementById('log-kind-marker').getAttribute('aria-checked'), 'true');
+  assert.equal(doc.getElementById('message-editor-panel').hidden, false);
+  doc.querySelectorAll('.code-line')[2].click(); doc.getElementById('remove-point').click(); doc.querySelectorAll('.code-line')[1].click();
+  assert.equal(doc.getElementById('log-kind-message').getAttribute('aria-checked'), 'true');
   doc.getElementById('log-kind-value').click(); assert.equal(doc.getElementById('variable-name').textContent, 'i0');
-  doc.getElementById('log-kind-marker').click();
+  doc.getElementById('log-kind-message').click();
   doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
-  assert.equal(calls[0].plan.points.length, 1); assert.equal(calls[0].plan.points[0].kind, 'marker');
+  assert.equal(calls[0].plan.points.length, 1); assert.equal(calls[0].plan.points[0].kind, 'message');
   assert.equal(calls[0].plan.points[0].message, 'literal {i0}'); assert.equal(calls[0].plan.points[0].variables, undefined);
   doc.getElementById('open-custom').click(); await tick(); doc.querySelectorAll('.code-line')[1].click();
   assert.equal(doc.getElementById('point-message').value, 'literal {i0}');
@@ -690,7 +694,7 @@ test('legacy mixed templates remain unchanged until a replacement value is expli
   assert.equal(doc.getElementById('variable-name').textContent, '2 saved variables');
   assert.equal(doc.getElementById('legacy-template').hidden, false);
   assert.match(doc.getElementById('legacy-template').textContent, /score=\{i0\}, enabled=\{z0\}/);
-  doc.getElementById('log-kind-marker').click(); doc.getElementById('log-kind-value').click();
+  doc.getElementById('log-kind-message').click(); doc.getElementById('log-kind-value').click();
   doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
   assert.deepEqual(JSON.parse(JSON.stringify(calls[1].plan.points[0])), JSON.parse(JSON.stringify(legacy)));
   doc.getElementById('open-custom').click(); await tick(); doc.querySelectorAll('.code-line')[1].click(); insertVariable(doc, '$r1');
@@ -701,32 +705,93 @@ test('legacy mixed templates remain unchanged until a replacement value is expli
   assert.equal(calls[2].plan.points[0].kind, 'value'); assert.equal(calls[2].plan.points[0].message, '{$r1}');
   assert.deepEqual(JSON.parse(JSON.stringify(calls[2].plan.points[0].variables)), [{ name: '$r1', type: 'java.lang.String' }]);
 });
-test('cancelled mode changes preserve the applied marker and Remove clears both mode drafts', async t => {
+test('cancelled mode changes preserve the applied message and Remove clears all mode drafts', async t => {
   const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
   await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); enterMessage(window, doc, 'reached');
   doc.getElementById('code-apply').click(); doc.getElementById('open-custom').click(); await tick();
   doc.querySelectorAll('.code-line')[1].click(); insertVariable(doc, 'z0'); doc.getElementById('code-cancel').click();
   doc.getElementById('instrument').click(); await tick();
-  assert.equal(calls[0].plan.points[0].kind, 'marker'); assert.equal(calls[0].plan.points[0].message, 'reached');
+  assert.equal(calls[0].plan.points[0].kind, 'message'); assert.equal(calls[0].plan.points[0].message, 'reached');
   doc.getElementById('open-custom').click(); await tick(); doc.querySelectorAll('.code-line')[1].click();
-  assert.equal(doc.getElementById('log-kind-marker').getAttribute('aria-checked'), 'true');
-  insertVariable(doc, 'i0'); doc.getElementById('remove-point').click(); doc.getElementById('log-kind-marker').click();
+  assert.equal(doc.getElementById('log-kind-message').getAttribute('aria-checked'), 'true');
+  insertVariable(doc, 'i0'); doc.getElementById('remove-point').click(); doc.getElementById('log-kind-message').click();
   assert.equal(doc.getElementById('point-message').value, ''); assert.equal(doc.getElementById('dialog-count').textContent, 'No log points selected');
   doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick(); assert.equal(calls[1].plan, null);
 });
-test('class navigation resets editor controls and late availability cannot change marker mode', async t => {
+test('class navigation resets editor controls and late availability cannot change message mode', async t => {
   const variables = pendingResult();
   const { dom, window, doc } = createUi({ inspectCode: async () => lazyCatalog(), inspectClass: async name => lazyClass(name), inspectVariables: () => variables.promise }); t.after(() => dom.window.close());
   await openVariableEditor(doc); chooseClass(doc, 'Main'); await tick(); doc.querySelector('.code-line').click();
   enterMessage(window, doc, 'still reached'); doc.getElementById('log-kind-value').click(); await tick();
-  doc.getElementById('log-kind-marker').click(); variables.resolve(lazyVariables('<org.example.Main: void first()>')); await tick();
-  assert.equal(doc.getElementById('marker-editor').hidden, false); assert.equal(doc.getElementById('point-message').value, 'still reached');
-  assert.match(doc.getElementById('variable-hint').textContent, /whether this statement was reached/);
+  doc.getElementById('log-kind-message').click(); variables.resolve(lazyVariables('<org.example.Main: void first()>')); await tick();
+  assert.equal(doc.getElementById('message-editor-panel').hidden, false); assert.equal(doc.getElementById('point-message').value, 'still reached');
+  assert.match(doc.getElementById('variable-hint').textContent, /Your message will be printed/);
   chooseClass(doc, 'Other'); await tick();
-  assert.equal(doc.getElementById('log-kind-marker').disabled, true); assert.equal(doc.getElementById('log-kind-value').disabled, true);
+  assert.equal(doc.getElementById('log-kind-message').disabled, true); assert.equal(doc.getElementById('log-kind-value').disabled, true);
   assert.equal(doc.getElementById('value-editor').hidden, true); assert.equal(doc.getElementById('point-message').disabled, true);
   assert.equal(doc.getElementById('point-message').value, ''); assert.equal(doc.getElementById('variable-name').textContent, 'No variable selected');
 });
+test('selecting a statement adds an internal reach point without a message or variable input', async t => {
+  const { dom, doc, calls } = createUi(); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelector('.code-line').click();
+  assert.equal(doc.getElementById('log-kind-reached').getAttribute('aria-checked'), 'true');
+  assert.equal(doc.getElementById('message-editor-panel').hidden, true);
+  assert.equal(doc.getElementById('value-editor').hidden, true);
+  assert.equal(doc.getElementById('point-message').disabled, true);
+  assert.equal(doc.getElementById('dialog-count').textContent, '1 log point selected');
+  assert.match(doc.getElementById('variable-hint').textContent, /No message is needed/);
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points)), [
+    { kind: 'reached', method: '<org.example.Main: void run()>', index: 1, statement: 'return' }
+  ]);
+  doc.getElementById('open-custom').click(); await tick(); doc.querySelector('.code-line').click();
+  doc.getElementById('remove-point').click();
+  assert.equal(doc.getElementById('dialog-count').textContent, 'No log points selected');
+  assert.equal(doc.querySelector('.code-line .num').classList.contains('marked'), false);
+  assert.match(doc.getElementById('variable-hint').textContent, /Marker removed/);
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  assert.equal(calls[1].plan, null, 'Applying a removal does not recreate an automatic reach point');
+});
+
+test('all three modes cycle by keyboard and keep independent message and value drafts', async t => {
+  const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();
+  function arrow(key) { doc.querySelector('.log-kind-switch [aria-checked="true"]').dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); }
+  arrow('ArrowRight');
+  assert.equal(doc.activeElement, doc.getElementById('log-kind-message'));
+  enterMessage(window, doc, 'score checkpoint'); arrow('ArrowRight');
+  assert.equal(doc.getElementById('log-kind-value').getAttribute('aria-checked'), 'true');
+  insertVariable(doc, 'i0'); arrow('ArrowRight');
+  assert.equal(doc.getElementById('log-kind-reached').getAttribute('aria-checked'), 'true');
+  assert.equal(doc.getElementById('message-editor-panel').hidden, true);
+  assert.equal(doc.getElementById('value-editor').hidden, true);
+  arrow('ArrowLeft'); assert.equal(doc.getElementById('variable-name').textContent, 'i0');
+  arrow('ArrowLeft'); assert.equal(doc.getElementById('point-message').value, 'score checkpoint');
+  arrow('ArrowLeft');
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  assert.equal(calls[0].plan.points[0].kind, 'reached');
+  assert.equal(calls[0].plan.points[0].message, undefined);
+  assert.equal(calls[0].plan.points[0].variables, undefined);
+});
+
+test('older literal marker plans reopen as custom messages without losing their text', async t => {
+  const { dom, window, doc, calls } = createUi(); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelector('.code-line').click(); enterMessage(window, doc, 'legacy {literal}');
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  const legacy = calls[0].plan.points[0];
+  for (const oldKind of ['marker', undefined]) {
+    if (oldKind) legacy.kind = oldKind; else delete legacy.kind;
+    doc.getElementById('open-custom').click(); await tick(); doc.querySelector('.code-line').click();
+    assert.equal(doc.getElementById('log-kind-message').getAttribute('aria-checked'), 'true');
+    assert.equal(doc.getElementById('point-message').value, 'legacy {literal}');
+    doc.getElementById('log-kind-reached').click(); doc.getElementById('log-kind-message').click();
+    assert.equal(doc.getElementById('point-message').value, 'legacy {literal}');
+    doc.getElementById('code-cancel').click();
+  }
+  doc.getElementById('instrument').click(); await tick();
+  assert.equal(calls[1].plan.points[0].message, 'legacy {literal}');
+});
+
 test('coverage shows the latest actual variable message as inert text and preserves the code link', async t => {
   const samples = ['score=1', '<img src=x onerror="window.bad=true"> score=2'];
   const { dom, window, doc } = createUi({ analyze: async () => ({ coverageSummary: {}, custom: { summary: { points: [{ id: 'variables', message: 'score={i0}', method: '<A: void run()>', index: 2, status: 'covered', count: 2, samples }] } } }) });
@@ -738,7 +803,7 @@ test('coverage shows the latest actual variable message as inert text and preser
   assert.equal(doc.getElementById('page-explore').hidden, false);
 });
 
-test('coverage separates statement markers from value logs and never fabricates a missing value', async t => {
+test('coverage preserves legacy custom messages and never fabricates a missing value', async t => {
   const points = [
     { id: 'marker', kind: 'marker', message: 'reached {i0}', method: '<A: void run()>', index: 1, status: 'covered', count: 1, samples: ['ignore me'] },
     { id: 'never', kind: 'value', message: '{i0}', method: '<A: void run()>', index: 2, status: 'uncovered', count: 0, samples: ['stale sample'] },
@@ -748,13 +813,37 @@ test('coverage separates statement markers from value logs and never fabricates 
   ];
   const { dom, doc } = createUi({ analyze: async () => ({ coverageSummary: {}, custom: { summary: { points } } }) });
   t.after(() => dom.window.close()); await selectRun(doc); doc.getElementById('analyze').click(); await tick();
-  assert.deepEqual([...doc.querySelectorAll('.custom-log-group h4')].map(el => el.textContent), ['Statement markers', 'Variable values']);
+  assert.deepEqual([...doc.querySelectorAll('.custom-log-group h4')].map(el => el.textContent), ['Custom messages', 'Variable values']);
   const row = id => doc.querySelector(`[data-point-id="${id}"]`);
   assert.equal(row('marker').querySelector('strong').textContent, 'reached {i0}');
+  assert.equal(row('marker').dataset.kind, 'message');
   assert.equal(row('marker').querySelector('.point-status').textContent, 'Reached'); assert.equal(row('marker').querySelector('.point-value'), null);
   assert.equal(row('never').querySelector('.point-status').textContent, 'Not reached'); assert.equal(row('never').querySelector('.point-value'), null);
   assert.equal(row('missing').querySelector('.point-status').firstChild.textContent, 'Reached · value not captured'); assert.equal(row('missing').querySelector('.point-value'), null);
   assert.equal(row('empty').querySelector('.point-value').textContent, '(empty string)');
   assert.equal(row('null-value').querySelector('.point-value').textContent, 'null');
   assert.equal(row('null-value').dataset.kind, 'value');
+});
+
+test('coverage separates internal reach points, custom strings, and variable values', async t => {
+  const points = [
+    { id: 'arrival', kind: 'reached', message: 'internal metadata must stay hidden', method: '<A: void run()>', index: 1, status: 'covered', count: 2, samples: ['not a value'] },
+    { id: 'missed', kind: 'reached', method: '<A: void run()>', index: 2, status: 'uncovered', count: 0 },
+    { id: 'text', kind: 'message', message: 'my chosen {string}', method: '<A: void run()>', index: 3, status: 'covered', count: 1, samples: ['not a variable'] },
+    { id: 'value', kind: 'value', message: '{i0}', method: '<A: void run()>', index: 4, status: 'covered', count: 1, latestValue: '42' }
+  ];
+  const { dom, doc } = createUi({ analyze: async () => ({ coverageSummary: {}, custom: { summary: { points } } }) });
+  t.after(() => dom.window.close()); await selectRun(doc); doc.getElementById('analyze').click(); await tick();
+  assert.deepEqual([...doc.querySelectorAll('.custom-log-group h4')].map(el => el.textContent), ['Statement reached', 'Custom messages', 'Variable values']);
+  const row = id => doc.querySelector(`[data-point-id="${id}"]`);
+  assert.equal(row('arrival').querySelector('strong').textContent, 'Statement 1');
+  assert.match(row('arrival').textContent, /<A: void run\(\)>/);
+  assert.equal(row('arrival').querySelector('.point-status').textContent, 'Reached');
+  assert.equal(row('missed').querySelector('.point-status').textContent, 'Not reached');
+  for (const id of ['arrival', 'missed', 'text']) assert.equal(row(id).querySelector('.point-value'), null);
+  assert.equal(row('text').querySelector('strong').textContent, 'my chosen {string}');
+  assert.equal(row('text').dataset.kind, 'message');
+  assert.equal(row('value').querySelector('.point-value').textContent, '42');
+  assert.doesNotMatch(doc.getElementById('messages-list').textContent, /internal metadata|not a value|not a variable/);
+  row('arrival').click(); assert.equal(doc.getElementById('page-explore').hidden, false);
 });

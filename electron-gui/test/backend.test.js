@@ -104,19 +104,35 @@ test('variable plans accept only explicit supported template bindings and leave 
   assert.throws(() => validatePlan(plan({ ...point, variables: [{ name: 'other', type: 'int' }] })), /missing/);
 });
 
-test('custom log modes keep literal markers separate from a single selected value', () => {
+test('custom log modes distinguish internal reach points, literal messages and one selected value', () => {
   const point = { method: '<A: void x()>', index: 1, statement: 'return', message: '{i0}', variables: [{ name: 'i0', type: 'int' }] };
   const plan = value => ({ apkSha256: 'a'.repeat(64), points: [value] });
   assert.doesNotThrow(() => validatePlan(plan({ ...point, kind: 'value' })));
   assert.doesNotThrow(() => validatePlan(plan({ ...point, kind: 'marker', variables: [] })));
   assert.doesNotThrow(() => validatePlan(plan({ ...point, kind: 'marker', variables: undefined })));
   assert.throws(() => validatePlan(plan({ ...point, kind: 'marker' })), /literal message/);
+  assert.doesNotThrow(() => validatePlan(plan({ ...point, kind: 'message', variables: [] })));
+  assert.throws(() => validatePlan(plan({ ...point, kind: 'message' })), /literal message/);
+  for (const message of [undefined, null, '']) assert.doesNotThrow(() => validatePlan(plan({ ...point, kind: 'reached', message, variables: [] })));
+  for (const message of ['hello', ' ', 123]) assert.throws(() => validatePlan(plan({ ...point, kind: 'reached', message, variables: [] })), /no message/);
+  assert.throws(() => validatePlan(plan({ ...point, kind: 'reached', message: undefined })), /cannot bind variables/);
+  assert.throws(() => validatePlan(plan({ ...point, kind: 'message', message: '', variables: [] })), /nonempty/);
   for (const variables of [undefined, null, [], [...point.variables, { name: 'i1', type: 'int' }]]) {
     assert.throws(() => validatePlan(plan({ ...point, kind: 'value', message: '{i0}{i1}', variables })), /exactly one/);
   }
   assert.throws(() => validatePlan(plan({ ...point, kind: 'value', message: 'score={i0}' })), /without additional/);
-  for (const kind of ['', 'unknown', 1, true]) assert.throws(() => validatePlan(plan({ ...point, kind })), /statement marker or a variable/);
+  for (const kind of ['', 'unknown', 1, true]) assert.throws(() => validatePlan(plan({ ...point, kind })), /statement reached, a custom message/);
   assert.doesNotThrow(() => validatePlan(plan({ ...point, message: 'legacy score={i0}' })));
+});
+
+test('internal reach records never appear as user messages', async t => {
+  const { readCustomMessages } = require('../src/backend');
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'androlog-reach-records-')); t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'runtime.log'), id = 'a'.repeat(32), ignored = 'b'.repeat(32);
+  await fs.writeFile(file, [`TEST: CUSTOM_REACHED=${id}`, `10-29 14:00:00.000 123 456 I TEST: CUSTOM_REACHED=${id}`, `OTHER: CUSTOM_REACHED=${ignored}`, 'TEST: CUSTOM_REACHED=bad-id', 'TEST: CUSTOM=my message'].join('\n'));
+  const summary = await readCustomMessages(file, 'TEST');
+  assert.equal(summary.total, 1); assert.deepEqual(summary.markers, { [id]: 2 });
+  assert.deepEqual(summary.messages, [{ message: 'my message', count: 1 }]);
 });
 
 test('custom message summaries include tagged variable values without counting their marker twice', async t => {

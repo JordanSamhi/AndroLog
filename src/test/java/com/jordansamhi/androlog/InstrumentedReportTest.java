@@ -32,7 +32,7 @@ public class InstrumentedReportTest {
         Map<String, Object> custom = CustomPointReport.build(apk, log);
         List<Map<String, Object>> points = points(custom);
         assertEquals("covered", points.get(0).get("status")); assertEquals(2, points.get(0).get("count"));
-        assertEquals("marker", points.get(0).get("kind")); assertFalse(points.get(0).containsKey("samples"));
+        assertEquals("message", points.get(0).get("kind")); assertFalse(points.get(0).containsKey("samples"));
         assertFalse(points.get(0).containsKey("latestValue"));
         assertEquals("uncovered", points.get(1).get("status")); assertEquals(0, points.get(1).get("count"));
         assertTrue(log.getSummary().isEmpty());
@@ -117,7 +117,7 @@ public class InstrumentedReportTest {
         value.put("kind", "value"); value.put("dynamic", true);
         log.recordCustomValue(FIRST, "wrong-kind value"); log.recordCustomMarker(SECOND);
         List<Map<String, Object>> points = points(CustomPointReport.build(apk, log));
-        assertEquals("marker", points.get(0).get("kind")); assertEquals("uncovered", points.get(0).get("status"));
+        assertEquals("message", points.get(0).get("kind")); assertEquals("uncovered", points.get(0).get("status"));
         assertFalse(points.get(0).containsKey("samples")); assertFalse(points.get(0).containsKey("latestValue"));
         assertFalse(points.get(0).containsKey("dynamic"));
         assertEquals("value", points.get(1).get("kind")); assertEquals("covered", points.get(1).get("status"));
@@ -142,6 +142,33 @@ public class InstrumentedReportTest {
         Map<String, Object> point = points(CustomPointReport.build(apk, log)).get(0);
         assertEquals("covered", point.get("status")); assertEquals(1, point.get("count"));
         assertEquals(1101, log.getCustomMessageTotal()); assertEquals(100, log.getOmittedCustomMessages());
+    }
+
+    @Test public void reachEventsCountVisitsWithoutCreatingMessagesOrValues() throws Exception {
+        addPoint(FIRST, 1, null); addPoint(SECOND, 2, null);
+        for (Map<String, Object> point : apk.getCustomPoints()) point.put("kind", "reached");
+        Path input = temporary.newFile("reached.log").toPath();
+        Files.write(input, Arrays.asList("TEST: CUSTOM_REACHED=" + FIRST, "TEST: CUSTOM_REACHED=" + FIRST,
+                "OTHER: CUSTOM_REACHED=" + SECOND, "TEST: CUSTOM_REACHED=invalid", "TEST: CUSTOM=unrelated message",
+                "TEST: CUSTOM_VALUE=" + SECOND + "|not a value point"), StandardCharsets.UTF_8);
+        new LogParser("TEST", apk).parseLogs(input.toString());
+        List<Map<String, Object>> points = points(CustomPointReport.build(apk, log));
+        assertEquals("reached", points.get(0).get("kind")); assertEquals("covered", points.get(0).get("status"));
+        assertEquals(2, points.get(0).get("count")); assertEquals("uncovered", points.get(1).get("status"));
+        for (Map<String, Object> point : points) {
+            assertFalse(point.containsKey("message")); assertFalse(point.containsKey("samples")); assertFalse(point.containsKey("latestValue"));
+        }
+        assertEquals(2, log.getCustomMessageTotal()); assertTrue(log.getSummary().isEmpty());
+        assertFalse(log.getCustomMessages().keySet().stream().anyMatch(text -> text.startsWith("CUSTOM_REACHED=")));
+    }
+
+    @Test public void aReachPointWithoutAnIdCannotBeCoveredByLiteralMessageFallback() throws Exception {
+        addPoint(null, 1, "same"); apk.getCustomPoints().get(0).put("kind", "reached");
+        addPoint(null, 2, "same"); log.recordCustomMessage("same");
+        List<Map<String, Object>> points = points(CustomPointReport.build(apk, log));
+        assertEquals("unknown", points.get(0).get("status")); assertNull(points.get(0).get("count"));
+        assertFalse(points.get(0).containsKey("message"));
+        assertEquals("message", points.get(1).get("kind")); assertEquals("covered", points.get(1).get("status"));
     }
 
     @Test public void htmlUsesOriginalProbeIdentityWithReloadedDisplayRowsAndEmbedsCustomLocations() throws Exception {

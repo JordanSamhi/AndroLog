@@ -73,8 +73,8 @@ public class LogParser {
                 Matcher tagged = taggedLine.matcher(line);
                 if (!tagged.matches()) continue;
                 String message = tagged.group(1);
-                if (message.startsWith("CUSTOM_POINT=")) {
-                    String id = message.substring("CUSTOM_POINT=".length());
+                if (message.startsWith("CUSTOM_POINT=") || message.startsWith("CUSTOM_REACHED=")) {
+                    String id = message.substring(message.indexOf('=') + 1);
                     if (id.matches("[a-f0-9]{32}")) summaryLogBuilder.recordCustomMarker(id);
                     continue;
                 }

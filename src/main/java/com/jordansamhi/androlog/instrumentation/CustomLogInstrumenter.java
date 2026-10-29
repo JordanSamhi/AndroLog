@@ -25,6 +25,7 @@ public final class CustomLogInstrumenter {
         plan.validate(); this.tag = tag;
         boolean values = false;
         for (CustomLogPlan.Point point : plan.points) {
+            if ("reached".equals(point.kind) && point.id == null) point.id = UUID.randomUUID().toString().replace("-", "");
             if (point.variables != null && !point.variables.isEmpty()) {
                 values = true;
                 if (point.id == null) point.id = UUID.randomUUID().toString().replace("-", "");
@@ -81,6 +82,13 @@ public final class CustomLogInstrumenter {
         if (selections == null) return;
         for (Selected selected : selections) {
             if (!body.getUnits().contains(selected.unit)) throw stale(selected.point);
+            if ("reached".equals(selected.point.kind)) {
+                Unit probe = Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(log,
+                        StringConstant.v(tag), StringConstant.v("CUSTOM_REACHED=" + selected.point.id)));
+                body.getUnits().insertBefore(probe, selected.unit);
+                inserted.add(key(selected.point));
+                continue;
+            }
             if (!selected.variables.isEmpty()) {
                 insertValues(body, selected);
                 inserted.add(key(selected.point));

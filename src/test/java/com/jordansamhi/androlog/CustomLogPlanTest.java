@@ -81,7 +81,7 @@ public class CustomLogPlanTest {
     @Test public void explicitKindsRejectContradictoryBindingsButLegacyMixedMessagesStillWork() throws Exception {
         CustomLogPlan.Point point = new CustomLogPlan.Point("<example.App: void run()>", 2, "return", "{first}");
         CustomLogPlan plan = new CustomLogPlan(repeat("a", 64), Collections.singletonList(point));
-        point.kind = "invalid"; expectFailure(plan::validate, "statement marker or a variable value");
+        point.kind = "invalid"; expectFailure(plan::validate, "statement reached, a custom message, or a variable value");
         point.kind = "value"; expectFailure(plan::validate, "exactly one variable");
         point.variables.add(new CustomLogPlan.Variable("first", "int")); plan.validate();
         point.kind = "marker"; expectFailure(plan::validate, "cannot bind variables");
@@ -96,6 +96,24 @@ public class CustomLogPlanTest {
     }
 
     private static String repeat(String value, int count) { return String.join("", Collections.nCopies(count, value)); }
+
+    @Test public void reachPointsNeedNoUserInputAndMessagesRemainLiteral() throws Exception {
+        CustomLogPlan.Point reached = new CustomLogPlan.Point("<example.App: void run()>", 1, "nop", null);
+        reached.kind = "reached";
+        CustomLogPlan.Point message = new CustomLogPlan.Point("<example.App: void run()>", 2, "return", "literal {braces}");
+        message.kind = "message";
+        CustomLogPlan plan = new CustomLogPlan(repeat("a", 64), Arrays.asList(reached, message));
+        Path file = temporary.newFile("three-kinds.json").toPath(); plan.write(file);
+        CustomLogPlan restored = CustomLogPlan.read(file);
+        assertEquals("reached", restored.points.get(0).kind); assertNull(restored.points.get(0).message);
+        assertEquals("message", restored.points.get(1).kind); assertEquals("literal {braces}", restored.points.get(1).message);
+        reached.message = ""; plan.validate();
+        reached.message = "not allowed"; expectFailure(plan::validate, "do not take a message");
+        reached.message = null; reached.variables.add(new CustomLogPlan.Variable("value", "int"));
+        expectFailure(plan::validate, "cannot bind variables"); reached.variables.clear();
+        message.variables.add(new CustomLogPlan.Variable("braces", "java.lang.String")); expectFailure(plan::validate, "cannot bind variables");
+        message.variables.clear(); message.message = ""; expectFailure(plan::validate, "Enter a message");
+    }
     private interface Action { void run() throws IOException; }
     private static void expectFailure(Action action, String message) throws Exception {
         try { action.run(); fail("Expected IOException"); } catch (IOException expected) { assertTrue(expected.getMessage(), expected.getMessage().contains(message)); }

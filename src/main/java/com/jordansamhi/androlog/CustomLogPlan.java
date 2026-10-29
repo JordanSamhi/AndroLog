@@ -26,7 +26,7 @@ public final class CustomLogPlan {
         public int index;
         public String statement;
         public String message;
-        public String kind; // Optional for legacy plans; new points use marker or value.
+        public String kind; // New points use reached, message, or value; marker is a legacy message alias.
         public String id; // Optional unique marker for GUI execution feedback.
         public List<Variable> variables = new ArrayList<>();
         public Point() { }
@@ -51,10 +51,14 @@ public final class CustomLogPlan {
                     || point.statement == null || point.statement.trim().isEmpty()) {
                 throw new IOException("A custom log point is incomplete. Browse the APK and select its statement again.");
             }
-            validateMessage(point.message);
-            if (point.kind != null && !"marker".equals(point.kind) && !"value".equals(point.kind)) {
-                throw new IOException("Choose a statement marker or a variable value log.");
+            if (point.kind != null && !Arrays.asList("reached", "message", "marker", "value").contains(point.kind)) {
+                throw new IOException("Choose statement reached, a custom message, or a variable value log.");
             }
+            boolean reached = "reached".equals(point.kind);
+            if (reached) {
+                if (point.message != null && !point.message.isEmpty()) throw new IOException("Statement reached logs do not take a message.");
+                if (point.variables != null && !point.variables.isEmpty()) throw new IOException("Statement reached logs cannot bind variables.");
+            } else validateMessage(point.message);
             Set<String> variables = new HashSet<>();
             if (point.variables != null) for (Variable variable : point.variables) {
                 if (variable == null || variable.name == null || !variable.name.matches("[^\\s{}\\p{Cntrl}]{1,200}")
@@ -62,8 +66,8 @@ public final class CustomLogPlan {
                 if (!variables.add(variable.name)) throw new IOException("A local variable may only be listed once in a custom log.");
                 if (!point.message.contains("{" + variable.name + "}")) throw new IOException("A custom log variable is missing its placeholder.");
             }
-            if ("marker".equals(point.kind) && !variables.isEmpty()) {
-                throw new IOException("Statement markers use a literal message and cannot bind variables.");
+            if (("message".equals(point.kind) || "marker".equals(point.kind)) && !variables.isEmpty()) {
+                throw new IOException("Custom messages use a literal string and cannot bind variables.");
             }
             if ("value".equals(point.kind) && (variables.size() != 1
                     || !point.message.equals("{" + point.variables.get(0).name + "}"))) {

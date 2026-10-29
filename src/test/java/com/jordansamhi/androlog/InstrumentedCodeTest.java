@@ -113,11 +113,41 @@ public class InstrumentedCodeTest {
         InstrumentedCode.Result scan = InstrumentedCode.inspect(body, "TEST", null);
         assertTrue(scan.foundProbes); assertTrue(scan.expected.isEmpty());
         assertEquals(2, scan.code.getStatements().size()); assertEquals(2, scan.customPoints.size());
-        assertEquals("marker", scan.customPoints.get(0).get("kind"));
-        assertEquals("marker", scan.customPoints.get(1).get("kind"));
+        assertEquals("message", scan.customPoints.get(0).get("kind"));
+        assertEquals("message", scan.customPoints.get(1).get("kind"));
         assertNull(scan.customPoints.get(0).get("id")); assertEquals(1, scan.customPoints.get(0).get("index"));
         assertEquals("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", scan.customPoints.get(1).get("id"));
         assertEquals(2, scan.customPoints.get(1).get("index"));
+    }
+
+    @Test public void internalReachProbesRemainDistinctFromMessagesAndHideOnlyTheirOwnSetup() {
+        JimpleBody body = body("reachedOnly");
+        Local tag = local(body, "tag", string()), payload = local(body, "payload", string());
+        String reachedId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", messageId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        body.getUnits().add(Jimple.v().newAssignStmt(tag, StringConstant.v("TEST")));
+        body.getUnits().add(Jimple.v().newAssignStmt(payload, StringConstant.v("CUSTOM_REACHED=" + reachedId)));
+        body.getUnits().add(invoke(custom, tag, payload));
+        body.getUnits().add(Jimple.v().newNopStmt());
+        body.getUnits().add(custom("CUSTOM=literal {message}")); body.getUnits().add(custom("CUSTOM_POINT=" + messageId));
+        body.getUnits().add(Jimple.v().newReturnVoidStmt());
+        InstrumentedCode.Result scan = InstrumentedCode.inspect(body, "TEST", null);
+        assertTrue(scan.foundProbes); assertTrue(scan.expected.isEmpty());
+        assertEquals(2, scan.code.getStatements().size()); assertEquals(2, scan.customPoints.size());
+        Map<String, Object> reached = scan.customPoints.get(0), message = scan.customPoints.get(1);
+        assertEquals("reached", reached.get("kind")); assertEquals(reachedId, reached.get("id"));
+        assertEquals(1, reached.get("index")); assertEquals("nop", reached.get("statement"));
+        assertFalse(reached.containsKey("message")); assertFalse(reached.containsKey("dynamic"));
+        assertEquals("message", message.get("kind")); assertEquals(messageId, message.get("id"));
+        assertEquals("literal {message}", message.get("message")); assertEquals(2, message.get("index"));
+    }
+
+    @Test public void malformedAndWrongTagReachPayloadsRemainApplicationCode() {
+        JimpleBody body = body("ordinaryReachText");
+        body.getUnits().add(custom("CUSTOM_REACHED=not-an-id"));
+        body.getUnits().add(invoke(custom, StringConstant.v("OTHER"), StringConstant.v("CUSTOM_REACHED=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
+        body.getUnits().add(Jimple.v().newReturnVoidStmt());
+        InstrumentedCode.Result scan = InstrumentedCode.inspect(body, "TEST", null);
+        assertFalse(scan.foundProbes); assertTrue(scan.customPoints.isEmpty()); assertEquals(3, scan.code.getStatements().size());
     }
 
     @Test public void variableTemplatesRemainPortableAndDoNotHideOriginalValueDefinitions() {

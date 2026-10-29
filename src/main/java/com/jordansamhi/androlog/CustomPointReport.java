@@ -12,16 +12,19 @@ public final class CustomPointReport {
     public static Map<String, Object> build(SummaryBuilder apk, SummaryLogBuilder log) {
         List<Map<String, Object>> expected = apk.getCustomPoints();
         Map<String, Integer> occurrences = new HashMap<>();
-        for (Map<String, Object> point : expected) occurrences.merge((String) point.get("message"), 1, Integer::sum);
+        for (Map<String, Object> point : expected) {
+            if ("message".equals(kindOf(point))) occurrences.merge((String) point.get("message"), 1, Integer::sum);
+        }
         List<Map<String, Object>> points = new ArrayList<>();
         Set<String> knownMarkers = new HashSet<>();
         int observed = 0, unknown = 0;
         for (Map<String, Object> source : expected) {
             Map<String, Object> point = new LinkedHashMap<>(source);
             String id = (String) point.get("id"), message = (String) point.get("message");
-            boolean valuePoint = "value".equals(point.get("kind"))
-                    || (!"marker".equals(point.get("kind")) && Boolean.TRUE.equals(point.get("dynamic")));
-            point.put("kind", valuePoint ? "value" : "marker");
+            String kind = kindOf(point);
+            boolean valuePoint = "value".equals(kind), reachedPoint = "reached".equals(kind);
+            point.put("kind", kind);
+            if (reachedPoint) point.remove("message");
             // Samples come from this run, never from cached/source metadata or a literal marker.
             point.remove("samples"); point.remove("latestValue");
             if (valuePoint) point.put("dynamic", true); else point.remove("dynamic");
@@ -32,11 +35,14 @@ public final class CustomPointReport {
                 // A value event already proves arrival, even if capture ends before its companion marker.
                 // Paired events describe the same visit and must not be added together.
                 if (valuePoint) count = Math.max(count, log.getCustomValueCount(id));
-            } else {
+            } else if ("message".equals(kind)) {
                 // Old probes recorded only their message. A shared message cannot identify a location.
                 int hits = log.getCustomMessages().getOrDefault(message, 0);
-                count = hits > 0 && occurrences.get(message) > 1 ? null : Integer.valueOf(hits);
+                count = hits > 0 && occurrences.getOrDefault(message, 0) > 1 ? null : Integer.valueOf(hits);
                 point.put("id", legacyId(point));
+            } else {
+                // Reached/value probes require an ID; message text cannot establish their identity.
+                count = null; point.put("id", legacyId(point));
             }
             String status = count == null ? "unknown" : count > 0 ? "covered" : "uncovered";
             if ("covered".equals(status)) observed++;
@@ -63,6 +69,13 @@ public final class CustomPointReport {
         result.put("unmatchedMarkers", unmatched);
         if (unmatched > 0) result.put("notice", "Some custom-point markers do not belong to this APK and were ignored. Check that the APK and logs come from the same instrumentation.");
         return result;
+    }
+
+    private static String kindOf(Map<String, Object> point) {
+        Object kind = point.get("kind");
+        if ("reached".equals(kind)) return "reached";
+        if ("message".equals(kind) || "marker".equals(kind)) return "message";
+        return "value".equals(kind) || Boolean.TRUE.equals(point.get("dynamic")) ? "value" : "message";
     }
 
     private static String legacyId(Map<String, Object> point) {

@@ -79,6 +79,21 @@ public class CustomLogInstrumenterTest {
         assertEquals(Arrays.asList("CUSTOM=same message", "CUSTOM_POINT=" + point.id), messages);
     }
 
+    @Test public void reachPointGeneratesAnInternalIdAndOnlyOneProbePerVisitWithoutRuntimeHelper() throws Exception {
+        JimpleBody body = body(method(app, "reached", Collections.emptyList(), VoidType.v()));
+        Unit target = Jimple.v().newReturnVoidStmt(); body.getUnits().add(target);
+        CustomLogPlan.Point point = new CustomLogPlan.Point(body.getMethod().getSignature(), 1, target.toString(), null);
+        point.kind = "reached";
+        CustomLogInstrumenter custom = new CustomLogInstrumenter("TEST", new CustomLogPlan(String.join("", Collections.nCopies(64, "a")), Collections.singletonList(point)));
+        assertTrue(point.id.matches("[a-f0-9]{32}"));
+        custom.capture(body); custom.instrument(body); custom.verifyComplete();
+        assertEquals(2, body.getUnits().size()); assertTrue(body.getLocals().isEmpty());
+        assertFalse(Scene.v().containsClass(CustomLogInstrumenter.RUNTIME_CLASS));
+        Class<?> loaded = load(); loaded.getMethod("reached").invoke(null); loaded.getMethod("reached").invoke(null);
+        assertEquals(Arrays.asList("CUSTOM_REACHED=" + point.id, "CUSTOM_REACHED=" + point.id), messages);
+        assertNull(point.message);
+    }
+
     @Test public void staleOrUnsafePointsAndMissingMethodsNeverSilentlySucceed() throws Exception {
         JimpleBody body = body(method(app, "unchanged", Collections.singletonList(IntType.v()), VoidType.v()));
         parameter(body, "value", IntType.v(), 0); body.getUnits().add(Jimple.v().newReturnVoidStmt());

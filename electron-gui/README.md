@@ -53,9 +53,10 @@ Save the output before choosing another APK or closing the app. The GUI warns if
 
 ### Add custom logs
 
-Open **Custom logging** to inspect the APK. Expand the nested **package → class → method** tree, choose a method, and select a statement in its class's Jimple listing. Choose one of two modes:
+Open **Custom logging** to inspect the APK. Expand the nested **package → class → method** tree, choose a method, and select a statement in its class's Jimple listing. Choose one of three modes:
 
-- **Statement reached**: type a literal message such as `reached this point`. The report shows whether this point was reached.
+- **Statement reached**: no input is needed. Selecting a statement adds an internal AndroLog marker, and the report shows whether that point was reached.
+- **Custom message**: type a string such as `starting checkout`. The report shows your message and whether its point was reached.
 - **Variable value**: click **Choose variable** and select a local by name and type. The report shows whether the point was reached and its latest printed value.
 
 Click **Use log points** to apply your selection. Each statement can have one custom log; you can edit, change its mode, or remove it. **Cancel** discards changes in the code browser.
@@ -64,13 +65,13 @@ The tree loads first. Class code is read when you open it, and variable availabi
 
 Only locals initialized on every incoming path are offered, using their value **before** the selected statement. To observe the result of an assignment, select the following statement. For example, choosing `i3` captures `42` if that is its value when execution reaches the point. Existing plans that combine text and variables remain supported.
 
-Supported types are `byte`, `short`, `int`, `long`, `float`, `double`, `boolean`, strings, and object or array references. APKs may expose names such as `i3` or `r2` instead of the original source names. Braces in statement-marker messages stay literal. Direct field selection, primitive characters, and expressions are not supported.
+Supported types are `byte`, `short`, `int`, `long`, `float`, `double`, `boolean`, strings, and object or array references. APKs may expose names such as `i3` or `r2` instead of the original source names. Braces in custom messages stay literal. Direct field selection, primitive characters, and expressions are not supported.
 
 Object choices show **uses toString()**. The injected `CustomLogRuntime` helper handles conversion, escaping, and truncation. Null references produce `null`; nonfatal conversion failures produce `<toString failed>`, and nested object conversion produces `<recursive toString>`. Arrays use their ordinary object representation, without expanding their elements. Custom `toString()` methods execute application code and may have side effects or be slow; fatal VM errors are not suppressed. Newly allocated objects, including strings, become available only after their constructor completes successfully on every incoming path.
 
-Choose **Custom only** if you want these messages without automatic probes. Explicit custom points are independent of the automatic package and library filters.
+Choose **Custom only** if you want these points without automatic probes. Explicit custom points are independent of the automatic package and library filters.
 
-Each visit logs the message immediately **before** the selected statement executes, plus a unique point marker used by the GUI. Repeated visits capture fresh values, including before statements that subsequently throw. Message templates are limited to 1,000 UTF-8 bytes. String values are null-safe, line breaks are escaped, and long rendered messages are truncated with an ellipsis to fit a Logcat record. Setup and monitor statements cannot be selected.
+Each visit is recorded immediately **before** the selected statement executes. **Statement reached** emits only an internal marker; the other modes also log your message or the variable's current value. Repeated visits capture fresh values, including before statements that subsequently throw. Message templates are limited to 1,000 UTF-8 bytes. String values are null-safe, line breaks are escaped, and long rendered messages are truncated with an ellipsis to fit a Logcat record. Setup and monitor statements cannot be selected.
 
 The listing is Jimple reconstructed from APK bytecode, not the original Java or Kotlin source. Selections are bound to the original APK fingerprint and checked against the method and statement. Selecting a different APK clears them.
 
@@ -105,7 +106,7 @@ AndroLog reads the expected probes and custom points directly from the APK. Cove
 
 The dashboard shows observed counts, totals, and percentages for statements, methods, classes, activities, services, broadcast receivers, and content providers. Elements without probes are **not measured**. AndroLog's logging instructions and helper classes are excluded from statistics and the code display. A category with no eligible elements is unavailable, rather than reported as 0% coverage. Select a statistics card to explore its category in the report.
 
-After analysis, **Custom logs** separates **Statement markers** from **Variable values**. Each row shows its method/statement location and a green **Reached** or red **Not reached** status. Variable rows also show the **Latest value** printed during the run. If a point marker was captured but its value is missing from the log, the report says **Reached · value not captured**. Points are listed even when none appear in the log. Click a row to jump to its inline annotation in **Explore report**. Custom-only instrumentations work the same way; point kinds, templates, and locations are recovered from the APK without the original plan.
+After analysis, **Custom logs** separates **Statement reached**, **Custom messages**, and **Variable values**. Each row shows its method/statement location and a green **Reached** or red **Not reached** status. Custom messages also show your string, and variable rows show the **Latest value** printed during the run. Internal identifiers stay hidden. If a variable's point marker was captured but its value is missing from the log, the report says **Reached · value not captured**. Points are listed even when none appear in the log. Click a row to jump to its annotation in **Explore report**. Point kinds, templates, and locations are recovered from the APK without the original plan.
 
 Current GUI instrumentations include a distinct point marker, allowing identical messages at different locations to be distinguished. Older instrumentations may emit only message text: if the same message appears at several points and was observed, the individual points are **Unconfirmed** rather than guessed to be covered or missed.
 

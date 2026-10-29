@@ -144,6 +144,9 @@ public final class InstrumentedCode {
                 if (message != null && message.startsWith("CUSTOM=")) {
                     customs.put(unit, new Custom(message.substring("CUSTOM=".length())));
                     hidden.add(unit); result.foundProbes = true;
+                } else if (message != null && message.matches("CUSTOM_REACHED=[a-f0-9]{32}")) {
+                    Custom point = new Custom(null); point.id = message.substring("CUSTOM_REACHED=".length()); point.reached = true;
+                    customs.put(unit, point); hidden.add(unit); result.foundProbes = true;
                 } else if (message != null && message.matches("CUSTOM_POINT=[a-f0-9]{32}")) {
                     markers.put(unit, message.substring("CUSTOM_POINT=".length()));
                     // A marker is hidden only once it is paired with its CUSTOM message.
@@ -208,8 +211,9 @@ public final class InstrumentedCode {
             if (custom != null) {
                 Map<String, Object> point = new LinkedHashMap<>();
                 point.put("id", custom.id); point.put("method", method);
-                point.put("index", row == null ? 0 : row); point.put("statement", textByUnit.get(target)); point.put("message", custom.message);
-                point.put("kind", custom.dynamic ? "value" : "marker");
+                point.put("index", row == null ? 0 : row); point.put("statement", textByUnit.get(target));
+                if (!custom.reached) point.put("message", custom.message);
+                point.put("kind", custom.reached ? "reached" : custom.dynamic ? "value" : "message");
                 if (custom.dynamic) point.put("dynamic", true);
                 result.customPoints.add(point);
             }
@@ -277,7 +281,7 @@ public final class InstrumentedCode {
 
     private static Set<Unit> identitySet() { return Collections.newSetFromMap(new IdentityHashMap<Unit, Boolean>()); }
     private static final class Custom {
-        final String message; String id; boolean dynamic;
+        final String message; String id; boolean dynamic, reached;
         Custom(String message) { this.message = message; }
     }
     private static final class Resolver {

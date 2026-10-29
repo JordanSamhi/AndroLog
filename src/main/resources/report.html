@@ -455,8 +455,9 @@
       // marker never changes the independent automatic statement-coverage status.
       var customById = Object.create(null), customByRow = Object.create(null), statementsByMethod = Object.create(null);
       function customKind(point) {
-        if (point.kind === 'marker' || point.kind === 'value') return point.kind;
-        return point.dynamic === true || typeof point.latestValue === 'string' || list(point.samples).length ? 'value' : 'marker';
+        if (point.kind === 'reached' || point.kind === 'message' || point.kind === 'value') return point.kind;
+        if (point.kind === 'marker') return 'message';
+        return point.dynamic === true || typeof point.latestValue === 'string' || list(point.samples).length ? 'value' : 'message';
       }
       function displayCustomValue(value) { return value === '' ? '(empty string)' : value; }
       classes.forEach(function (clazz) { list(clazz.methods).forEach(function (method) {
@@ -481,10 +482,11 @@
       });
       function customValueCaptured(point) { return point.kind === 'value' && point.covered && typeof point.latestValue === 'string'; }
       function customStatusText(point) { return point.status === 'unknown' ? 'Unconfirmed' : point.covered ? point.kind === 'value' && !customValueCaptured(point) ? 'Reached · value not captured' : 'Reached' : 'Not reached'; }
-      ['marker', 'value'].forEach(function (kind) {
+      var customGroupNames = { reached: 'Statement reached', message: 'Custom messages', value: 'Variable values' };
+      ['reached', 'message', 'value'].forEach(function (kind) {
         var ids = Object.keys(customById).filter(function (id) { return customById[id].kind === kind; });
         if (!ids.length) return;
-        var heading = make('li', ''); heading.appendChild(make('h3', 'custom-group-heading', kind === 'marker' ? 'Statement markers' : 'Variable values')); $('custom-log-list').appendChild(heading);
+        var heading = make('li', ''); heading.appendChild(make('h3', 'custom-group-heading', customGroupNames[kind])); $('custom-log-list').appendChild(heading);
         ids.forEach(function (id) {
         var point = customById[id], li = make('li', ''), link = make('a', 'custom-point ' + point.status);
         link.href = '#custom=' + encodeURIComponent(id); link.setAttribute('data-custom-point', id); link.setAttribute('data-kind', kind);
@@ -495,8 +497,8 @@
           var sample = make('strong', 'custom-value', displayCustomValue(point.latestValue));
           if (point.samples.length) sample.title = 'Recent distinct values:\n' + point.samples.map(displayCustomValue).join('\n');
           location.appendChild(sample);
-        } else location.appendChild(make('strong', kind === 'value' ? 'custom-value-label' : 'custom-message', point.message));
-        location.appendChild(make('small', '', point.method + ' · statement ' + point.index));
+        } else location.appendChild(make('strong', kind === 'value' ? 'custom-value-label' : kind === 'reached' ? 'custom-location' : 'custom-message', kind === 'reached' ? 'Statement ' + point.index : point.message));
+        location.appendChild(make('small', '', point.method + (kind === 'reached' ? '' : ' · statement ' + point.index)));
         var status = make('span', 'custom-status', customStatusText(point));
         if (kind === 'value' && point.covered && point.count > 0) status.appendChild(make('small', 'custom-observations', point.count + (point.count === 1 ? ' observation' : ' observations')));
         link.appendChild(location); link.appendChild(status);
@@ -783,11 +785,12 @@
               var annotation = make('span', 'custom-inline-log ' + status);
               annotation.setAttribute('data-custom-point-id', point.id);
               annotation.setAttribute('data-kind', point.kind);
-              var kindLabel = point.kind === 'value' ? 'Variable value' : 'Statement marker';
-              annotation.setAttribute('aria-label', kindLabel + ': ' + point.message + ' · ' + customStatusText(point) + (customValueCaptured(point) ? ' · Latest value: ' + displayCustomValue(point.latestValue) : ''));
+              var kindLabel = point.kind === 'value' ? 'Variable value' : point.kind === 'message' ? 'Custom message' : 'Statement ' + point.index;
+              annotation.setAttribute('aria-label', kindLabel + (point.kind === 'reached' ? '' : ': ' + point.message) + ' · ' + customStatusText(point) + (customValueCaptured(point) ? ' · Latest value: ' + displayCustomValue(point.latestValue) : ''));
               annotation.title = point.status === 'unknown' ? 'The log cannot identify which point emitted this shared message.' : point.covered ? 'Custom log reached in the supplied runtime log.' : 'Custom log not reached in the supplied runtime log.';
               var marker = make('span', 'custom-log-marker'); marker.setAttribute('aria-hidden', 'true');
-              annotation.appendChild(marker); annotation.appendChild(make('span', 'custom-inline-kind', kindLabel)); annotation.appendChild(make('span', 'custom-inline-message', point.message));
+              annotation.appendChild(marker);
+              if (point.kind !== 'reached') { annotation.appendChild(make('span', 'custom-inline-kind', kindLabel)); annotation.appendChild(make('span', 'custom-inline-message', point.message)); }
               if (customValueCaptured(point)) {
                 annotation.appendChild(make('span', 'custom-inline-value', 'Latest value: ' + displayCustomValue(point.latestValue)));
                 if (point.samples.length) annotation.title += '\nRecent distinct values:\n' + point.samples.map(displayCustomValue).join('\n');

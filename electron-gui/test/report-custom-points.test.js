@@ -91,7 +91,7 @@ test('hostile message text remains inert in the panel and inline annotations', t
   const { dom, doc, errors } = fixture({ points: [{ id: 'hostile', method: first, index: 1, statement: text, message, count: 1 }], hash: '#custom=hostile' });
   t.after(() => dom.window.close());
   assert.equal(doc.querySelector('.custom-inline-message').textContent, message);
-  assert.equal(doc.querySelector('.custom-inline-kind').textContent, 'Statement marker');
+  assert.equal(doc.querySelector('.custom-inline-kind').textContent, 'Custom message');
   assert.equal(doc.querySelector('.custom-inline-status').textContent, 'Reached');
   assert.equal(doc.querySelector('.custom-point strong').textContent, message);
   assert.equal(doc.querySelector('.custom-inline-log img'), null);
@@ -115,15 +115,16 @@ test('variable templates show the latest sample safely in the panel and beside t
   assert.equal(dom.window.__executed, undefined); assert.deepEqual(errors.map(e => e.message), []);
 });
 
-test('marker and value logs have distinct sections and honest missing-value states', t => {
+test('legacy custom messages and value logs have distinct sections and honest missing-value states', t => {
   const { dom, doc, errors } = fixture({ points: [
     { id: 'marker', kind: 'marker', method: first, index: 1, statement: text, message: 'reached {r1}', count: 1, samples: ['must be ignored'] },
     { id: 'never', kind: 'value', method: first, index: 2, statement: text, message: '{i0}', count: 0, samples: ['must not show'] },
     { id: 'missing', kind: 'value', method: second, index: 1, statement: text, message: '{r1}', count: 2, samples: [] }
   ] }); t.after(() => dom.window.close());
-  assert.deepEqual([...doc.querySelectorAll('.custom-group-heading')].map(el => el.textContent), ['Statement markers', 'Variable values']);
+  assert.deepEqual([...doc.querySelectorAll('.custom-group-heading')].map(el => el.textContent), ['Custom messages', 'Variable values']);
   const marker = doc.querySelector('[data-custom-point="marker"]');
   assert.equal(marker.querySelector('strong').textContent, 'reached {r1}'); assert.equal(marker.querySelector('.custom-status').textContent, 'Reached');
+  assert.equal(marker.dataset.kind, 'message');
   assert.equal(marker.querySelector('.custom-value'), null);
   const never = doc.querySelector('[data-custom-point="never"]');
   assert.equal(never.querySelector('.custom-status').textContent, 'Not reached'); assert.equal(never.querySelector('.custom-value'), null);
@@ -132,6 +133,34 @@ test('marker and value logs have distinct sections and honest missing-value stat
   assert.equal(doc.querySelector('[data-custom-point-id="missing"] .custom-inline-status').textContent, 'Reached · value not captured');
   assert.equal(doc.querySelector('[data-custom-point-id="never"] .custom-inline-status').textContent, 'Not reached');
   assert.equal(doc.querySelectorAll('.custom-inline-value').length, 0);
+  assert.deepEqual(errors.map(e => e.message), []);
+});
+
+test('internal reach points display only locations and status alongside messages and values', async t => {
+  const { dom, doc, errors } = fixture({ points: [
+    { id: 'arrival', kind: 'reached', method: first, index: 1, statement: text, message: 'internal metadata must stay hidden', count: 2, samples: ['not a value'] },
+    { id: 'missed', kind: 'reached', method: first, index: 2, statement: text, count: 0 },
+    { id: 'message', kind: 'message', method: second, index: 1, statement: text, message: 'chosen {string}', count: 1, latestValue: 'ignore this' },
+    { id: 'value', kind: 'value', method: second, index: 1, statement: text, message: '{i0}', count: 1, latestValue: '42' }
+  ] }); t.after(() => dom.window.close());
+  assert.deepEqual([...doc.querySelectorAll('.custom-group-heading')].map(el => el.textContent), ['Statement reached', 'Custom messages', 'Variable values']);
+  const arrival = doc.querySelector('[data-custom-point="arrival"]');
+  assert.equal(arrival.querySelector('strong').textContent, 'Statement 1');
+  assert.equal(arrival.querySelector('small').textContent, first);
+  assert.equal(arrival.querySelector('.custom-status').textContent, 'Reached');
+  assert.equal(doc.querySelector('[data-custom-point="missed"] .custom-status').textContent, 'Not reached');
+  assert.equal(doc.querySelector('[data-custom-point="message"] .custom-message').textContent, 'chosen {string}');
+  assert.equal(doc.querySelector('[data-custom-point="message"] .custom-value'), null);
+  assert.equal(doc.querySelector('[data-custom-point="value"] .custom-value').textContent, '42');
+  const annotation = doc.querySelector('[data-custom-point-id="arrival"]');
+  assert.equal(annotation.textContent, 'Reached');
+  assert.equal(annotation.getAttribute('aria-label'), 'Statement 1 · Reached');
+  assert.equal(annotation.querySelector('.custom-inline-message'), null);
+  assert.equal(doc.querySelector('[data-custom-point-id="missed"]').textContent, 'Not reached');
+  assert.doesNotMatch(doc.getElementById('custom-log-panel').textContent, /internal metadata|not a value|ignore this/);
+  arrival.click(); await tick();
+  assert.equal(doc.querySelector('.navigation-target').dataset.jimpleLine, '1');
+  assert.equal(doc.querySelector('.navigation-target').dataset.jimpleMethod, first);
   assert.deepEqual(errors.map(e => e.message), []);
 });
 
