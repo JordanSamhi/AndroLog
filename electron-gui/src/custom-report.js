@@ -28,6 +28,18 @@ async function listPlans(dir, apkSha256, tag) {
   }
   return plans.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
+// Point markers are unique to a build, unlike user-authored message text.
+function selectPlan(plans, log, planId) {
+  if (planId) {
+    const plan = plans.find(item => item.id === planId);
+    if (!plan) throw new Error('The selected custom log build does not match this APK and tag.');
+    return { plan, needsPlanSelection: false };
+  }
+  const matches = plans.filter(plan => plan.points.some(point => (log.markers?.[point.id] || 0) > 0));
+  if (matches.length === 1) return { plan: matches[0], needsPlanSelection: false };
+  if (matches.length === 0 && plans.length === 1) return { plan: plans[0], needsPlanSelection: false };
+  return { plan: null, needsPlanSelection: matches.length > 1 || plans.length > 1 };
+}
 function summarize(plan, log) {
   if (!plan) return null;
   const points = plan.points.map(point => ({ ...point, count: log.markers[point.id] || 0 }));
@@ -36,10 +48,10 @@ function summarize(plan, log) {
 function escape(value) { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function addReportPanel(html, summary) {
   if (!summary) return html;
-  const rows = summary.points.map(point => `<li class="custom-point ${point.count ? 'seen' : 'unseen'}"><div><strong>${escape(point.message)}</strong><small>${escape(point.method)} · statement ${point.index}</small><code>${escape(point.statement)}</code></div><span>${point.count ? `Observed · ${point.count}×` : 'Not observed'}</span></li>`).join('');
-  const panel = `<style>.custom-points{margin:0 0 20px;padding:17px 20px;background:white;border:1px solid #dce4e9;border-radius:12px}.custom-points summary{cursor:pointer;color:#172e43;font-weight:700}.custom-points p{color:#536879;font-size:12px;margin:8px 0}.custom-points ul{padding:0;list-style:none}.custom-point{display:flex;justify-content:space-between;gap:14px;padding:12px;border-radius:8px;margin-top:7px;background:#f3f6f8}.custom-point.seen{background:#e2f5e9}.custom-point small,.custom-point code{display:block;overflow-wrap:anywhere;color:#536879;font-size:11px}.custom-point span{white-space:nowrap;font-size:12px;font-weight:700;color:#087c70}.custom-point.unseen span{color:#637683}</style><details class="custom-points" open><summary>Custom log points · ${summary.observed} of ${summary.points.length} observed</summary><p>Not observed means no matching point marker was found in this log. Verify that it came from the selected instrumented build; incomplete logs can miss execution.</p><ul>${rows}</ul></details>`;
+  const rows = summary.points.map(point => `<li class="custom-point ${point.count ? 'seen' : 'unseen'}"><div><strong>${escape(point.message)}</strong><small>${escape(point.method)} · statement ${escape(point.index)}</small></div><span title="${point.count ? 'A matching point marker was found in the supplied log.' : 'No matching point marker was found in the supplied log.'}">${point.count ? 'Covered' : 'Not covered'}</span></li>`).join('');
+  const panel = `<style>.custom-points{margin:0 0 20px;padding:17px 20px;background:white;border:1px solid #dce4e9;border-radius:12px}.custom-points h2{font-size:16px;color:#172e43;margin:0 0 12px}.custom-points ul{padding:0;margin:0;list-style:none}.custom-point{display:flex;justify-content:space-between;gap:14px;padding:12px;border-radius:8px;margin-top:7px;overflow-wrap:anywhere}.custom-point.seen{background:#e2f5e9}.custom-point.unseen{background:#fff0ee}.custom-point small{display:block;color:#536879;font-size:11px;margin-top:4px}.custom-point span{white-space:nowrap;font-size:12px;font-weight:700;color:#087c70}.custom-point.unseen span{color:#a53e40}</style><section class="custom-points" aria-label="Custom logs"><h2>Custom logs</h2><ul>${rows}</ul></section>`;
   const anchor = '<section class="metrics" id="metrics"';
   if (!html.includes(anchor)) throw new Error('Could not add custom points to the report.');
   return html.replace(anchor, panel + anchor);
 }
-module.exports = { preparePlan, savePlan, listPlans, summarize, addReportPanel };
+module.exports = { preparePlan, savePlan, listPlans, selectPlan, summarize, addReportPanel };

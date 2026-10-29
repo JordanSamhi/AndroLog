@@ -168,13 +168,14 @@ test('custom code explorer groups methods under classes and searches method name
 
 test('custom points show observed and not observed separately and select the build for analysis', async t => {
   const builds = [{ id: 'a', createdAt: '2026-10-29T08:00:00Z', count: 2 }]; let analyzedPlan;
-  const summary = { observed: 1, points: [{ message: 'same', method: '<A: void a()>', index: 1, statement: 'return', count: 3 }, { message: 'same', method: '<A: void b()>', index: 2, statement: 'return', count: 0 }] };
-  const { dom, doc } = createUi({ customPlans: async () => builds, readCustom: async (_tag, id) => ({ total: 3, messages: [], summary: id ? summary : null }), analyze: async (_options, id) => { analyzedPlan = id; return { coverageSummary: {} }; } });
+  const summary = { id: 'a', observed: 1, points: [{ message: 'same', method: '<A: void a()>', index: 1, statement: 'return', count: 3 }, { message: 'same', method: '<A: void b()>', index: 2, statement: 'return', count: 0 }] };
+  const { dom, doc } = createUi({ customPlans: async () => builds, readCustom: async (_tag, id) => ({ total: 3, messages: [], summary }), analyze: async (_options, id) => { analyzedPlan = id; return { coverageSummary: {} }; } });
   t.after(() => dom.window.close());
   doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
-  assert.match(doc.getElementById('messages-summary').textContent, /1 of 2/);
-  assert.match(doc.querySelector('.point-row.observed').textContent, /Observed · 3×/);
-  assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not observed/);
+  assert.equal(doc.getElementById('messages-summary').hidden, true);
+  assert.equal(doc.getElementById('custom-build-picker').hidden, true);
+  assert.match(doc.querySelector('.point-row.observed').textContent, /Covered/);
+  assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not covered/);
   doc.getElementById('analyze').click(); await tick(); assert.equal(analyzedPlan, 'a');
 });
 
@@ -191,9 +192,22 @@ test('analysis progress appears while working and follows the reported stages', 
 });
 
 test('choosing the original APK after a log reloads the matching custom build', async t => {
-  const { dom, doc } = createUi({ customPlans: async () => [{ id: 'build', createdAt: '2026-10-29T08:00:00Z', count: 1 }], readCustom: async (_tag, id) => ({ total: 0, messages: [], summary: id ? { observed: 0, points: [{ message: 'later', method: '<A: void a()>', index: 1, count: 0 }] } : null }) });
+  const { dom, doc } = createUi({ customPlans: async () => [{ id: 'build', createdAt: '2026-10-29T08:00:00Z', count: 1 }], readCustom: async (_tag, id) => ({ total: 0, messages: [], summary: { id: 'build', observed: 0, points: [{ message: 'later', method: '<A: void a()>', index: 1, count: 0 }] } }) });
   t.after(() => dom.window.close());
   doc.getElementById('choose-log').click(); await tick(); doc.getElementById('choose-apk').click(); await tick();
-  assert.equal(doc.getElementById('custom-build').value, 'build');
-  assert.match(doc.getElementById('messages-list').textContent, /Not observed/);
+  assert.equal(doc.getElementById('custom-build-picker').hidden, true);
+  assert.match(doc.getElementById('messages-list').textContent, /Not covered/);
+});
+
+test('ambiguous custom builds ask for a selection instead of coloring unknown points red', async t => {
+  const { dom, window, doc } = createUi({
+    customPlans: async () => [{ id: 'first', createdAt: '2026-10-29T08:00:00Z' }, { id: 'second', createdAt: '2026-10-29T09:00:00Z' }],
+    readCustom: async (_tag, id) => ({ messages: [], total: 0, needsPlanSelection: !id, summary: id ? { id, points: [{ message: 'here', method: '<A: void run()>', index: 1, count: 0 }] } : null })
+  }); t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
+  assert.equal(doc.getElementById('custom-build-picker').hidden, false);
+  assert.equal(doc.querySelectorAll('.point-row').length, 0); assert.equal(doc.getElementById('analyze').disabled, true);
+  const select = doc.getElementById('custom-build'); select.value = 'second'; select.dispatchEvent(new window.Event('change')); await tick();
+  assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not covered/);
+  assert.equal(doc.getElementById('analyze').disabled, false);
 });

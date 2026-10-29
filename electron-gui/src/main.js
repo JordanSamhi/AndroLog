@@ -4,7 +4,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 const { Backend, copySafely, readCustomMessages, hashFile } = require('./backend');
-const { preparePlan, savePlan, listPlans, summarize, addReportPanel } = require('./custom-report');
+const { preparePlan, savePlan, listPlans, selectPlan, summarize, addReportPanel } = require('./custom-report');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'androlog', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 let window, backend, selectedApk = null, selectedLog = null, result = null, report = null, busy = false, dirty = false, closing = false;
@@ -76,9 +76,8 @@ function registerHandlers() {
     if (!selectedLog) throw new Error('Choose a runtime log first.');
     const log = await readCustomMessages(selectedLog, tag);
     const plans = selectedApk ? await listPlans(plansDir(), await hashFile(selectedApk), tag) : [];
-    const plan = plans.find(item => item.id === planId);
-    if (planId && !plan) throw new Error('The selected custom log build does not match this APK and tag.');
-    return { ...log, summary: summarize(plan, log) };
+    const { plan, needsPlanSelection } = selectPlan(plans, log, planId);
+    return { ...log, summary: summarize(plan, log), needsPlanSelection };
   }
   handle('log:custom', customResults);
   handle('code:inspect', () => exclusive(async () => {
@@ -108,9 +107,11 @@ function registerHandlers() {
   });
   handle('coverage:analyze', (opts, planId) => exclusive(async () => {
     if (!selectedApk || !selectedLog) throw new Error('Choose the original APK and a runtime log first.');
-    const next = await backend.analyze(selectedApk, selectedLog, settings, opts, Boolean(planId));
+    const selectedCustom = await customResults(opts.tag, planId);
+    const resolvedPlanId = selectedCustom.summary?.id || planId;
+    const next = await backend.analyze(selectedApk, selectedLog, settings, opts, Boolean(selectedCustom.summary));
     try {
-      const custom = await customResults(opts.tag, planId);
+      const custom = await customResults(opts.tag, resolvedPlanId);
       if (await hashFile(selectedLog) !== next.logHash || await hashFile(selectedApk) !== next.apkHash) throw new Error('The APK or runtime log changed during analysis. Run it again.');
       if (custom.summary) await fs.writeFile(next.html, addReportPanel(await fs.readFile(next.html, 'utf8'), custom.summary));
       next.report.custom = custom;

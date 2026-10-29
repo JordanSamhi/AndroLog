@@ -46,3 +46,5 @@ body.busy .package-box,body.busy .box-top{animation:none}
 .tree-children{margin-left:9px;padding-left:7px;border-left:1px solid #dce8e1}.tree-children>.tree-class{margin-left:0}.tree-package>summary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.class-list{padding:16px 12px}.code-layout{grid-template-columns:270px minmax(0,1fr)}
 
 .package-art{height:135px}.package-art svg{height:130px;width:180px}.action-panel>.animation-caption{font-size:11px;color:#47806b;text-align:center;margin:0 0 18px;min-height:17px}
+
+.point-row.unobserved{background:#fff0ee}.point-row.unobserved strong{color:#713e39}.point-row.unobserved .point-status{color:#a53e40}.point-row.unobserved small{color:#886a64}.point-row>div{min-width:0}.point-row strong{white-space:normal}.messages-heading p[hidden]{display:none}
