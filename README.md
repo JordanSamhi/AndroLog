@@ -35,7 +35,7 @@ The Electron GUI targets macOS, Windows, and Linux. You can also [build a deskto
 
 ### 1. Choose what to log
 
-Open the **original APK** in **Instrument**. Select classes, methods, statements, Android components, or **Dynamic call graph**, then click **Instrument APK** and save the result.
+Open the **original APK** in **Instrument**. Select classes, methods, statements, Android components, or **Dynamic call graph**, then click **Instrument APK**. Save the result or test it directly on a connected device.
 
 [![Instrument view: choose an APK, logging options, and a Logcat tag](data/screenshots/gui-instrument.png)](data/screenshots/gui-instrument.png)
 
@@ -50,15 +50,22 @@ The code browser shows Jimple reconstructed from the APK. Messages are literal t
 
 </details>
 
-### 2. Run the app
+### 2. Test on a device
 
 Click **Test on device**, choose a connected Android phone or emulator, and click **Start test**. AndroLog installs your instrumented APK, starts recording, and launches the app. Exercise it, then click **Stop & analyze** to open Coverage automatically. Enable USB debugging and authorize the computer when using a physical device.
 
+<details>
+<summary>See device recording</summary>
+
+[![Test on device recording an emulator run, with an elapsed timer and Stop & analyze button](data/screenshots/gui-device-test.png)](data/screenshots/gui-device-test.png)
+
+</details>
+
 Each test keeps the exact APK and its logs together. You can also use the commands under **Run your app** after saving, or the CLI's [`--capture` option](docs/cli.md#automatic-capture).
 
-### 3. Analyze coverage
+### 3. Read coverage
 
-In **Coverage**, open the **instrumented APK used for the test** and its **log file**, enter the matching Logcat tag, then click **Analyze run**. The dashboard shows statements, methods, classes, and Android components observed during the run.
+**Stop & analyze** opens the dashboard with your test's APK, logs, and tag already selected. It shows statements, methods, classes, and Android components observed during the run. For an existing capture, open its **instrumented APK** and **log file** in **Coverage**, enter the matching Logcat tag, and click **Analyze run**.
 
 [![Coverage dashboard with observed totals, percentages, and custom log results](data/screenshots/gui-coverage.png)](data/screenshots/gui-coverage.png)
 
