@@ -49,7 +49,7 @@ Open **Custom logging**, browse the package → class → method tree, and selec
 
 Click **Use log points**, then **Instrument APK**. Choose **Custom only** if you want these points without automatic coverage probes. Values are recorded **before** the selected statement; to inspect an assignment's result, select the following statement. Objects use their `toString()` representation.
 
-[![Custom log editor with a selected statement and the Insert variable picker showing local names and types](data/screenshots/gui-custom-logs.png)](data/screenshots/gui-custom-logs.png)
+[![Custom log editor with Statement reached, Custom message, and Variable value options, a package tree, and a selected integer variable](data/screenshots/gui-custom-logs.png)](data/screenshots/gui-custom-logs.png)
 
 The code browser shows Jimple reconstructed from the APK. Messages and selected variable values are logged just before the chosen statement executes.
 
@@ -65,9 +65,11 @@ Each test keeps the exact APK and its logs together. You can also use the comman
 
 **Stop & analyze** opens the dashboard with your test's APK, logs, and tag already selected. It shows statements, methods, classes, and Android components observed during the run. For an existing capture, open its **instrumented APK** and **log file** in **Coverage**, enter the matching Logcat tag, and click **Analyze run**.
 
-[![Coverage dashboard with observed totals, percentages, and custom log results](data/screenshots/gui-coverage.png)](data/screenshots/gui-coverage.png)
+[![Coverage dashboard with observed totals and green percentage bars for statements, methods, classes, and Android components](data/screenshots/gui-coverage.png)](data/screenshots/gui-coverage.png)
 
 Custom logs are grouped into **Statement reached**, **Custom messages**, and **Variable values**, with green **Reached** or red **Not reached** feedback. Variable logs also show the **Latest value** printed during the run. Click a row to jump to its statement in Explore. Red means not observed in this capture, not necessarily unreachable.
+
+[![Results for all three custom logging options, with reached and unreached points and a captured integer value of 14](data/screenshots/gui-custom-results.png)](data/screenshots/gui-custom-results.png)
 
 **The instrumented APK and its logs are enough to analyze a run on another computer.** No original APK or local instrumentation history is required. AndroLog's added code is excluded from the statistics.
 
@@ -77,7 +79,7 @@ Custom logs are grouped into **Statement reached**, **Custom messages**, and **V
 
 [![Explore report showing a dynamic call graph with class navigation](data/screenshots/gui-dynamic-graph.png)](data/screenshots/gui-dynamic-graph.png)
 
-Use **Export HTML** to share an interactive report that opens offline in a browser. Screenshots use a test APK and sample logs; custom-log statuses are illustrated with controlled observations.
+Use **Export HTML** to share an interactive report that opens offline in a browser. Screenshots show a demonstration APK and its recorded execution on an Android emulator.
 
 ## Command line
 
