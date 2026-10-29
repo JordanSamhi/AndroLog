@@ -49,25 +49,15 @@ Open **Custom logging**, browse the package → class → method tree, and selec
 
 Click **Use log points**, then **Instrument APK**. Choose **Custom only** if you want these points without automatic coverage probes. Values are recorded **before** the selected statement; to inspect an assignment's result, select the following statement. Objects use their `toString()` representation.
 
-<details>
-<summary>See custom log selection</summary>
-
 [![Custom log editor with a selected statement and the Insert variable picker showing local names and types](data/screenshots/gui-custom-logs.png)](data/screenshots/gui-custom-logs.png)
 
 The code browser shows Jimple reconstructed from the APK. Messages and selected variable values are logged just before the chosen statement executes.
-
-</details>
 
 ### 2. Test on a device
 
 Click **Test on device**, choose a connected Android phone or emulator, and click **Start test**. AndroLog installs your instrumented APK, starts recording, and launches the app. Exercise it, then click **Stop & analyze** to open Coverage automatically. Enable USB debugging and authorize the computer when using a physical device.
 
-<details>
-<summary>See device recording</summary>
-
 [![Test on device recording an emulator run, with an elapsed timer and Stop & analyze button](data/screenshots/gui-device-test.png)](data/screenshots/gui-device-test.png)
-
-</details>
 
 Each test keeps the exact APK and its logs together. You can also use the commands under **Run your app** after saving, or the CLI's [`--capture` option](docs/cli.md#automatic-capture).
 
