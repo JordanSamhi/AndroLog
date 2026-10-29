@@ -4,7 +4,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 const { Backend, copySafely, readCustomMessages, hashFile } = require('./backend');
-const { preparePlan, savePlan, listPlans, selectPlan, summarize, addReportPanel } = require('./custom-report');
+const { preparePlan, savePlan, listPlans, resolveSummary, addReportPanel } = require('./custom-report');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'androlog', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 let window, backend, selectedApk = null, selectedLog = null, result = null, report = null, busy = false, dirty = false, closing = false;
@@ -67,17 +67,11 @@ function registerHandlers() {
     const file = await chooseFile('Choose a captured runtime log', ['log', 'txt']);
     if (file) { selectedLog = file; await removeSession(report); report = null; } return file;
   });
-  handle('custom:plans', async tag => {
-    if (!selectedApk) return [];
-    const plans = await listPlans(plansDir(), await hashFile(selectedApk), tag);
-    return plans.map(({ id, createdAt, points }) => ({ id, createdAt, count: points.length }));
-  });
-  async function customResults(tag, planId) {
+  async function customResults(tag) {
     if (!selectedLog) throw new Error('Choose a runtime log first.');
     const log = await readCustomMessages(selectedLog, tag);
     const plans = selectedApk ? await listPlans(plansDir(), await hashFile(selectedApk), tag) : [];
-    const { plan, needsPlanSelection } = selectPlan(plans, log, planId);
-    return { ...log, summary: summarize(plan, log), needsPlanSelection };
+    return { ...log, summary: resolveSummary(plans, log) };
   }
   handle('log:custom', customResults);
   handle('code:inspect', () => exclusive(async () => {
@@ -91,7 +85,7 @@ function registerHandlers() {
     const next = await backend.instrument(selectedApk, settings, opts, trackedPlan);
     if (trackedPlan) { try { await savePlan(plansDir(), trackedPlan); } catch (error) { await backend.discard(next.dir); throw new Error(`Could not save custom log point metadata: ${error.message}`); } }
     await removeSession(result); result = next; temporary.add(next.dir); dirty = true;
-    return { name: path.basename(next.output), planId: trackedPlan?.id || null };
+    return { name: path.basename(next.output) };
   }));
   handle('apk:save', async () => {
     if (!result || busy) throw new Error('Instrument an APK first.');
@@ -105,13 +99,11 @@ function registerHandlers() {
     }
     await copySafely(result.output, destination, [selectedApk, selectedLog]); dirty = false; return destination;
   });
-  handle('coverage:analyze', (opts, planId) => exclusive(async () => {
+  handle('coverage:analyze', opts => exclusive(async () => {
     if (!selectedApk || !selectedLog) throw new Error('Choose the original APK and a runtime log first.');
-    const selectedCustom = await customResults(opts.tag, planId);
-    const resolvedPlanId = selectedCustom.summary?.id || planId;
-    const next = await backend.analyze(selectedApk, selectedLog, settings, opts, Boolean(selectedCustom.summary));
+    const next = await backend.analyze(selectedApk, selectedLog, settings, opts);
     try {
-      const custom = await customResults(opts.tag, resolvedPlanId);
+      const custom = await customResults(opts.tag);
       if (await hashFile(selectedLog) !== next.logHash || await hashFile(selectedApk) !== next.apkHash) throw new Error('The APK or runtime log changed during analysis. Run it again.');
       if (custom.summary) await fs.writeFile(next.html, addReportPanel(await fs.readFile(next.html, 'utf8'), custom.summary));
       next.report.custom = custom;

@@ -166,17 +166,17 @@ test('custom code explorer groups methods under classes and searches method name
   assert.equal(doc.querySelectorAll('.tree-method').length, 1); assert.match(doc.querySelector('.tree-method').textContent, /third/);
 });
 
-test('custom points show observed and not observed separately and select the build for analysis', async t => {
-  const builds = [{ id: 'a', createdAt: '2026-10-29T08:00:00Z', count: 2 }]; let analyzedPlan;
+test('custom points show coverage without adding a build-selection input', async t => {
+  let analysisArguments;
   const summary = { id: 'a', observed: 1, points: [{ message: 'same', method: '<A: void a()>', index: 1, statement: 'return', count: 3 }, { message: 'same', method: '<A: void b()>', index: 2, statement: 'return', count: 0 }] };
-  const { dom, doc } = createUi({ customPlans: async () => builds, readCustom: async (_tag, id) => ({ total: 3, messages: [], summary }), analyze: async (_options, id) => { analyzedPlan = id; return { coverageSummary: {} }; } });
+  const { dom, doc } = createUi({ readCustom: async (...args) => { assert.equal(args.length, 1); return { total: 3, messages: [], summary }; }, analyze: async (...args) => { analysisArguments = args; return { coverageSummary: {} }; } });
   t.after(() => dom.window.close());
   doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
   assert.equal(doc.getElementById('messages-summary').hidden, true);
-  assert.equal(doc.getElementById('custom-build-picker').hidden, true);
+  assert.equal(doc.getElementById('custom-build-picker'), null);
   assert.match(doc.querySelector('.point-row.observed').textContent, /Covered/);
   assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not covered/);
-  doc.getElementById('analyze').click(); await tick(); assert.equal(analyzedPlan, 'a');
+  doc.getElementById('analyze').click(); await tick(); assert.equal(analysisArguments.length, 1); assert.equal(analysisArguments[0].tag, 'ANDROLOG');
 });
 
 test('analysis progress appears while working and follows the reported stages', async t => {
@@ -191,24 +191,36 @@ test('analysis progress appears while working and follows the reported stages', 
   assert.equal(doc.getElementById('analysis-progress').hidden, true); assert.deepEqual(calls.at(-1), [0, false]);
 });
 
-test('choosing the original APK after a log reloads the matching custom build', async t => {
-  const { dom, doc } = createUi({ customPlans: async () => [{ id: 'build', createdAt: '2026-10-29T08:00:00Z', count: 1 }], readCustom: async (_tag, id) => ({ total: 0, messages: [], summary: { id: 'build', observed: 0, points: [{ message: 'later', method: '<A: void a()>', index: 1, count: 0 }] } }) });
+test('choosing the original APK after a log reloads custom points without a build menu', async t => {
+  const { dom, doc } = createUi({ readCustom: async () => ({ total: 0, messages: [], summary: { id: 'build', observed: 0, points: [{ message: 'later', method: '<A: void a()>', index: 1, count: 0 }] } }) });
   t.after(() => dom.window.close());
   doc.getElementById('choose-log').click(); await tick(); doc.getElementById('choose-apk').click(); await tick();
-  assert.equal(doc.getElementById('custom-build-picker').hidden, true);
+  assert.equal(doc.getElementById('custom-build-picker'), null);
   assert.match(doc.getElementById('messages-list').textContent, /Not covered/);
 });
 
-test('ambiguous custom builds ask for a selection instead of coloring unknown points red', async t => {
-  const { dom, window, doc } = createUi({
-    customPlans: async () => [{ id: 'first', createdAt: '2026-10-29T08:00:00Z' }, { id: 'second', createdAt: '2026-10-29T09:00:00Z' }],
-    readCustom: async (_tag, id) => ({ messages: [], total: 0, needsPlanSelection: !id, summary: id ? { id, points: [{ message: 'here', method: '<A: void run()>', index: 1, count: 0 }] } : null })
+test('unknown custom baselines neither request a build selection nor block APK and log analysis', async t => {
+  let analyses = 0;
+  const { dom, doc } = createUi({
+    readCustom: async () => ({ messages: [{ message: 'recorded message', count: 1 }], total: 1, summary: null }),
+    analyze: async (...args) => { assert.equal(args.length, 1); analyses++; return { coverageSummary: {} }; }
   }); t.after(() => dom.window.close());
   doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
-  assert.equal(doc.getElementById('custom-build-picker').hidden, false);
-  assert.equal(doc.querySelectorAll('.point-row').length, 0); assert.equal(doc.getElementById('analyze').disabled, true);
-  const select = doc.getElementById('custom-build'); select.value = 'second'; select.dispatchEvent(new window.Event('change')); await tick();
-  assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not covered/);
+  assert.equal(doc.getElementById('custom-build-picker'), null);
+  assert.equal(doc.querySelectorAll('.point-row.unobserved').length, 0);
+  assert.match(doc.getElementById('messages-list').textContent, /recorded message/);
+  assert.equal(doc.getElementById('analyze').disabled, false);
+  doc.getElementById('analyze').click(); await tick(); assert.equal(analyses, 1);
+});
+
+test('partial custom metadata shows only recorded points without inventing red rows', async t => {
+  const summary = { partial: true, points: [
+    { id: 'observed', message: 'known', method: '<A: void run()>', index: 1, count: 2 },
+    { id: 'unknown', message: 'unconfirmed', method: '<A: void run()>', index: 2, count: 0 }
+  ] };
+  const { dom, doc } = createUi({ readCustom: async () => ({ messages: [], summary }) }); t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
+  assert.equal(doc.querySelectorAll('.point-row').length, 1); assert.equal(doc.querySelectorAll('.point-row.unobserved').length, 0);
   assert.equal(doc.getElementById('analyze').disabled, false);
 });
 
@@ -220,7 +232,7 @@ function clickableCustomFixture() {
 }
 test('clicking a custom log creates a report if needed and forwards the exact point after iframe load', async t => {
   const summary = clickableCustomFixture(); let analyses = 0;
-  const { dom, window, doc } = createUi({ readCustom: async () => ({ messages: [], summary }), analyze: async (_opts, id) => { analyses++; assert.equal(id, 'build'); return { coverageSummary: {}, custom: { summary } }; } });
+  const { dom, window, doc } = createUi({ readCustom: async () => ({ messages: [], summary }), analyze: async (...args) => { analyses++; assert.equal(args.length, 1); return { coverageSummary: {}, custom: { summary } }; } });
   t.after(() => dom.window.close());
   doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
   doc.querySelectorAll('.custom-point-link')[1].click(); await tick(); await tick();

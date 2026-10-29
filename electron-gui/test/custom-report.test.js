@@ -5,7 +5,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { readCustomMessages } = require('../src/backend');
-const { preparePlan, savePlan, listPlans, selectPlan, summarize, addReportPanel } = require('../src/custom-report');
+const { preparePlan, savePlan, listPlans, resolveSummary, summarize, addReportPanel } = require('../src/custom-report');
 test('point markers distinguish identical messages, persist per build and appear safely in exported reports', async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'androlog-custom-')); t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const original = { apkSha256: 'a'.repeat(64), points: [
@@ -36,20 +36,31 @@ test('point markers distinguish identical messages, persist per build and appear
 function fixturePlan() {
   return preparePlan({ apkSha256: 'a'.repeat(64), points: [{ method: '<A: void one()>', index: 1, statement: 'return', message: 'same message' }] }, 'TEST');
 }
-test('automatic plan selection uses point identity rather than duplicate message text', () => {
+test('runtime markers identify the custom baseline automatically', () => {
   const first = fixturePlan(), second = fixturePlan();
   const log = { markers: { [second.points[0].id]: 2 }, messages: [{ message: 'same message', count: 2 }] };
-  assert.equal(selectPlan([first, second], log).plan, second);
-  assert.equal(selectPlan([first, second], log).needsPlanSelection, false);
-  assert.equal(selectPlan([first, second], log, first.id).plan, first);
-  assert.throws(() => selectPlan([first, second], log, 'unknown'), /does not match/);
+  const summary = resolveSummary([first, second], log);
+  assert.equal(summary.id, second.id); assert.equal(summary.points[0].count, 2);
 });
-test('ambiguous builds never silently produce a coverage result', () => {
+test('repeated instrumentation of the same custom baseline needs no build selection', () => {
   const first = fixturePlan(), second = fixturePlan();
-  const empty = { markers: {} };
-  assert.deepEqual(selectPlan([], empty), { plan: null, needsPlanSelection: false });
-  assert.deepEqual(selectPlan([first], empty), { plan: first, needsPlanSelection: false });
-  assert.deepEqual(selectPlan([first, second], empty), { plan: null, needsPlanSelection: true });
-  const mixed = { markers: { [first.points[0].id]: 1, [second.points[0].id]: 1 } };
-  assert.deepEqual(selectPlan([first, second], mixed), { plan: null, needsPlanSelection: true });
+  const empty = { markers: {}, total: 0 };
+  assert.equal(resolveSummary([], empty), null);
+  assert.equal(resolveSummary([first, second], empty).points[0].count, 0);
+  const mixed = { markers: { [first.points[0].id]: 1, [second.points[0].id]: 2 } };
+  const summary = resolveSummary([first, second], mixed);
+  assert.equal(summary.points.length, 1); assert.equal(summary.points[0].count, 3); assert.equal(summary.observed, 1);
+});
+test('different or unknown custom baselines never invent uncovered points', () => {
+  const first = fixturePlan(), second = fixturePlan();
+  second.points[0].message = 'a different custom log';
+  second.points.push({ ...second.points[0], id: 'c'.repeat(32), index: 2, message: 'never recorded' });
+  assert.equal(resolveSummary([first, second], { markers: {} }), null);
+  assert.equal(resolveSummary([first], { markers: { unknown: 1 } }), null);
+  assert.equal(resolveSummary([first], { markers: {}, total: 1, messages: [{ message: 'same message', count: 1 }] }), null);
+  const mixed = { markers: { [first.points[0].id]: 1, [second.points[0].id]: 2 } };
+  const summary = resolveSummary([first, second], mixed);
+  assert.equal(summary.partial, true); assert.equal(summary.points.length, 2);
+  assert.ok(summary.points.every(point => point.count > 0));
+  assert.ok(summary.points.every(point => point.method === first.points[0].method));
 });

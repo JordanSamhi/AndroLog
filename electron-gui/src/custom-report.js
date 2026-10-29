@@ -28,17 +28,40 @@ async function listPlans(dir, apkSha256, tag) {
   }
   return plans.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-// Point markers are unique to a build, unlike user-authored message text.
-function selectPlan(plans, log, planId) {
-  if (planId) {
-    const plan = plans.find(item => item.id === planId);
-    if (!plan) throw new Error('The selected custom log build does not match this APK and tag.');
-    return { plan, needsPlanSelection: false };
-  }
+const pointKey = point => JSON.stringify([point.method, point.index, point.statement, point.message]);
+const baselineKey = plan => JSON.stringify(plan.points.map(pointKey).sort());
+
+// Resolve saved locations from the APK fingerprint and runtime markers, without
+// introducing another input. Different instrumentations of an identical set of
+// points have the same baseline even though their runtime marker IDs differ.
+function resolveSummary(plans, log) {
+  if (!plans.length) return null;
   const matches = plans.filter(plan => plan.points.some(point => (log.markers?.[point.id] || 0) > 0));
-  if (matches.length === 1) return { plan: matches[0], needsPlanSelection: false };
-  if (matches.length === 0 && plans.length === 1) return { plan: plans[0], needsPlanSelection: false };
-  return { plan: null, needsPlanSelection: matches.length > 1 || plans.length > 1 };
+  if (matches.length === 1) return summarize(matches[0], log);
+  const candidates = matches.length ? matches : plans;
+  if (!matches.length && (log.total > 0 || Object.keys(log.markers || {}).length)) return null;
+  const sameBaseline = candidates.every(plan => baselineKey(plan) === baselineKey(candidates[0]));
+  if (!sameBaseline && !matches.length) return null;
+  const counts = new Map(), seen = new Set();
+  for (const plan of candidates) for (const point of plan.points) {
+    if (seen.has(point.id)) continue;
+    seen.add(point.id);
+    const key = pointKey(point); counts.set(key, (counts.get(key) || 0) + (log.markers?.[point.id] || 0));
+  }
+  if (sameBaseline) {
+    const plan = candidates[0];
+    const points = plan.points.map(point => ({ ...point, count: counts.get(pointKey(point)) || 0 }));
+    return { id: plan.id, createdAt: plan.createdAt, points, observed: points.filter(point => point.count > 0).length };
+  }
+  // Mixed baselines can identify recorded points, but not a reliable set of
+  // unexecuted points. Keep their exact locations and omit speculative red rows.
+  const observed = new Map();
+  for (const plan of matches) for (const point of plan.points) {
+    const key = pointKey(point), count = counts.get(key) || 0;
+    if (count && !observed.has(key)) observed.set(key, { ...point, count });
+  }
+  const points = [...observed.values()];
+  return { id: null, partial: true, points, observed: points.length };
 }
 function summarize(plan, log) {
   if (!plan) return null;
@@ -60,4 +83,4 @@ function addReportPanel(html, summary) {
   if (!html.includes(anchor)) throw new Error('Could not add custom points to the report.');
   return html.replace(anchor, () => panel + anchor);
 }
-module.exports = { preparePlan, savePlan, listPlans, selectPlan, summarize, addReportPanel };
+module.exports = { preparePlan, savePlan, listPlans, resolveSummary, summarize, addReportPanel };

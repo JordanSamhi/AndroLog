@@ -195,16 +195,15 @@ class Backend {
       return { dir, output, input: apk, apkHash: before };
     } catch (e) { await this.discard(dir); throw e; }
   }
-  async analyze(apk, log, settings, opts, customOnly = false) {
+  async analyze(apk, log, settings, opts) {
     apk = await regularFile(apk, 'the original APK'); log = await regularFile(log, 'the runtime log');
     await validateSettings(settings, false); validateOptions(opts);
-    if (!opts.probes.some(Boolean) && !customOnly) throw new Error('Select the probes used when instrumenting the APK or choose a custom log build.');
     const [apkHash, logHash] = await Promise.all([hashFile(apk), hashFile(log)]);
     const dir = await this.workspace(), json = path.join(dir, 'coverage.json'), html = path.join(dir, 'coverage.html');
     try {
       const args = ['-a', apk, '-p', settings.platforms, '-o', dir, '-pam', log, '-l', opts.tag, '-j', json, '-html', html];
       opts.probes.forEach((v, i) => { if (v) args.push(FLAGS[i]); });
-      if (!opts.probes.some(Boolean) && customOnly) args.push('--custom-report-only');
+      if (!opts.probes.some(Boolean)) args.push('--custom-report-only');
       if (opts.excludeLibraries) args.push('-n'); if (opts.packagePrefix) args.push('-pkg', opts.packagePrefix);
       await this.run(settings, args, { workDir: dir, label: 'Analyzing coverage' });
       if (apkHash !== await hashFile(apk) || logHash !== await hashFile(log)) throw new Error('The APK or runtime log changed during analysis. Run it again.');
