@@ -13,7 +13,8 @@ AndroLog inserts logging probes into an APK, then compares the original applicat
 - **Interactive HTML reports:** package navigation, continuous class listings, coverage filters, clickable code references, and class-level graph exploration.
 - **Terminal and JSON reports:** aggregate coverage and cumulative coverage by minute.
 - **Integrated capture:** install and launch the instrumented app, collect logs, and generate reports with one command.
-- **Desktop GUI:** choose an APK, select logging probes, follow instrumentation, and save a signed copy without composing a command.
+- **Desktop GUI:** instrument an APK, place custom logs in its code, compare runtime logs with the original APK, and explore the results in one window.
+- **Custom log points:** write a message at a selected statement, see whether it was reached, and jump directly to that location in the report.
 
 [Wiki](https://github.com/JordanSamhi/AndroLog/wiki) · [Desktop GUI](#desktop-gui) · [Previews](#report-previews) · [Setup](#build-and-configure) · [Quick start](#instrument-run-and-report) · [Reports](#read-the-reports) · [Dynamic call graph](#dynamic-call-graph) · [Options](#command-line-reference) · [Troubleshooting](#troubleshooting)
 
@@ -35,13 +36,14 @@ These screenshots show a report generated from an instrumented Android demo app 
 
 | Dependency | Used for |
 | --- | --- |
-| JDK 17 or newer and Apache Maven | Building and running AndroLog, including its AndroSpecter 2.0.0 dependency. The helper inserted into APKs retains Java 8 bytecode for Android compatibility. |
+| JDK 17 or newer and Apache Maven | Building the Java backend. Source runs and the CLI need Java; packaged desktop apps bundle a runtime. |
+| Node.js 22.12 or newer and npm | Running or packaging the Electron desktop GUI from source, and running its tests. Not needed for the Java CLI or a packaged app. |
 | Android SDK Platforms | Resolving Android classes during instrumentation and report generation. Install a platform containing `android.jar`. |
 | Android SDK Build Tools | Aligning and signing instrumented APKs with `zipalign` and `apksigner`. |
 | Android SDK Platform Tools (`adb`) and a device or emulator | Installing the instrumented APK and collecting runtime logs. |
 | A browser | Opening the standalone HTML report offline. |
 
-Node.js is needed only to run the JavaScript regression tests.
+The desktop interface targets macOS, Windows, and Linux. macOS packaging has been tested; Windows and Linux packages still need validation on those systems.
 
 AndroLog uses AndroSpecter 2.0.0 with Soot 4.6.0 pinned for APK compatibility. The transitive Soot 4.7.1 backend caused constructor and register-verification failures in Word Snake runtime checks. Keep the Soot pin when rebuilding; upgrading it requires testing the resulting APKs on Android, as compilation alone does not catch these failures.
 
@@ -67,67 +69,62 @@ Check the available options:
 java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 ```
 
-## Electron desktop GUI
-
-The `electron-gui` folder contains a JavaScript/Electron desktop interface backed by the existing AndroLog Java engine. It includes APK instrumentation, custom log points, coverage statistics, and the interactive code and dynamic call graph report. See the [Electron desktop guide](electron-gui/README.md) for setup, usage, and cross-platform packaging. The Java desktop GUI below remains available.
-
 ## Desktop GUI
 
-[![AndroLog desktop GUI with an APK drop area, setup steps, and SDK settings](data/screenshots/androlog-gui.png)](data/screenshots/androlog-gui.png)
+The desktop app uses Electron for the interface and the same Java engine as the CLI. Its three views are **Instrument**, **Coverage**, and **Explore report**.
 
-Build with `mvn package`, then launch from the repository:
+### Install and launch from source
 
-```bash
-./androlog-gui
-# Optionally open an APK immediately:
-./androlog-gui /path/to/application.apk
-```
-
-On Windows, use `androlog-gui.bat`. The portable desktop JAR can also be launched directly:
+After building the Java backend with `mvn package`, run:
 
 ```bash
-java -jar target/androlog-gui-0.1.jar
+cd electron-gui
+npm ci
+npm start
 ```
 
-1. **Choose an APK.** Browse for a file or drop one onto the window. Use a complete application APK, rather than a resource-only split.
-2. **Choose your logs.** Toggle classes, methods, statements, Android components, and dynamic call tracing. **Essentials** selects classes, methods, and components; **Everything** selects all five. Use **Custom only** to turn off automatic probes and place your own messages at specific code points. A package prefix, custom log tag, and exclusion of known libraries are also available for automatic logging.
-3. **Instrument.** An APK package opens to reveal its code, receives logging statements, closes during rebuilding, and gains a signing seal. The animation follows the actual worker stages and can be disabled in SDK settings. The display shows elapsed time, without estimating a completion percentage. You can cancel, or open **Run details…** to inspect and save the full run log.
-4. **Save your APK.** Choose a filename and destination in the save dialog. AndroLog protects the original APK and asks before replacing another file. You can open the destination folder or instrument another app.
+These commands work on macOS, Windows, and Linux with the requirements above. For later launches, run `npm start` from `electron-gui`; rebuild with `mvn package` from the repository root after changing the Java backend. The desktop app does not require the CLI signing configuration below.
 
-The GUI discovers the Android SDK from `ANDROID_HOME`, `ANDROID_SDK_ROOT`, and common installation locations. Use **SDK settings** to choose the SDK, or the Platforms and Build Tools folders separately. The **?** button beside SDK settings and **What do I need?** inside the dialog explain which packages to install, which folders to select, and link to Android's setup guide. Animations can also be disabled in SDK settings. Preferences are stored in `~/.config/androlog/gui.properties`; signing paths are passed to the worker through temporary configuration, outside the repository. The GUI does not require the CLI configuration described below.
+Open **Settings** and check the automatically discovered Android SDK paths:
 
-Each APK is processed in a separate JVM, keeping the interface responsive and isolating Soot state between runs. The signed APK and diagnostics stay in a temporary session until you start another run or close the app; save the files you want to keep. APKs use the same bundled test signing key as the CLI. Installation, capture, and report generation remain available through the [command line workflow](#instrument-run-and-report).
+| Setting | What to select |
+| --- | --- |
+| **Android SDK platforms** | The SDK's `platforms` folder, containing at least one `android-<version>/android.jar`. Required for reading APKs and generating reports. |
+| **Android Build Tools** | One installed `build-tools/<version>` folder containing `zipalign` and `apksigner`. Required for instrumenting and signing APKs. |
+| **Java executable** | Usually leave empty. Source runs use `JAVA_HOME` or Java on `PATH`; packaged apps use their bundled runtime. Choose an executable to override it. |
 
-### Explore a recorded run
+Install missing SDK packages with Android Studio's SDK Manager or Android's SDK command-line tools. Settings and custom-point metadata stay in the application's local user-data directory, outside the repository.
 
-Choose the **Execution dashboard** tab, enter the same Logcat tag used for instrumentation, and open a captured runtime log. The dashboard shows distinct observed classes, methods, statements, all four Android component types, and custom messages; select a card or category to browse and filter observations. Raw dynamic call records are available in the category selector. The activity chart shows the number of matching records in each recorded minute, omitting empty intervals; **Reload** reads the file again after more logs have been collected. You can return to instrumentation without losing the current setup.
+### Instrument, run, and explore
 
-For coverage percentages and progress bars, choose **Compare APK…**, select the original APK, and specify the probes, package prefix and library setting used when it was instrumented. AndroLog matches observations against that APK's baseline in a separate process; selected cards show matched observations and totals, or a dash if there is nothing to cover. Select only probes that were enabled: a missing observation does not establish that a probe was disabled. **Reload** re-reads the same log and repeats the comparison using the saved settings; if the APK has changed, choose it again. Categories not selected for comparison still show distinct raw observations; the item list also shows raw log entries, which may include records from a different APK. Custom-message record counts are occurrences in the file. Repeated automatic probe records are not execution frequencies, and raw call records are not validated call-graph edges. For code listings and the dynamic call graph, use the [HTML report workflow](#read-the-reports).
+1. **Instrument:** choose the original APK and a Logcat tag. Select classes, methods, statements, components, or **Dynamic call graph**. **Essentials** selects classes, methods, and components; **Everything** enables all five. Optional package and library filters are under **Advanced options**.
+2. **Add custom messages, if needed:** open **Your own messages**, expand packages → classes → methods, select a statement in the whole-class listing, and type a message such as `reached this point`. Click **Use log points**. **Custom only** disables automatic probes while keeping your messages.
+3. **Save and run:** click **Instrument APK**, then **Save instrumented APK**. AndroLog leaves the original APK unchanged and signs the output with its test key. The window then shows `adb install` and Logcat commands using your saved filename and tag. Start capture before launching the app in a fresh process, exercise it, and stop capture with **Ctrl+C**.
+4. **Coverage:** choose the **original APK** and the **runtime log**. Keep the same tag, automatic probes, package prefix, and library filter used for instrumentation, then click **Analyze run**. Cards show observed/total classes, methods, statements, and Android components. Custom logs show their message, location, and a green **Covered** or red **Not covered** status.
+5. **Explore report:** browse packages and methods, scroll through a whole class, follow code links, and inspect the dynamic call graph. Custom messages appear beside their statements with green/red markers. Clicking a custom log in Coverage jumps to that statement here. Use **Export HTML** to save a standalone report.
 
-### Place your own log messages
+**The coverage baseline is the original APK.** The only analysis inputs to select are that APK and its log file; there is no APK-build selector. Custom-point locations are recovered automatically from metadata saved when this GUI instruments the APK. If that metadata is missing or ambiguous, AndroLog shows the observations it can identify instead of guessing which points were missed.
 
-On **Choose your logs**, open **Your own messages → Choose…**, or choose **Custom only**. AndroLog reads the APK in a separate process and shows a searchable package/class tree. Selecting a class opens its whole Jimple code, with method headings and statement numbers.
+Custom messages are literal single-line text, emitted immediately before the selected statement on every visit. They do not evaluate variables, and they can be used independently of automatic coverage probes. A red marker means the point was not observed in the supplied log; a late or incomplete capture can miss execution.
 
-Select a statement and type a message such as `reached this point`, then click **Use these log points**. A marked row identifies each configured point; select it again to edit its message, clear the text to remove it, or use **Next log point** to review the selections. **Cancel** discards changes made in the code browser.
+The GUI currently reads captured log files; it does not record a device session itself. For installation, launch, capture, and reporting in one command, use the CLI's [`--capture` workflow](#automatic-capture). See the [desktop guide](electron-gui/README.md) for a complete walkthrough and troubleshooting.
 
-Messages are literal single-line text, without variable selection or expression evaluation. Every visit to the point emits `CUSTOM=reached this point` under the chosen Logcat tag, immediately **before** the selected statement executes. This includes repeated visits in a loop and visits to statements that subsequently throw. Messages support up to 1,000 UTF-8 bytes. Setup and monitor statements cannot be selected. Explicit custom points are independent of the automatic package/library filters and can be combined with coverage and dynamic-call probes.
+### Create a packaged desktop app
 
-The selections are tied to the APK's SHA-256 fingerprint and checked against the original method and statement. If the APK changes, browse it again. Selecting a new APK clears the previous points. Custom messages appear in Logcat; they are not coverage events. Code browsing and instrumentation both use AndroLog's existing Soot/Jimple pipeline.
-
-### Package a desktop application
-
-With JDK 17 or newer providing `jpackage`, build a self-contained app for the current operating system:
+From `electron-gui`, after `mvn package` has built the backend:
 
 ```bash
-mvn package
-./scripts/package-gui.sh
-# Or choose a destination folder:
-./scripts/package-gui.sh /path/to/desktop-build
+npm ci
+npm run dist
 ```
 
-The script runs on macOS and Linux. On macOS it creates `target/desktop/AndroLog-macos.zip`: extract the archive into a local folder, such as Applications, and open `AndroLog.app`. Keeping the build archived prevents cloud-synced checkouts from attaching metadata that invalidates the app signature. On Linux the output is `target/desktop/AndroLog/`. Both bundle Java, including the executable used by instrumentation workers and SDK signing tools. Android SDK Platforms and Build Tools must still be installed separately. Existing packages are not overwritten. macOS packaging uses native bundle build number `1`, while the AndroLog engine remains version `0.1`.
+Build on the target operating system and architecture, using a full JDK 17+ with `jlink` and a matching architecture. Archives are written to `target/electron/`: a ZIP on macOS and Windows, or a `.tar.gz` on Linux. Extract the archive and launch AndroLog. The package includes Electron and Java, so users do not need Node.js, Maven, or a separate Java installation. Android SDK packages are still required.
 
-This creates a local application image; it is not a Developer ID signed or notarized public installer. The macOS flow has been tested; the Windows launcher and Linux packaging still need validation on those systems.
+The default macOS package is ad-hoc signed for local testing, not a notarized public installer. See [packaging details](electron-gui/README.md#package-for-your-platform) for distribution and local app-image builds.
+
+### Earlier Java GUI
+
+The earlier Swing interface remains in the source tree. After `mvn package`, launch it with `./androlog-gui` (`androlog-gui.bat` on Windows) or `java -jar target/androlog-gui-0.1.jar`. These launchers open the Java interface; use `npm start` above for the current Electron GUI.
 
 ## Configure command-line APK signing
 
@@ -338,6 +335,7 @@ java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 | `-j`, `--json <file>` | Write a JSON report. Requires `-pa`, `-pam`, or `--capture`. |
 | `--inspect-code <file>` | Export the original Jimple statements to a JSON catalog without changing or signing the APK. |
 | `--custom-logs <file>` | Instrument the exact points in an APK-bound JSON plan. May be used alone or with automatic probes; cannot be combined with capture or reporting. |
+| `--custom-report-only` | Allow an HTML code report without automatic coverage probes. Requires `-pa` or `-pam` and `-html`; used by the GUI for custom-only runs. |
 
 ### Capture
 
@@ -360,7 +358,7 @@ Capture log tags may contain letters, digits, underscores, dots, and hyphens, an
 | `-cp`, `--components` | Activities, services, broadcast receivers, and content providers. |
 | `-mc`, `--method-calls` | Executed callsites and confirmed runtime targets. |
 
-Select the same probes for instrumentation and reporting. `-html` and `--capture` require at least one probe option; `-mc` alone supports a graph-only report.
+Select the same probes for instrumentation and reporting. `--capture` requires at least one probe option. HTML reports also require a probe unless `--custom-report-only` is set; `-mc` alone supports a graph-only report.
 
 ### Scope and diagnostics
 
@@ -378,10 +376,11 @@ The CLI prints timed stages and generated file paths. Errors go to standard erro
 
 | Symptom | What to check |
 | --- | --- |
-| `Signing tool not configured` or tool not executable | Check both paths in your external `config.properties` and use the classpath helper. The files must exist and be executable. |
+| GUI cannot read the APK or find signing tools | In **Settings**, choose the SDK `platforms` folder and an installed `build-tools/<version>` folder. Use **Run details** for the backend error. |
+| `Signing tool not configured` or tool not executable in the CLI | Check both paths in your external `config.properties` and use the classpath helper. The files must exist and be executable. |
 | Installation fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | The installed app and instrumented APK have different signing certificates. Use a clean test device or emulator installation. |
 | Coverage is unexpectedly empty or incomplete | Check the original APK version, log tag, probe flags, and scope. Capture before starting a fresh app process and exercise the relevant code. |
-| No dynamic call graph is available | Instrument with `-mc`, install that APK, and capture a new log. Adding `-mc` only when parsing cannot create missing runtime observations. |
+| No dynamic call graph is available | Enable **Dynamic call graph** in the GUI or instrument with `-mc`, install that APK, and capture a new log. Enabling it only during analysis cannot create missing runtime observations. |
 | The graph asks you to choose a starting class | The launcher activity has no matching recorded calls, the app has no launcher declaration, or an older report lacks manifest metadata. Select a class or regenerate the report from the APK. |
 | No timeline entries appear | Use `-pam` with timestamped output such as `adb logcat -v threadtime`. Untimestamped observations count only toward aggregate totals. |
 | Capture cannot select a device | Check `adb devices`, authorize the connection, and use `--device <serial>` if several devices are online. |
@@ -400,7 +399,14 @@ Run the Java tests:
 mvn test
 ```
 
-Run the report's JavaScript regression tests with Node.js:
+Run the Electron GUI tests after `npm ci` in `electron-gui`:
+
+```bash
+cd electron-gui
+npm test
+```
+
+From the repository root, run the report's JavaScript regression tests:
 
 ```bash
 node --test src/test/js/report-links.test.js src/test/js/report-graph.test.js
