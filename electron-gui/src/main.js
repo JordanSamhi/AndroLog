@@ -153,6 +153,7 @@ function registerHandlers() {
   handle('operation:cancel', () => { backend.cancel(); });
 }
 app.whenReady().then(async () => {
+  app.dock?.setIcon(path.join(__dirname, 'icon.png'));
   app.setAboutPanelOptions({ applicationName: 'AndroLog', applicationVersion: andrologVersion, version: andrologVersion });
   settings = await readSettings();
   protocol.handle('androlog', async request => {
