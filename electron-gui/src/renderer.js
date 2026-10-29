@@ -189,6 +189,7 @@
   function sendCategory() { if (state.pendingCategory && $('report-frame').contentWindow) { $('report-frame').contentWindow.postMessage({ type: 'androlog.selectCategory', category: state.pendingCategory }, '*'); } }
   $('report-frame').addEventListener('load', sendCategory);
   function updateSettings(values) {
+    if (values.appVersion) { $('app-version').textContent = `Electron ${values.appVersion}`; document.title = `AndroLog · ${values.appVersion}`; }
     for (const key of ['platforms','buildTools','java']) $(`settings-${key}`).value = values[key] || '';
     const ready = Boolean(values.platforms && values.buildTools); $('sdk-dot').classList.toggle('ready', ready); $('sdk-summary').textContent = ready ? 'SDK paths configured' : 'Android SDK setup';
   }

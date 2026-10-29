@@ -45,7 +45,7 @@ async function chooseFile(title, extensions) {
   return picked.canceled ? null : picked.filePaths[0];
 }
 function registerHandlers() {
-  handle('settings:get', () => settings);
+  handle('settings:get', () => ({ ...settings, appVersion: app.getVersion() }));
   handle('settings:choose', async kind => {
     if (!['platforms', 'buildTools', 'java'].includes(kind)) throw new Error('Unknown setting.');
     const choice = await dialog.showOpenDialog(window, { title: kind === 'java' ? 'Choose Java 17 or newer' : kind === 'platforms' ? 'Choose the Android SDK platforms folder' : 'Choose an Android Build Tools version folder', properties: [kind === 'java' ? 'openFile' : 'openDirectory'] });
