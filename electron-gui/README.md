@@ -21,7 +21,7 @@ The development app uses `JAVA_HOME`, or Java on `PATH`; you can choose a Java e
 
 ## Workflows
 
-- **Instrument:** select an original APK, choose automatic probes and optional package scope, and instrument. The output is signed with AndroLog's test key. Save it under a different filename; the original APK is protected.
+- **Instrument:** select an original APK, choose automatic probes and optional package scope, and instrument. The APK illustration follows the actual analysis, modification, rebuild, and signing stages and respects reduced-motion settings. The output is signed with AndroLog's test key. Save it under a different filename; the original APK is protected.
 - **Custom messages:** choose **Your own messages**, browse the APK's packages and whole-class Jimple code, select a statement, and type a literal single-line message. Custom points are bound to the APK fingerprint and can be combined with automatic probes. They emit on every visit; they do not evaluate variables.
 - **Coverage:** select the original APK and a captured runtime log. Select the same probes, Logcat tag, package scope, and library settings used for instrumentation, then choose **Analyze run**. The coverage cards show matched observations and totals. Zero total is shown as unavailable, not 0% coverage. Custom messages in the selected log are listed separately and can be refreshed without running coverage analysis.
 - **Explore report:** browse the complete interactive AndroLog report inside the app, including covered/uncovered class code, package navigation, a cumulative coverage timeline when log timestamps are available, and the dynamic call graph. Instrument with **Dynamic call graph** enabled to collect call records. Export a standalone HTML copy when needed.

@@ -32,6 +32,7 @@
   }
   function setBusy(busy, kind = '') {
     state.busy = busy; state.stageKind = kind; document.body.classList.toggle('busy', busy); $('operation-panel').hidden = !busy;
+    if (busy && kind === 'instrument') window.andrologAnimation?.setStage(0, true);
     $('cancel-coverage').hidden = !(busy && kind === 'coverage');
     $('analyze').textContent = busy && kind === 'coverage' ? 'Analyzing…' : 'Analyze run →';
     for (const id of ['choose-apk','coverage-choose-apk','choose-log','open-custom','instrument','save-apk','analyze','settings-save','save-report','report-export','preset-essentials','preset-all','preset-custom']) $(id).disabled = busy;
@@ -52,6 +53,7 @@
   api.onUpdate(update => {
     if (update.type === 'log') { state.logText = (state.logText + update.text).slice(-180000); $('operation-log').textContent = state.logText; $('operation-log').scrollTop = $('operation-log').scrollHeight; }
     if (update.type === 'stage') {
+      if (state.stageKind === 'instrument') window.andrologAnimation?.setStage(update.stage);
       document.querySelectorAll('.stage-rail span').forEach((el, i) => el.classList.toggle('done', i < update.stage));
       const stages = state.stageKind === 'instrument' ? ['Reading your APK', 'Adding your log points', 'Rebuilding the APK', 'Aligning and signing'] : state.stageKind === 'inspect' ? ['Reading your APK', 'Preparing the code browser'] : ['Reading your APK', 'Building the baseline', 'Matching runtime logs', 'Creating the report', 'Finishing'];
       $('operation-title').textContent = stages[Math.min(Math.max(update.stage - 1, 0), stages.length - 1)];
@@ -65,6 +67,7 @@
     try {
       const selected = await api.chooseApk(); if (!selected) return;
       state.apk = selected; state.catalog = null; state.points.clear(); state.result = false; clearReport();
+      window.andrologAnimation?.setStage(0, true);
       $('apk-name').textContent = basename(selected); $('apk-path').textContent = selected; $('apk-path').title = selected;
       $('choose-apk').textContent = 'Change APK ↗'; $('coverage-apk').textContent = basename(selected); $('coverage-apk').title = selected;
       $('custom-count').textContent = 'Place a log in the code'; $('save-apk').hidden = true; $('action-title').textContent = 'Ready to instrument';
@@ -101,7 +104,9 @@
   }
   $('instrument').addEventListener('click', async () => {
     const plan = state.points.size ? { apkSha256: state.catalog.apkSha256, points: [...state.points.values()] } : null;
-    const output = await run('instrument', () => api.instrument(options(), plan)); if (!output) return;
+    const output = await run('instrument', () => api.instrument(options(), plan));
+    if (!output) { window.andrologAnimation?.setStage(0); return; }
+    window.andrologAnimation?.setStage(5);
     state.result = true; $('save-apk').hidden = false; $('action-title').textContent = 'Your APK is ready.'; $('action-description').textContent = 'Instrumented, aligned, and signed. Choose where to save your new APK.'; updateAvailability(); toast('Your instrumented APK is ready to save.');
   });
   $('save-apk').addEventListener('click', async () => { try { const file = await api.saveApk(); if (file) { $('action-title').textContent = 'Saved. Ready to run.'; $('action-description').textContent = file; toast(`Saved ${basename(file)}`); } } catch (e) { toast(e.message, true); } });

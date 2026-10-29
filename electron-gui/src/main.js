@@ -121,7 +121,8 @@ app.whenReady().then(async () => {
       return new Response(response.body, { status: response.status, headers });
     }
     if (url.hostname !== 'app') return new Response('Not found', { status: 404 });
-    const files = { '/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/renderer.js': 'renderer.js', '/icon.png': 'icon.png' };
+    if (url.pathname === '/anime.js') { const bundle = path.join(path.dirname(require.resolve('animejs/package.json')), 'dist', 'bundles', 'anime.umd.min.js'); return net.fetch(pathToFileURL(bundle).toString()); }
+    const files = { '/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/animation.js': 'animation.js', '/renderer.js': 'renderer.js', '/icon.png': 'icon.png' };
     const name = files[url.pathname]; return name ? net.fetch(pathToFileURL(path.join(__dirname, name)).toString()) : new Response('Not found', { status: 404 });
   });
   registerHandlers();

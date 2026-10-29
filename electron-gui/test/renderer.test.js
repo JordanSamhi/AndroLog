@@ -88,3 +88,19 @@ test('the visible Logcat tags stay in sync between instrumentation and coverage'
   coverageTag.value = 'ANOTHER_TAG'; coverageTag.dispatchEvent(new window.Event('input', { bubbles: true }));
   assert.equal(instrumentTag.value, 'ANOTHER_TAG');
 });
+
+test('instrumentation stages and completion drive the package illustration', async t => {
+  let update, finish;
+  const { dom, window, doc } = createUi({
+    onUpdate: handler => { update = handler; },
+    instrument: () => new Promise(resolve => { finish = resolve; })
+  });
+  t.after(() => dom.window.close());
+  const stages = []; window.andrologAnimation = { setStage: (...args) => stages.push(args) };
+  doc.getElementById('choose-apk').click(); await tick(); stages.length = 0;
+  doc.getElementById('instrument').click(); await tick();
+  update({ type: 'stage', stage: 2 });
+  assert.ok(stages.some(([stage]) => stage === 2));
+  finish({ name: 'original.apk' }); await tick();
+  assert.equal(stages.at(-1)[0], 5);
+});
