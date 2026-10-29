@@ -16,7 +16,7 @@ function createUi(overrides = {}) {
   window.HTMLDialogElement.prototype.close = function () { this.open = false; };
   const calls = [];
   const api = {
-    settings: async () => ({ platforms: '/sdk/platforms', buildTools: '/sdk/build-tools/36' }),
+    settings: async () => ({ platforms: '/sdk/platforms', buildTools: '/sdk/build-tools/36', andrologVersion: '0.1', appVersion: '0.1.3' }),
     chooseApk: async () => '/apps/original.apk', chooseLog: async () => '/logs/runtime.log',
     readCustom: async () => ({total: 2, omitted: 0, messages: [{message: 'reached this point', count: 2}]}),
     chooseSetting: async () => null, saveSettings: async value => value, cancel: async () => {}, onUpdate: () => {},
@@ -30,6 +30,8 @@ function createUi(overrides = {}) {
 }
 test('workspace begins without fabricated coverage and keeps controls disabled', async t => {
   const { dom, doc } = createUi(); t.after(() => dom.window.close()); await tick();
+  assert.equal(doc.getElementById('app-version').textContent, 'Version 0.1');
+  assert.equal(doc.title, 'AndroLog · 0.1');
   assert.equal(doc.getElementById('instrument').disabled, true);
   assert.equal(doc.getElementById('analyze').disabled, true);
   assert.equal(doc.querySelectorAll('.stat').length, 7);

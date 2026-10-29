@@ -5,12 +5,15 @@ const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 const { Backend, copySafely, readCustomMessages, hashFile } = require('./backend');
 const { preparePlan, savePlan, listPlans, resolveSummary, addReportPanel } = require('./custom-report');
+const { desktopVersion } = require('./version');
+
+const andrologVersion = desktopVersion({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, root: path.resolve(__dirname, '../..') });
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'androlog', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 let window, backend, selectedApk = null, selectedLog = null, result = null, report = null, busy = false, dirty = false, closing = false;
 let settings;
 const temporary = new Set();
-const bundledJar = () => app.isPackaged ? path.join(process.resourcesPath, 'androlog.jar') : path.resolve(__dirname, '../../target/androlog-0.1-jar-with-dependencies.jar');
+const bundledJar = () => app.isPackaged ? path.join(process.resourcesPath, 'androlog.jar') : path.resolve(__dirname, `../../target/androlog-${andrologVersion}-jar-with-dependencies.jar`);
 const plansDir = () => path.join(app.getPath('userData'), 'custom-plans');
 const configFile = () => path.join(app.getPath('userData'), 'settings.json');
 async function exists(file) { try { await fs.access(file); return true; } catch { return false; } }
@@ -45,7 +48,7 @@ async function chooseFile(title, extensions) {
   return picked.canceled ? null : picked.filePaths[0];
 }
 function registerHandlers() {
-  handle('settings:get', () => ({ ...settings, appVersion: app.getVersion() }));
+  handle('settings:get', () => ({ ...settings, andrologVersion }));
   handle('settings:choose', async kind => {
     if (!['platforms', 'buildTools', 'java'].includes(kind)) throw new Error('Unknown setting.');
     const choice = await dialog.showOpenDialog(window, { title: kind === 'java' ? 'Choose Java 17 or newer' : kind === 'platforms' ? 'Choose the Android SDK platforms folder' : 'Choose an Android Build Tools version folder', properties: [kind === 'java' ? 'openFile' : 'openDirectory'] });
@@ -124,6 +127,7 @@ function registerHandlers() {
   handle('operation:cancel', () => { backend.cancel(); });
 }
 app.whenReady().then(async () => {
+  app.setAboutPanelOptions({ applicationName: 'AndroLog', applicationVersion: andrologVersion, version: andrologVersion });
   settings = await readSettings();
   protocol.handle('androlog', async request => {
     const url = new URL(request.url);

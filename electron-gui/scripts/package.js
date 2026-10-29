@@ -4,7 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
+const { projectVersion } = require('../src/version');
 const root = path.resolve(__dirname, '../..');
+const andrologVersion = projectVersion(root);
 const args = process.argv.slice(2);
 const platformFlags = { '--mac': 'darwin', '-m': 'darwin', '--win': 'win32', '-w': 'win32', '--linux': 'linux', '-l': 'linux' };
 for (const flag of args) {
@@ -12,7 +14,7 @@ for (const flag of args) {
   if (platform && platformFlags[platform] !== process.platform) throw new Error('Build on the target OS so the bundled Java runtime matches the app.');
   if ((flag === '--x64' && process.arch !== 'x64') || (flag === '--arm64' && process.arch !== 'arm64') || flag === '--universal' || flag === '--ia32') throw new Error('Build on the target architecture so the bundled Java runtime matches the app.');
 }
-const jar = path.join(root, 'target', 'androlog-0.1-jar-with-dependencies.jar');
+const jar = path.join(root, 'target', `androlog-${andrologVersion}-jar-with-dependencies.jar`);
 if (!fs.existsSync(jar)) throw new Error('Build the Java backend first with mvn package.');
 const bin = process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, 'bin') : '';
 const tool = name => bin ? path.join(bin, process.platform === 'win32' ? name + '.exe' : name) : name;
@@ -32,7 +34,9 @@ const builder = require.resolve('electron-builder/cli.js');
 const buildOutput = path.join(staging, 'output');
 const config = JSON.parse(fs.readFileSync(path.join(root, 'electron-gui', 'package.json'), 'utf8')).build;
 config.directories.output = buildOutput;
-config.extraResources = [{ from: jar, to: 'androlog.jar' }, { from: destination, to: 'runtime' }];
+const versionFile = path.join(staging, 'androlog-version.json');
+fs.writeFileSync(versionFile, JSON.stringify({ version: andrologVersion }));
+config.extraResources = [{ from: jar, to: 'androlog.jar' }, { from: destination, to: 'runtime' }, { from: versionFile, to: 'androlog-version.json' }];
 if (process.platform === 'darwin' && !process.env.CSC_NAME && !process.env.CSC_LINK && !args.some(arg => arg.includes('mac.identity'))) {
   config.mac.identity = '-';
   console.log('Using an ad-hoc macOS signature for local testing. A Developer ID and notarization are needed for distribution.');
