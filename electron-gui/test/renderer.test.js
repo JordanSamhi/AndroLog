@@ -186,3 +186,11 @@ test('analysis progress appears while working and follows the reported stages', 
   finish({ coverageSummary: {} }); await tick();
   assert.equal(doc.getElementById('analysis-progress').hidden, true); assert.deepEqual(calls.at(-1), [0, false]);
 });
+
+test('choosing the original APK after a log reloads the matching custom build', async t => {
+  const { dom, doc } = createUi({ customPlans: async () => [{ id: 'build', createdAt: '2026-10-29T08:00:00Z', count: 1 }], readCustom: async (_tag, id) => ({ total: 0, messages: [], summary: id ? { observed: 0, points: [{ message: 'later', method: '<A: void a()>', index: 1, count: 0 }] } : null }) });
+  t.after(() => dom.window.close());
+  doc.getElementById('choose-log').click(); await tick(); doc.getElementById('choose-apk').click(); await tick();
+  assert.equal(doc.getElementById('custom-build').value, 'build');
+  assert.match(doc.getElementById('messages-list').textContent, /Not observed/);
+});

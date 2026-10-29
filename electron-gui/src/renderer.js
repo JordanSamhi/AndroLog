@@ -75,7 +75,7 @@
       $('apk-name').textContent = basename(selected); $('apk-path').textContent = selected; $('apk-path').title = selected;
       $('choose-apk').textContent = 'Change APK ↗'; $('coverage-apk').textContent = basename(selected); $('coverage-apk').title = selected;
       $('custom-count').textContent = 'Place a log in the code'; $('save-apk').hidden = true; $('action-title').textContent = 'Ready to instrument';
-      $('action-description').textContent = 'Your original APK stays unchanged.'; updateAvailability();
+      $('action-description').textContent = 'Your original APK stays unchanged.'; updateAvailability(); if (state.log) refreshMessages();
     } catch (error) { toast(error.message, true); }
   }
   $('choose-apk').addEventListener('click', chooseApk); $('coverage-choose-apk').addEventListener('click', chooseApk);
