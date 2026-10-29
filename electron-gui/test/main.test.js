@@ -12,7 +12,7 @@ const realRequire = createRequire(mainPath);
 async function mainFixture(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'androlog-main-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
-  const handlers = new Map(), files = [], saves = [], calls = [];
+  const handlers = new Map(), files = [], saves = [], calls = [], controls = {};
   let ready, window;
   class Backend {
     async discard() {}
@@ -26,6 +26,13 @@ async function mainFixture(t) {
       calls.push({ apk, log, options });
       return { dir, html: path.join(dir, 'report.html'), report: { instrumentedInput: true, coverageSummary: {}, custom: { summary: { points: [] } } } };
     }
+    async listDevices() { return [{ serial: 'emulator-5554', name: 'Pixel', state: 'device' }]; }
+    async capture(apk, settings, options, root) {
+      calls.push({ capture: apk, options, root });
+      if (controls.capture) return controls.capture(apk, options, root);
+      return { dir: root, apk: path.join(root, 'tested.apk'), log: path.join(root, 'runtime.log'), tag: options.tag };
+    }
+    async stopCapture() { calls.push({ stopCapture: true }); }
   }
   const electron = {
     app: { isPackaged: false, whenReady: () => ({ then: fn => { ready = fn(); } }), getPath: () => dir, setAboutPanelOptions() {}, on() {} },
@@ -48,7 +55,7 @@ async function mainFixture(t) {
     return realRequire(name);
   } };
   vm.runInNewContext(source, context, { filename: mainPath }); await ready;
-  return { dir, files, saves, calls, invoke: (name, ...args) => handlers.get(name)({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, ...args) };
+  return { dir, files, saves, calls, controls, invoke: (name, ...args) => handlers.get(name)({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, ...args) };
 }
 
 test('main process keeps the two APK inputs separate and needs no local custom catalog', async t => {
@@ -76,4 +83,38 @@ test('saving an instrumented APK selects that file for coverage and preserves th
   assert.equal(calls.at(-1).apk, saved);
   assert.equal(await fs.readFile(original, 'utf8'), 'original');
   assert.equal(await fs.readFile(saved, 'utf8'), 'instrumented');
+});
+
+test('device testing uses the produced APK and its original tag, then selects the captured pair for analysis', async t => {
+  const { dir, files, calls, invoke } = await mainFixture(t);
+  await assert.rejects(invoke('device:start', { device: 'emulator-5554' }), /Instrument an APK/);
+  files.push(path.join(dir, 'original.apk')); await invoke('select:apk');
+  await invoke('apk:instrument', { tag: 'BUILT_TAG' }, null);
+  files.push(path.join(dir, 'different.apk')); await invoke('select:coverage-apk');
+  const devices = await invoke('device:list'); assert.equal(devices[0].serial, 'emulator-5554');
+  const captured = await invoke('device:start', { device: devices[0].serial, tag: 'IGNORED', apk: '/untrusted.apk' });
+  const call = calls.find(c => c.capture);
+  assert.equal(call.capture, path.join(dir, 'working.apk'));
+  assert.equal(call.options.tag, 'BUILT_TAG'); assert.equal(call.options.device, 'emulator-5554');
+  assert.equal(call.root, path.join(dir, 'captures'));
+  await invoke('coverage:analyze', { tag: captured.tag });
+  assert.equal(calls.at(-1).apk, captured.apk); assert.equal(calls.at(-1).log, captured.log);
+  await assert.rejects(invoke('device:stop'), /No device test/);
+});
+
+test('capture locks conflicting operations, allows stop, and releases the lock on failure', async t => {
+  const { dir, files, calls, controls, invoke } = await mainFixture(t);
+  files.push(path.join(dir, 'original.apk')); await invoke('select:apk');
+  await invoke('apk:instrument', { tag: 'RUN' }, null);
+  let fail;
+  controls.capture = () => new Promise((_resolve, reject) => { fail = reject; });
+  const capture = invoke('device:start', { device: 'emulator-5554' });
+  const failure = assert.rejects(capture, /Disconnected/);
+  await assert.rejects(invoke('device:start', { device: 'other' }), /Another operation/);
+  await assert.rejects(invoke('select:coverage-apk'), /Wait for/);
+  await assert.rejects(invoke('settings:save', {}), /Wait for/);
+  await invoke('device:stop'); assert.equal(calls.at(-1).stopCapture, true);
+  fail(new Error('Disconnected; partial log kept')); await failure;
+  await assert.rejects(invoke('device:stop'), /No device test/);
+  assert.equal((await invoke('device:list')).length, 1);
 });

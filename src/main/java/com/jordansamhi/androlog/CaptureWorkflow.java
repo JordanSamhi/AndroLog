@@ -240,7 +240,7 @@ final class CaptureWorkflow {
         if (Main.sameFile(html, json)) throw new IOException("HTML and JSON outputs must be separate files.");
     }
 
-    private static List<String> adb(List<String> prefix, String... arguments) {
+    static List<String> adb(List<String> prefix, String... arguments) {
         List<String> result = new ArrayList<>(prefix);
         boolean shell = arguments.length > 0 && "shell".equals(arguments[0]);
         for (int i = 0; i < arguments.length; i++) {

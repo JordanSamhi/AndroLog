@@ -11,7 +11,7 @@ const andrologVersion = desktopVersion({ isPackaged: app.isPackaged, resourcesPa
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'androlog', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 let window, backend, selectedApk = null, selectedCoverageApk = null, selectedLog = null, result = null, report = null, busy = false, dirty = false, closing = false;
-let settings;
+let settings, capturing = false;
 const temporary = new Set();
 const bundledJar = () => app.isPackaged ? path.join(process.resourcesPath, 'androlog.jar') : path.resolve(__dirname, `../../target/androlog-${andrologVersion}-jar-with-dependencies.jar`);
 const configFile = () => path.join(app.getPath('userData'), 'settings.json');
@@ -87,7 +87,7 @@ function registerHandlers() {
     if (!(await confirmDiscard())) return null;
     const trackedPlan = plan ? preparePlan(plan, opts.tag) : null;
     const next = await backend.instrument(selectedApk, settings, opts, trackedPlan);
-    await removeSession(result); result = next; temporary.add(next.dir); dirty = true;
+    await removeSession(result); result = { ...next, tag: opts.tag }; temporary.add(next.dir); dirty = true;
     return { name: path.basename(next.output) };
   }));
   handle('apk:save', async () => {
@@ -108,6 +108,24 @@ function registerHandlers() {
     const next = await backend.analyze(selectedCoverageApk, selectedLog, settings, opts);
     await removeSession(report); report = next; temporary.add(next.dir); return next.report;
   }));
+  handle('device:list', () => exclusive(() => backend.listDevices(settings)));
+  handle('device:start', opts => exclusive(async () => {
+    if (!result) throw new Error('Instrument an APK before testing it on a device.');
+    if (!opts || typeof opts.device !== 'string' || !opts.device.trim()) throw new Error('Choose a ready device.');
+    capturing = true;
+    try {
+      const captured = await backend.capture(result.output, settings, { device: opts.device, tag: result.tag }, path.join(app.getPath('userData'), 'captures'));
+      // This persistent session owns the exact APK installed on the device and its log.
+      // It must survive temporary report cleanup and subsequent instrumentations.
+      selectedCoverageApk = captured.apk; selectedLog = captured.log;
+      await removeSession(report); report = null;
+      return { apk: captured.apk, log: captured.log, tag: captured.tag };
+    } finally { capturing = false; }
+  }));
+  handle('device:stop', () => {
+    if (!capturing) throw new Error('No device test is running.');
+    return backend.stopCapture();
+  });
   handle('coverage:save', async () => {
     if (!report || busy) throw new Error('Analyze a run first.');
     const selected = await dialog.showSaveDialog(window, { title: 'Save HTML coverage report', defaultPath: 'androlog-coverage.html', filters: [{ name: 'HTML report', extensions: ['html'] }], properties: process.platform === 'linux' ? ['showOverwriteConfirmation'] : [] });

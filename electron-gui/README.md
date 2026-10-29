@@ -63,6 +63,14 @@ The listing is Jimple reconstructed from APK bytecode, not the original Java or 
 
 ## Run the app and collect logs
 
+After instrumentation, click **Test on device**. Choose a connected phone or emulator, then **Start test**. For a phone, enable USB debugging and accept the computer's authorization prompt; use **Refresh** if it does not appear ready. Android SDK Platform Tools (`adb`) are detected from the configured SDK or your environment.
+
+AndroLog installs the instrumented APK, starts capture before launching the app, and displays **Recording** with an elapsed timer. Interact with the app normally, then click **Stop & analyze**. Coverage opens automatically using that test's APK, log file, and tag.
+
+Every test saves a separate copy of the instrumented APK and `runtime.log` in the desktop app's data folder under `captures`. The session path appears in **Run details**. These files survive closing AndroLog and later instrumentations. Cancelling a test or losing the device connection keeps any partial log for manual analysis. The app is restarted for capture; installation conflicts are reported without uninstalling an existing app. Capture excludes older buffered records without clearing the device's logs.
+
+### Manual capture
+
 After saving, AndroLog shows commands using the actual saved path and Logcat tag. Use **Copy** beside either command to copy it to your clipboard. For example, in a terminal with `adb` on `PATH`:
 
 ```bash
@@ -74,7 +82,7 @@ Keep capture running, launch the app in a fresh process, and exercise the behavi
 
 Start capture before launching the app because some automatic probes are emitted only once per process. Logcat can include previously buffered matching records; if you want to clear those before a new test session, run `adb logcat -c` first. That command clears the device's log buffers.
 
-The GUI currently reads files; it does not capture from a connected device. The CLI's [`--capture` workflow](../docs/cli.md#automatic-capture) can automate installation, launch, capture, and report generation.
+The CLI's [`--capture` workflow](../docs/cli.md#automatic-capture) also automates installation, launch, capture, and report generation.
 
 ## Analyze coverage
 

@@ -10,6 +10,9 @@ const { spawn } = require('node:child_process');
 
 const FLAGS = ['-c', '-m', '-s', '-cp', '-mc'];
 const TAG = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
+const DEVICE = /^[^\s\x00-\x1f\x7f]{1,512}$/;
+const CAPTURE_CLASS = 'com.jordansamhi.androlog.DeviceCapture';
+const CAPTURE_STATES = new Set(['preparing', 'installing', 'launching', 'recording', 'stopping']);
 const PACKAGE = /^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*\.?$/;
 
 function javaProperty(value) {
@@ -102,47 +105,89 @@ async function copySafely(source, destination, protectedFiles = []) {
   finally { await fsp.rm(temporary, { force: true }); }
 }
 
+function createOperation(interactive = false) {
+  return { child: null, cancelled: false, interactive, state: null, stopRequested: false, failure: null };
+}
+
 class Backend {
   constructor({ jar, tempRoot, defaultJava, emit = () => {} }) { this.jar = jar; this.tempRoot = tempRoot; this.defaultJava = defaultJava; this.emit = emit; this.child = null; this.active = null; this.workspaces = new Set(); }
-  async run(settings, args, { config = false, workDir, label = 'Working' } = {}) {
-    if (this.child) throw new Error('Another operation is already running.');
-    await regularFile(this.jar, 'the AndroLog backend JAR');
-    const java = settings.java || this.defaultJava || (process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, 'bin', process.platform === 'win32' ? 'java.exe' : 'java') : 'java');
-    let classpath = this.jar;
-    if (config) {
-      const dir = path.join(workDir, 'config'); await fsp.mkdir(dir, { recursive: true });
-      const win = process.platform === 'win32';
-      const zip = path.join(settings.buildTools, win ? 'zipalign.exe' : 'zipalign');
-      const sign = path.join(settings.buildTools, win ? 'apksigner.bat' : 'apksigner');
-      await fsp.writeFile(path.join(dir, 'config.properties'), `zipalignPath=${javaProperty(zip)}\napksignerPath=${javaProperty(sign)}\n`, { mode: 0o600 });
-      classpath = dir + path.delimiter + this.jar;
-    }
-    const javaArgs = ['-Djava.awt.headless=true', '-Dandrolog.gui.progress=true', '-cp', classpath, 'com.jordansamhi.androlog.Main', ...args];
-    const env = { ...process.env };
-    if (path.isAbsolute(java)) { env.JAVA_HOME = path.dirname(path.dirname(java)); env.PATH = path.dirname(java) + path.delimiter + (env.PATH || ''); }
-    this.emit({ type: 'start', label });
-    return new Promise((resolve, reject) => {
-      const child = spawn(java, javaArgs, { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
-      const operation = { child, cancelled: false }; this.child = child; this.active = operation; let output = '', pending = '';
-      const consume = chunk => {
-        const text = chunk.toString(); output = (output + text).slice(-200000); pending += text;
-        const lines = pending.split(/\r?\n/); pending = lines.pop();
-        for (const line of lines) { const m = /^@@ANDROLOG_STAGE (\d+)/.exec(line); if (m) this.emit({ type: 'stage', stage: Number(m[1]) }); }
-        this.emit({ type: 'log', text: text.slice(-12000) });
-      };
-      child.stdout.on('data', consume); child.stderr.on('data', consume);
-      child.on('error', e => { if (this.active === operation) { this.child = null; this.active = null; } reject(new Error(`Could not start Java: ${e.message}. Set a Java 17+ executable in Settings.`)); });
-      child.on('close', (code, signal) => {
-        if (this.active === operation) { this.child = null; this.active = null; }
-        if (operation.cancelled) return reject(new Error('Operation cancelled.'));
-        if (code !== 0) { const errors = output.match(/^Error[^\r\n]*/gm); return reject(new Error(errors?.at(-1) || `${label} failed (${signal ? 'signal ' + signal : 'exit ' + code}). Open run details for the full log.`)); }
-        resolve(output);
+  async run(settings, args, { config = false, workDir, label = 'Working', mainClass = 'com.jordansamhi.androlog.Main', interactive = false, onLine, timeoutMs = 0, reservation } = {}) {
+    if (this.active && this.active !== reservation) throw new Error('Another operation is already running.');
+    const operation = reservation || createOperation(interactive);
+    this.active = operation;
+    try {
+      await regularFile(this.jar, 'the AndroLog backend JAR');
+      const java = settings.java || this.defaultJava || (process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, 'bin', process.platform === 'win32' ? 'java.exe' : 'java') : 'java');
+      let classpath = this.jar;
+      if (config) {
+        const dir = path.join(workDir, 'config'); await fsp.mkdir(dir, { recursive: true });
+        const win = process.platform === 'win32';
+        const zip = path.join(settings.buildTools, win ? 'zipalign.exe' : 'zipalign');
+        const sign = path.join(settings.buildTools, win ? 'apksigner.bat' : 'apksigner');
+        await fsp.writeFile(path.join(dir, 'config.properties'), `zipalignPath=${javaProperty(zip)}\napksignerPath=${javaProperty(sign)}\n`, { mode: 0o600 });
+        classpath = dir + path.delimiter + this.jar;
+      }
+      if (operation.cancelled) throw new Error('Operation cancelled.');
+      const javaArgs = ['-Djava.awt.headless=true', '-Dandrolog.gui.progress=true', '-cp', classpath, mainClass, ...args];
+      const env = { ...process.env };
+      if (path.isAbsolute(java)) { env.JAVA_HOME = path.dirname(path.dirname(java)); env.PATH = path.dirname(java) + path.delimiter + (env.PATH || ''); }
+      this.emit({ type: 'start', label });
+      return await new Promise((resolve, reject) => {
+        const child = spawn(java, javaArgs, { env, windowsHide: true, stdio: [interactive ? 'pipe' : 'ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
+        operation.child = child; this.child = child;
+        let output = '';
+        const pending = { stdout: '', stderr: '' };
+        const fail = error => {
+          if (this.active !== operation || operation.failure) return;
+          operation.failure = error; this.cancel();
+        };
+        const lineReceived = line => {
+          if (operation.failure) return;
+          try {
+            const m = /^@@ANDROLOG_STAGE (\d+)/.exec(line); if (m) this.emit({ type: 'stage', stage: Number(m[1]) });
+            if (onLine) onLine(line, operation);
+          } catch (error) { fail(error); }
+        };
+        const consume = stream => chunk => {
+          const text = chunk.toString(); output = (output + text).slice(-200000); pending[stream] += text;
+          const lines = pending[stream].split(/\r?\n/); pending[stream] = lines.pop();
+          for (const line of lines) lineReceived(line);
+          this.emit({ type: 'log', text: text.slice(-12000) });
+        };
+        child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
+        child.stdout.on('data', consume('stdout')); child.stderr.on('data', consume('stderr'));
+        child.stdin?.on('error', error => {
+          if (!operation.cancelled) fail(new Error(`Cannot stop device capture: ${error.message}`));
+        });
+        const timer = timeoutMs > 0 ? setTimeout(() => fail(new Error(`${label} timed out. Check the device connection and try again.`)), timeoutMs) : null;
+        timer?.unref();
+        child.on('error', e => { clearTimeout(timer); reject(new Error(`Could not start Java: ${e.message}. Set a Java 17+ executable in Settings.`)); });
+        child.on('close', (code, signal) => {
+          clearTimeout(timer);
+          for (const line of Object.values(pending)) if (line) lineReceived(line);
+          if (operation.failure) return reject(operation.failure);
+          if (operation.cancelled) return reject(new Error('Operation cancelled.'));
+          if (code !== 0) { const errors = output.match(/^Error[^\r\n]*/gm); return reject(new Error(errors?.at(-1) || `${label} failed (${signal ? 'signal ' + signal : 'exit ' + code}). Open run details for the full log.`)); }
+          resolve(output);
+        });
       });
+    } finally {
+      if (this.active === operation) { this.child = null; this.active = null; }
+    }
+  }
+  async stopCapture() {
+    const operation = this.active;
+    if (!operation?.interactive || !operation.child) throw new Error('No device capture is running.');
+    if (operation.stopRequested) return;
+    if (operation.state !== 'recording' || operation.cancelled) throw new Error('Wait until the app is recording before stopping.');
+    operation.stopRequested = true;
+    await new Promise((resolve, reject) => {
+      operation.child.stdin.write('\n', error => error ? reject(new Error(`Cannot stop device capture: ${error.message}`)) : resolve());
     });
   }
   cancel() {
-    if (!this.child) return;
     if (this.active) this.active.cancelled = true;
+    if (!this.child) return;
     const active = this.child;
     try {
       if (process.platform === 'win32') {
@@ -172,6 +217,70 @@ class Backend {
     this.workspaces.clear();
   }
   async discard(dir) { await fsp.rm(dir, { recursive: true, force: true }); this.workspaces.delete(dir); }
+  async listDevices(settings) {
+    await validateSettings(settings, false);
+    let devices;
+    await this.run(settings, ['--platforms', settings.platforms, '--list'], {
+      mainClass: CAPTURE_CLASS, label: 'Finding devices', timeoutMs: 25000,
+      onLine: line => {
+        if (!line.startsWith('@@ANDROLOG_DEVICES ')) return;
+        let parsed;
+        try { parsed = JSON.parse(line.slice('@@ANDROLOG_DEVICES '.length)); } catch { throw new Error('The backend returned an invalid device list.'); }
+        if (!Array.isArray(parsed) || parsed.some(device => !device || typeof device.serial !== 'string' || !DEVICE.test(device.serial) || typeof device.name !== 'string' || typeof device.state !== 'string')) throw new Error('The backend returned an invalid device list.');
+        devices = parsed;
+      }
+    });
+    if (!devices) throw new Error('The backend did not return a device list. Rebuild AndroLog and try again.');
+    return devices;
+  }
+  async capture(apk, settings, opts, sessionRoot) {
+    if (this.active) throw new Error('Another operation is already running.');
+    // Reserve before any await: cancelling during APK validation/copying must
+    // prevent a later install, just as cancelling the Java process does.
+    const operation = createOperation(true); this.active = operation;
+    const checkCancelled = () => { if (operation.cancelled) throw new Error('Operation cancelled.'); };
+    let session;
+    try {
+      apk = await regularFile(apk, 'the instrumented APK'); checkCancelled();
+      await validateSettings(settings, false); checkCancelled();
+      if (!opts || !TAG.test(opts.tag || '')) throw new Error('Enter the same valid Logcat tag used during instrumentation.');
+      if (typeof opts.device !== 'string' || !DEVICE.test(opts.device) || opts.device.startsWith('-')) throw new Error('Choose a connected device.');
+      if (typeof sessionRoot !== 'string' || !path.isAbsolute(sessionRoot)) throw new Error('Choose a valid capture storage folder.');
+      await fsp.mkdir(sessionRoot, { recursive: true, mode: 0o700 }); checkCancelled();
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const dir = await fsp.mkdtemp(path.join(sessionRoot, `capture-${stamp}-`));
+      // Captures are permanent user data, deliberately absent from workspaces.
+      session = { dir, apk: path.join(dir, path.basename(apk)), log: path.join(dir, 'runtime.log'), tag: opts.tag };
+      checkCancelled();
+      const originalHash = await hashFile(apk); checkCancelled();
+      await fsp.copyFile(apk, session.apk, fs.constants.COPYFILE_EXCL); checkCancelled();
+      const [snapshotHash, currentHash] = await Promise.all([hashFile(session.apk), hashFile(apk)]); checkCancelled();
+      if (originalHash !== snapshotHash || originalHash !== currentHash) throw new Error('The instrumented APK changed while preparing the test. Start again.');
+      await fsp.writeFile(path.join(dir, 'session.json'), JSON.stringify({ apk: path.basename(session.apk), log: 'runtime.log', tag: opts.tag, device: opts.device, apkSha256: originalHash, startedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
+      checkCancelled();
+      this.emit({ type: 'log', text: `Saved session files: ${dir}\n` });
+      let recordingSeen = false;
+      await this.run(settings, ['--platforms', settings.platforms, '--apk', session.apk, '--device', opts.device, '--tag', opts.tag, '--output', session.log], {
+        mainClass: CAPTURE_CLASS, interactive: true, label: 'Testing on device', reservation: operation,
+        onLine: line => {
+          if (!line.startsWith('@@ANDROLOG_CAPTURE ')) return;
+          let update;
+          try { update = JSON.parse(line.slice('@@ANDROLOG_CAPTURE '.length)); } catch { throw new Error('The backend returned an invalid capture status.'); }
+          if (!update || !CAPTURE_STATES.has(update.state)) throw new Error('The backend returned an invalid capture status.');
+          operation.state = update.state;
+          if (update.state === 'recording') recordingSeen = true;
+          this.emit({ type: 'capture', state: update.state, ...session });
+        }
+      });
+      if (!recordingSeen || !operation.stopRequested) throw new Error('Device capture ended before Stop & analyze was requested.');
+      await regularFile(session.log, 'the captured runtime log');
+      return session;
+    } catch (error) {
+      throw new Error(error.message + (session ? ` Saved session files: ${session.dir}` : ''));
+    } finally {
+      if (this.active === operation) { this.child = null; this.active = null; }
+    }
+  }
   async inspect(apk, settings) {
     apk = await regularFile(apk, 'the original APK'); await validateSettings(settings, false);
     const dir = await this.workspace(), output = path.join(dir, 'catalog.json');

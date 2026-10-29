@@ -52,9 +52,9 @@ The code browser shows Jimple reconstructed from the APK. Messages are literal t
 
 ### 2. Run the app
 
-After saving, **Run your app** shows the `adb install` and Logcat commands for your APK, each with a **Copy** button. Install on a test device or emulator, start capture, then launch and exercise the app. Stop capture with **Ctrl+C**.
+Click **Test on device**, choose a connected Android phone or emulator, and click **Start test**. AndroLog installs your instrumented APK, starts recording, and launches the app. Exercise it, then click **Stop & analyze** to open Coverage automatically. Enable USB debugging and authorize the computer when using a physical device.
 
-The GUI reads log files. For automatic installation, launch, and capture, use the CLI's [`--capture` option](docs/cli.md#automatic-capture).
+Each test keeps the exact APK and its logs together. You can also use the commands under **Run your app** after saving, or the CLI's [`--capture` option](docs/cli.md#automatic-capture).
 
 ### 3. Analyze coverage
 

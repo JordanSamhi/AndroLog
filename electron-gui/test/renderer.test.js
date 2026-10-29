@@ -19,6 +19,7 @@ function createUi(overrides = {}) {
     settings: async () => ({ platforms: '/sdk/platforms', buildTools: '/sdk/build-tools/36', andrologVersion: '0.1', appVersion: '0.1.3' }),
     chooseApk: async () => '/apps/original.apk', chooseCoverageApk: async () => '/apps/instrumented.apk', chooseLog: async () => '/logs/runtime.log',
     chooseSetting: async () => null, saveSettings: async value => value, cancel: async () => {}, onUpdate: () => {},
+    listDevices: async () => [{ serial: 'emulator-5554', name: 'Pixel', state: 'device' }], stopDeviceTest: async () => {},
     inspectCode: async () => ({ apkSha256: 'a'.repeat(64), methods: [{ className: 'org.example.Main', signature: '<org.example.Main: void run()>', statements: [{ index: 1, text: 'return', selectable: true }] }] }),
     instrument: async (opts, plan) => { calls.push({ opts, plan }); return { name: 'original.apk' }; },
     saveApk: async () => '/apps/saved.apk', analyze: async () => ({ coverageSummary: { methods: { covered: 1, total: 4 }, services: { covered: 0, total: 0 } } }), saveReport: async () => '/tmp/report.html', ...overrides
@@ -275,4 +276,140 @@ test('failed reanalysis removes stale custom coverage and reports the backend er
   doc.getElementById('analyze').click(); await tick();
   assert.equal(doc.getElementById('report-frame').hidden, true); assert.equal(doc.querySelectorAll('.point-row').length, 0);
   assert.match(doc.getElementById('toast').textContent, /APK and log do not match/);
+});
+
+async function instrumentForDevice(doc) {
+  doc.getElementById('choose-apk').click(); await tick();
+  doc.getElementById('instrument').click(); await tick();
+  doc.getElementById('test-device').click(); await tick();
+}
+test('device testing is offered after instrumentation and only ready devices can start', async t => {
+  const { dom, doc } = createUi({ listDevices: async () => [
+    { serial: 'phone', name: 'My phone', state: 'unauthorized' },
+    { serial: 'offline-emulator', name: 'Tablet', state: 'offline' },
+    { serial: 'emulator-5554', name: 'Pixel', state: 'device' }
+  ] });
+  t.after(() => dom.window.close());
+  assert.equal(doc.getElementById('test-device').hidden, true);
+  await instrumentForDevice(doc);
+  assert.equal(doc.getElementById('test-device').hidden, false);
+  assert.equal(doc.getElementById('device-dialog').open, true);
+  const select = doc.getElementById('device-select');
+  assert.equal(select.value, 'emulator-5554');
+  assert.equal(select.options[0].disabled, true); assert.match(select.options[0].textContent, /authorization needed/);
+  assert.equal(select.options[1].disabled, true);
+  assert.equal(doc.getElementById('device-start').disabled, false);
+  doc.getElementById('device-cancel').click();
+  assert.equal(doc.getElementById('device-dialog').open, false);
+  doc.getElementById('choose-apk').click(); await tick();
+  assert.equal(doc.getElementById('test-device').hidden, true);
+});
+test('empty and failed device scans give recoverable instructions', async t => {
+  let scan = 0;
+  const { dom, doc } = createUi({ listDevices: async () => {
+    if (scan++ === 0) return [];
+    if (scan === 2) throw new Error('Cannot find adb. Install Android SDK Platform Tools.');
+    return [{ serial: 'phone', name: 'Phone', state: 'device' }];
+  } });
+  t.after(() => dom.window.close()); await instrumentForDevice(doc);
+  assert.equal(doc.getElementById('device-start').disabled, true);
+  assert.match(doc.getElementById('device-hint').textContent, /USB debugging/);
+  doc.getElementById('device-refresh').click(); await tick();
+  assert.match(doc.getElementById('device-error').textContent, /Cannot find adb/);
+  assert.equal(doc.getElementById('device-start').disabled, true);
+  doc.getElementById('device-refresh').click(); await tick();
+  assert.equal(doc.getElementById('device-error').hidden, true);
+  assert.equal(doc.getElementById('device-select').value, 'phone');
+  assert.equal(doc.getElementById('device-start').disabled, false);
+});
+test('Stop & analyze uses the captured APK, log and tag and unlocks the dashboard', async t => {
+  let update, finish, selected, stops = 0, analyses = 0, analyzedTag;
+  const { dom, window, doc } = createUi({
+    onUpdate: callback => { update = callback; },
+    startDeviceTest: value => { selected = value; return new Promise(resolve => { finish = resolve; }); },
+    stopDeviceTest: async () => { stops++; finish({ apk: '/sessions/run/app.apk', log: '/sessions/run/runtime.log', tag: 'CAPTURED' }); },
+    analyze: async opts => { analyses++; analyzedTag = opts.tag; return { coverageSummary: { methods: { covered: 2, total: 4 } } }; }
+  });
+  t.after(() => dom.window.close()); await instrumentForDevice(doc);
+  let interval, clears = 0, now = 100000;
+  window.Date.now = () => now;
+  window.setInterval = callback => { interval = callback; return 45; };
+  window.clearInterval = id => { if (id === 45) clears++; };
+  doc.getElementById('device-start').click(); await tick();
+  assert.equal(selected.device, 'emulator-5554');
+  assert.equal(doc.getElementById('choose-apk').disabled, true);
+  assert.equal(doc.getElementById('device-close').disabled, true);
+  assert.equal(doc.getElementById('device-stop').disabled, true);
+  const escape = new window.Event('cancel', { cancelable: true }); doc.getElementById('device-dialog').dispatchEvent(escape);
+  assert.equal(escape.defaultPrevented, true);
+  update({ type: 'capture', state: 'installing' }); assert.match(doc.getElementById('device-status').textContent, /Installing/);
+  update({ type: 'capture', state: 'recording' });
+  assert.equal(doc.getElementById('device-stop').disabled, false);
+  now += 65000; interval(); assert.equal(doc.getElementById('device-elapsed').textContent, '01:05');
+  assert.equal(analyses, 0);
+  doc.getElementById('device-stop').click(); await tick(); await tick();
+  assert.equal(stops, 1); assert.equal(analyses, 1); assert.equal(analyzedTag, 'CAPTURED');
+  assert.equal(doc.getElementById('device-dialog').open, false);
+  assert.equal(doc.getElementById('coverage-apk').title, '/sessions/run/app.apk');
+  assert.equal(doc.getElementById('log-name').title, '/sessions/run/runtime.log');
+  assert.match(doc.getElementById('operation-log').textContent, /APK: \/sessions\/run\/app.apk/);
+  assert.match(doc.getElementById('operation-log').textContent, /Runtime log: \/sessions\/run\/runtime.log/);
+  assert.equal(doc.getElementById('page-coverage').hidden, false);
+  assert.match(doc.querySelectorAll('.stat')[1].textContent, /50.0%/);
+  assert.equal(doc.getElementById('choose-apk').disabled, false);
+  assert.ok(clears >= 1);
+});
+test('capture failure preserves its error and permits retry without analyzing a partial run', async t => {
+  let update, fail, analyses = 0;
+  const { dom, doc } = createUi({
+    onUpdate: callback => { update = callback; },
+    startDeviceTest: () => new Promise((_resolve, reject) => { fail = reject; }),
+    analyze: async () => { analyses++; return { coverageSummary: {} }; }
+  });
+  t.after(() => dom.window.close()); await instrumentForDevice(doc);
+  doc.getElementById('device-start').click(); await tick();
+  update({ type: 'capture', state: 'recording' });
+  fail(new Error('Device disconnected. Saved session: /sessions/partial')); await tick();
+  assert.equal(analyses, 0);
+  assert.equal(doc.getElementById('device-dialog').open, true);
+  assert.match(doc.getElementById('device-error').textContent, /Saved session: \/sessions\/partial/);
+  assert.equal(doc.getElementById('device-start').disabled, false);
+  assert.equal(doc.getElementById('device-stop').hidden, true);
+  assert.equal(doc.getElementById('device-close').disabled, false);
+  assert.equal(doc.getElementById('choose-apk').disabled, false);
+});
+test('cancelling a test stops capture without opening analysis', async t => {
+  let fail, cancelled = 0, analyses = 0;
+  const { dom, doc } = createUi({
+    startDeviceTest: () => new Promise((_resolve, reject) => { fail = reject; }),
+    cancel: async () => { cancelled++; fail(new Error('Test cancelled. Saved session: /sessions/cancelled')); },
+    analyze: async () => { analyses++; return { coverageSummary: {} }; }
+  });
+  t.after(() => dom.window.close()); await instrumentForDevice(doc);
+  doc.getElementById('device-start').click(); await tick(); doc.getElementById('device-cancel').click(); await tick();
+  assert.equal(cancelled, 1); assert.equal(analyses, 0);
+  assert.equal(doc.getElementById('device-start').disabled, false);
+  assert.match(doc.getElementById('device-error').textContent, /Test cancelled/);
+});
+test('a successful capture returned after a late cancel still synchronizes the selected run', async t => {
+  let finish, cancelled = 0, analyses = 0, analyzedTag;
+  const { dom, doc } = createUi({
+    startDeviceTest: () => new Promise(resolve => { finish = resolve; }),
+    cancel: async () => { cancelled++; },
+    analyze: async opts => { analyses++; analyzedTag = opts.tag; return { coverageSummary: {} }; }
+  });
+  t.after(() => dom.window.close()); await selectRun(doc); await instrumentForDevice(doc);
+  doc.getElementById('device-start').click(); await tick();
+  doc.getElementById('device-cancel').click(); await tick();
+  finish({ apk: '/sessions/finished/app.apk', log: '/sessions/finished/runtime.log', tag: 'FINISHED' }); await tick();
+  assert.equal(cancelled, 1); assert.equal(analyses, 0);
+  assert.equal(doc.getElementById('device-dialog').open, false);
+  assert.equal(doc.getElementById('page-coverage').hidden, false);
+  assert.equal(doc.getElementById('coverage-apk').title, '/sessions/finished/app.apk');
+  assert.equal(doc.getElementById('log-name').title, '/sessions/finished/runtime.log');
+  assert.equal(doc.getElementById('coverage-tag').value, 'FINISHED');
+  assert.match(doc.getElementById('operation-log').textContent, /Runtime log: \/sessions\/finished\/runtime.log/);
+  assert.equal(doc.getElementById('analyze').disabled, false);
+  doc.getElementById('analyze').click(); await tick();
+  assert.equal(analyses, 1); assert.equal(analyzedTag, 'FINISHED');
 });

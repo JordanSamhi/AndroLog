@@ -9,6 +9,7 @@
   ];
   const basename = value => value ? value.split(/[\\/]/).pop() : '';
   let toastTimer;
+  const deviceTest = { active: false, loading: false, phase: '', started: null, timer: null, request: 0, cancelled: false };
   function toast(text, error = false) { const el = $('toast'); el.textContent = text; el.classList.toggle('error', error); el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 6000); }
   function navigate(page) {
     for (const el of document.querySelectorAll('.page')) { const selected = el.id === `page-${page}`; el.hidden = !selected; el.classList.toggle('active', selected); }
@@ -31,14 +32,14 @@
     drawMetrics(null); renderCustomLogs(null);
   }
   function setBusy(busy, kind = '') {
-    state.busy = busy; state.stageKind = kind; document.body.classList.toggle('busy', busy); $('operation-panel').hidden = !busy;
+    state.busy = busy; state.stageKind = kind; document.body.classList.toggle('busy', busy); $('operation-panel').hidden = !busy || kind === 'capture';
     if (busy && kind === 'instrument') window.andrologAnimation?.setStage(0, true);
     $('analysis-progress').hidden = !(busy && kind === 'coverage');
     window.andrologAnimation?.setAnalysis?.(0, busy && kind === 'coverage');
     if (busy && kind === 'coverage') { $('analysis-title').textContent = 'Preparing analysis'; $('analysis-description').textContent = 'Reading the APK and runtime log…'; document.querySelectorAll('.analysis-stage i').forEach(el => el.classList.remove('done')); }
     $('cancel-coverage').hidden = !(busy && kind === 'coverage');
     $('analyze').textContent = busy && kind === 'coverage' ? 'Analyzing…' : 'Analyze run →';
-    for (const id of ['choose-apk','coverage-choose-apk','choose-log','open-custom','instrument','save-apk','analyze','settings-save','save-report','report-export','preset-essentials','preset-all','preset-custom']) $(id).disabled = busy;
+    for (const id of ['choose-apk','coverage-choose-apk','choose-log','open-custom','instrument','save-apk','test-device','analyze','settings-save','save-report','report-export','preset-essentials','preset-all','preset-custom']) $(id).disabled = busy;
     document.querySelectorAll('.custom-point-link').forEach(el => { el.disabled = busy; });
     document.querySelectorAll('[data-probe], #log-tag, #coverage-tag, #package-prefix, #exclude-libraries, [data-setting]').forEach(el => { el.disabled = busy; });
     if (!busy) updateAvailability();
@@ -48,6 +49,7 @@
     if (state.busy) return;
     document.querySelectorAll('.custom-point-link').forEach(el => { el.disabled = !el.dataset.pointId; });
     $('instrument').disabled = !state.apk; $('open-custom').disabled = !state.apk; $('save-apk').disabled = !state.result;
+    $('test-device').disabled = !state.result; $('test-device').hidden = !state.result;
     $('analyze').disabled = !(state.coverageApk && state.log); $('save-report').disabled = !state.report; $('report-export').disabled = !state.report; $('explore-report').disabled = !state.report;
   }
   async function run(kind, task) {
@@ -56,6 +58,7 @@
     try { return await task(); } catch (error) { toast(error.message || String(error), true); return null; } finally { setBusy(false); }
   }
   api.onUpdate(update => {
+    if (update.type === 'capture' && deviceTest.active) showCaptureStage(update.state);
     if (update.type === 'log') { state.logText = (state.logText + update.text).slice(-180000); $('operation-log').textContent = state.logText; $('operation-log').scrollTop = $('operation-log').scrollHeight; }
     if (update.type === 'stage') {
       if (state.stageKind === 'instrument') window.andrologAnimation?.setStage(update.stage);
@@ -149,6 +152,129 @@
       $('action-title').textContent = 'Saved. Ready to run.'; $('action-description').textContent = file;
       selectCoverageApk(file); $('coverage-tag').value = state.instrumentTag; showNextSteps(file, state.instrumentTag); toast(`Saved ${basename(file)}`);
     } } catch (e) { toast(e.message, true); }
+  });
+  function deviceError(message = '') {
+    $('device-error').textContent = message; $('device-error').hidden = !message;
+  }
+  function updateDeviceControls() {
+    const selected = $('device-select').selectedOptions[0];
+    $('device-select').disabled = deviceTest.active || deviceTest.loading || ![...$('device-select').options].some(option => option.value && !option.disabled);
+    $('device-refresh').disabled = deviceTest.active || deviceTest.loading;
+    $('device-close').disabled = deviceTest.active;
+    $('device-start').hidden = deviceTest.active;
+    $('device-start').disabled = deviceTest.active || deviceTest.loading || !selected?.value || selected.disabled;
+    $('device-stop').hidden = !deviceTest.active;
+    $('device-stop').disabled = !deviceTest.active || deviceTest.phase !== 'recording' || deviceTest.cancelled;
+    $('device-cancel').textContent = deviceTest.active ? 'Cancel test' : 'Cancel';
+    $('device-cancel').disabled = deviceTest.active && deviceTest.cancelled;
+    $('device-setup').hidden = deviceTest.active;
+    $('device-progress').hidden = !deviceTest.active;
+  }
+  async function refreshDevices() {
+    if (deviceTest.active || deviceTest.loading) return;
+    const request = ++deviceTest.request, previous = $('device-select').value;
+    deviceTest.loading = true; deviceError(); updateDeviceControls();
+    $('device-hint').textContent = 'Looking for connected devices…';
+    try {
+      const devices = await api.listDevices();
+      if (request !== deviceTest.request) return;
+      $('device-select').replaceChildren();
+      for (const device of devices) {
+        const option = document.createElement('option'); option.value = device.serial;
+        const status = device.state === 'unauthorized' ? 'authorization needed' : device.state;
+        option.textContent = `${device.name || device.serial}${device.name && device.name !== device.serial ? ' · ' + device.serial : ''}${device.state === 'device' ? '' : ' — ' + status}`;
+        option.disabled = device.state !== 'device'; $('device-select').appendChild(option);
+      }
+      const ready = [...$('device-select').options].filter(option => !option.disabled);
+      if (ready.length) $('device-select').value = ready.some(option => option.value === previous) ? previous : ready[0].value;
+      else {
+        const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = devices.length ? 'No device is ready' : 'No devices connected';
+        placeholder.disabled = true; placeholder.selected = true; $('device-select').prepend(placeholder);
+      }
+      $('device-hint').textContent = ready.length
+        ? 'The app will be installed and opened. Use it normally, then stop to see coverage.'
+        : 'Connect a phone with USB debugging enabled, or start an emulator. Accept the debugging prompt on your phone, then refresh.';
+    } catch (error) {
+      if (request !== deviceTest.request) return;
+      $('device-select').replaceChildren(); deviceError(error.message || String(error));
+      $('device-hint').textContent = 'Check your SDK settings and Android SDK Platform Tools, then refresh.';
+    } finally {
+      if (request === deviceTest.request) { deviceTest.loading = false; updateDeviceControls(); }
+    }
+  }
+  function updateElapsed() {
+    const seconds = Math.max(0, Math.floor((Date.now() - deviceTest.started) / 1000));
+    $('device-elapsed').textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  }
+  function showCaptureStage(phase) {
+    deviceTest.phase = phase;
+    const labels = {
+      preparing: ['Preparing your test', 'Connecting to your device…'],
+      installing: ['Installing the APK', 'Your instrumented app is being installed.'],
+      launching: ['Opening your app', 'Starting the app and its log recording…'],
+      recording: ['Recording', 'Use the app on your device. Stop when you are ready to see coverage.'],
+      stopping: ['Finishing the recording', 'Saving the last logs before analysis…'],
+      cancelling: ['Cancelling the test', 'Keeping any logs already recorded…']
+    };
+    const [title, guidance] = labels[phase] || labels.preparing;
+    $('device-status').textContent = title; $('device-guidance').textContent = guidance;
+    $('device-indicator').classList.toggle('recording', phase === 'recording');
+    if (phase === 'recording') {
+      if (deviceTest.started === null) deviceTest.started = Date.now();
+      updateElapsed(); if (!deviceTest.timer) deviceTest.timer = setInterval(updateElapsed, 1000);
+    } else { clearInterval(deviceTest.timer); deviceTest.timer = null; }
+    $('device-elapsed').hidden = deviceTest.started === null;
+    updateDeviceControls();
+  }
+  function closeDeviceDialog() {
+    if (deviceTest.active) return;
+    deviceTest.request++; deviceTest.loading = false; $('device-dialog').close();
+  }
+  $('test-device').addEventListener('click', () => {
+    if (state.busy || !state.result) return;
+    deviceError(); updateDeviceControls(); $('device-dialog').showModal(); refreshDevices();
+  });
+  $('device-refresh').addEventListener('click', refreshDevices);
+  $('device-select').addEventListener('change', updateDeviceControls);
+  $('device-close').addEventListener('click', closeDeviceDialog);
+  $('device-dialog').addEventListener('cancel', event => {
+    if (deviceTest.active) event.preventDefault();
+    else { deviceTest.request++; deviceTest.loading = false; }
+  });
+  $('device-cancel').addEventListener('click', async () => {
+    if (!deviceTest.active) { closeDeviceDialog(); return; }
+    const previousPhase = deviceTest.phase;
+    deviceTest.cancelled = true; showCaptureStage('cancelling');
+    try { await api.cancel(); }
+    catch (error) { if (deviceTest.active) { deviceTest.cancelled = false; deviceError(error.message || String(error)); showCaptureStage(previousPhase); } }
+  });
+  $('device-start').addEventListener('click', async () => {
+    const selected = $('device-select').selectedOptions[0];
+    if (state.busy || !state.result || deviceTest.loading || !selected?.value || selected.disabled) return;
+    const device = selected.value;
+    deviceTest.active = true; deviceTest.cancelled = false; deviceTest.started = null;
+    $('device-running-name').textContent = selected.textContent; deviceError();
+    setBusy(true, 'capture'); state.logText = ''; $('operation-log').textContent = 'Starting device test…'; showCaptureStage('preparing');
+    let captured;
+    try { captured = await api.startDeviceTest({ device }); }
+    catch (error) { deviceError(error.message || String(error)); }
+    finally {
+      clearInterval(deviceTest.timer); deviceTest.timer = null; deviceTest.active = false;
+      setBusy(false); updateDeviceControls();
+    }
+    if (!captured) return;
+    closeDeviceDialog(); selectCoverageApk(captured.apk);
+    state.log = captured.log; $('log-name').textContent = basename(captured.log); $('log-name').title = captured.log;
+    $('coverage-tag').value = captured.tag; updateAvailability(); navigate('coverage');
+    if (!deviceTest.cancelled) await analyzeRun();
+    state.logText = `${state.logText}\nDevice test files\nAPK: ${captured.apk}\nRuntime log: ${captured.log}\n`;
+    $('operation-log').textContent = state.logText;
+  });
+  $('device-stop').addEventListener('click', async () => {
+    if (!deviceTest.active || deviceTest.phase !== 'recording') return;
+    showCaptureStage('stopping');
+    try { await api.stopDeviceTest(); }
+    catch (error) { if (deviceTest.active) { deviceError(error.message || String(error)); showCaptureStage('recording'); } }
   });
   async function analyzeRun() {
     if (state.busy) return null;
