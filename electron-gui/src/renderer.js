@@ -35,7 +35,7 @@
     $('cancel-coverage').hidden = !(busy && kind === 'coverage');
     $('analyze').textContent = busy && kind === 'coverage' ? 'Analyzing…' : 'Analyze run →';
     for (const id of ['choose-apk','coverage-choose-apk','choose-log','open-custom','instrument','save-apk','analyze','settings-save','save-report','report-export','preset-essentials','preset-all','preset-custom']) $(id).disabled = busy;
-    document.querySelectorAll('[data-probe], #log-tag, #package-prefix, #exclude-libraries, [data-setting]').forEach(el => { el.disabled = busy; });
+    document.querySelectorAll('[data-probe], #log-tag, #coverage-tag, #package-prefix, #exclude-libraries, [data-setting]').forEach(el => { el.disabled = busy; });
     if (!busy) updateAvailability();
     if (busy) { $('operation-title').textContent = kind === 'inspect' ? 'Reading your APK' : kind === 'coverage' ? 'Analyzing your run' : 'Preparing your APK'; $('operation-description').textContent = 'Starting the Java analysis…'; document.querySelectorAll('.stage-rail span').forEach(el => el.classList.remove('done')); }
   }
@@ -67,8 +67,8 @@
       state.apk = selected; state.catalog = null; state.points.clear(); state.result = false; clearReport();
       $('apk-name').textContent = basename(selected); $('apk-path').textContent = selected; $('apk-path').title = selected;
       $('choose-apk').textContent = 'Change APK ↗'; $('coverage-apk').textContent = basename(selected); $('coverage-apk').title = selected;
-      $('custom-count').textContent = 'Place a log in the code'; $('save-apk').hidden = true; $('action-title').textContent = 'Make it yours.';
-      $('action-description').textContent = 'Choose what you’d like to log. AndroLog will take care of the rest.'; updateAvailability();
+      $('custom-count').textContent = 'Place a log in the code'; $('save-apk').hidden = true; $('action-title').textContent = 'Ready to instrument';
+      $('action-description').textContent = 'Your original APK stays unchanged.'; updateAvailability();
     } catch (error) { toast(error.message, true); }
   }
   $('choose-apk').addEventListener('click', chooseApk); $('coverage-choose-apk').addEventListener('click', chooseApk);
@@ -91,8 +91,14 @@
   for (const [id, values] of [['preset-essentials', [1,1,0,1,0]], ['preset-all', [1,1,1,1,1]], ['preset-custom', [0,0,0,0,0]]]) {
     $(id).addEventListener('click', () => { document.querySelectorAll('[data-probe]').forEach((el, i) => { el.checked = Boolean(values[i]); }); if (state.report) clearReport(); updateAvailability(); if (id === 'preset-custom' && state.apk && !state.points.size) browseCode(); });
   }
-  document.querySelectorAll('[data-probe], #log-tag, #package-prefix, #exclude-libraries').forEach(el => el.addEventListener('change', () => { if (state.report) { clearReport(); updateAvailability(); } }));
-  $('log-tag').addEventListener('change', refreshMessages);
+  document.querySelectorAll('[data-probe], #package-prefix, #exclude-libraries').forEach(el => el.addEventListener('change', () => { if (state.report) { clearReport(); updateAvailability(); } }));
+  for (const id of ['log-tag', 'coverage-tag']) {
+    $(id).addEventListener('input', event => {
+      $(id === 'log-tag' ? 'coverage-tag' : 'log-tag').value = event.target.value;
+      if (state.report) { clearReport(); updateAvailability(); }
+    });
+    $(id).addEventListener('change', refreshMessages);
+  }
   $('instrument').addEventListener('click', async () => {
     const plan = state.points.size ? { apkSha256: state.catalog.apkSha256, points: [...state.points.values()] } : null;
     const output = await run('instrument', () => api.instrument(options(), plan)); if (!output) return;
@@ -127,7 +133,6 @@
   function updateSettings(values) {
     for (const key of ['platforms','buildTools','java']) $(`settings-${key}`).value = values[key] || '';
     const ready = Boolean(values.platforms && values.buildTools); $('sdk-dot').classList.toggle('ready', ready); $('sdk-summary').textContent = ready ? 'SDK paths configured' : 'Android SDK setup';
-    $('sdk-description').textContent = ready ? 'Check your paths in settings.' : 'Choose your SDK folders to get started.';
   }
   api.settings().then(updateSettings).catch(e => toast(e.message, true));
   document.querySelectorAll('[data-setting]').forEach(btn => btn.addEventListener('click', async () => { try { const result = await api.chooseSetting(btn.dataset.setting); if (result) $(`settings-${btn.dataset.setting}`).value = result; } catch (e) { toast(e.message, true); } }));

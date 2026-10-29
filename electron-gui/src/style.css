@@ -14,3 +14,9 @@ dialog{border:1px solid #dfeae4;border-radius:18px;padding:0;box-shadow:0 30px 1
 #classes{flex:1 1 0;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .code-lines{flex:1 1 0;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .code-line:disabled{pointer-events:none}
+
+/* A simpler workspace with the Logcat tag visible in both workflows. */
+.brand{margin-bottom:20px}.sdk-status{display:flex;align-items:center;gap:8px;color:#789088;font-size:11px;padding:0 12px}.settings-nav{margin-top:8px}
+.page-heading{margin-bottom:24px}h1{font-size:34px;letter-spacing:-1.3px}.lead{margin-top:8px}.section-heading h2{font-size:15px}.choices-heading{margin-top:20px}
+.tag-row{display:flex;align-items:center;gap:10px;margin-top:14px}.tag-row label{font-size:12px;font-weight:700;color:#48645c;white-space:nowrap}.tag-row input{width:170px;padding:9px 11px;border:1px solid #dbe8e1;border-radius:9px;background:#fff;color:#1a3a32;font-size:12px}.tag-row>span,.coverage-config p{font-size:11px;color:#849a90}
+.coverage-config{display:flex;align-items:center;gap:22px;margin:12px 0 22px}.coverage-config .tag-row{margin:0}.advanced-body{grid-template-columns:1fr}.action-panel{min-height:0}.action-panel h2{font-size:19px}.action-panel>p{margin-bottom:14px}

@@ -77,3 +77,14 @@ test('the class and statement panes remain independently scrollable in the dialo
   assert.equal(classPane.overflow, 'auto'); assert.equal(classPane.minHeight, '0');
   assert.equal(window.getComputedStyle(doc.querySelector('.code-main')).minHeight, '0');
 });
+
+test('the visible Logcat tags stay in sync between instrumentation and coverage', async t => {
+  const { dom, window, doc } = createUi(); t.after(() => dom.window.close()); await tick();
+  const instrumentTag = doc.getElementById('log-tag'), coverageTag = doc.getElementById('coverage-tag');
+  assert.equal(instrumentTag.closest('details'), null);
+  assert.equal(coverageTag.closest('details'), null);
+  instrumentTag.value = 'TEST_TAG'; instrumentTag.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(coverageTag.value, 'TEST_TAG');
+  coverageTag.value = 'ANOTHER_TAG'; coverageTag.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(instrumentTag.value, 'ANOTHER_TAG');
+});
