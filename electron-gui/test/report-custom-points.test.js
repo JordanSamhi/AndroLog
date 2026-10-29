@@ -4,7 +4,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { addReportPanel } = require('../src/custom-report');
 const resources = path.join(__dirname, '../../src/main/resources');
 const tick = () => new Promise(resolve => setTimeout(resolve, 15));
 const first = '<example.App: void run(int)>', second = '<example.App: void run(java.lang.String)>';
@@ -21,14 +20,13 @@ function fixture(options = {}) {
       { signature: first, covered: false, statements: [{ line: 1, text, status: 'unmeasured' }, { line: 2, text, status: 'unmeasured' }] },
       { signature: second, covered: false, statements: [{ line: 1, text, status: 'unmeasured' }] }
     ] }
-  ], callGraph: { available: false } };
+  ], callGraph: { available: false }, customPoints: points };
   const html = fs.readFileSync(path.join(resources, 'report.html'), 'utf8')
-    .replace('__ANDROLOG_DATA__', () => JSON.stringify(data))
+    .replace('__ANDROLOG_DATA__', () => JSON.stringify(data).replace(/</g, '\\u003c'))
     .replace('__ANDROLOG_LINKS__', () => fs.readFileSync(path.join(resources, 'report-links.js'), 'utf8'))
     .replace('__ANDROLOG_GRAPH__', () => fs.readFileSync(path.join(resources, 'report-graph.js'), 'utf8'));
-  const full = addReportPanel(html, { points, observed: points.filter(p => p.count > 0).length });
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', error => errors.push(error));
-  const dom = new JSDOM(full, { url: 'https://report.invalid/' + (options.hash || ''), runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole,
+  const dom = new JSDOM(html, { url: 'https://report.invalid/' + (options.hash || ''), runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole,
     beforeParse(window) { Object.defineProperty(window, 'parent', { value: parent }); window.HTMLElement.prototype.scrollIntoView = function () { this.dataset.scrolledIntoView = 'true'; }; } });
   return { dom, doc: dom.window.document, parent, errors };
 }

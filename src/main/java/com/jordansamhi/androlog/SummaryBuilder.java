@@ -32,6 +32,9 @@ public class SummaryBuilder {
     private boolean collectCallGraph;
     private String targetPackage;
     private List<String> launcherActivities;
+    private String instrumentedTag;
+    private boolean foundProbes;
+    private final List<Map<String, Object>> customPoints = Collections.synchronizedList(new ArrayList<>());
     private final Map<String, Integer> summary = new ConcurrentHashMap<>();
     private final Set<String> visitedComponents = new ConcurrentHashSet<>();
     private final Map<String, CoverageMethod> codeMethods = new ConcurrentHashMap<>();
@@ -76,6 +79,14 @@ public class SummaryBuilder {
     public boolean isCallGraphRequested() { return collectCallGraph; }
     public Map<String, CallSite> getCallSites() { return Collections.unmodifiableMap(callSites); }
     public Set<String> getGraphMethods() { return Collections.unmodifiableSet(graphMethods); }
+    public void setInstrumentedInput(String tag) { instrumentedTag = tag; }
+    public boolean isInstrumentedInput() { return instrumentedTag != null; }
+    public List<Map<String, Object>> getCustomPoints() {
+        List<Map<String, Object>> points = new ArrayList<>(customPoints);
+        points.sort(Comparator.comparing((Map<String, Object> p) -> (String) p.get("method"))
+                .thenComparingInt(p -> ((Number) p.get("index")).intValue()));
+        return points;
+    }
 
     public void setLauncherActivities(List<String> activities) {
         launcherActivities = Collections.unmodifiableList(new ArrayList<>(activities));
@@ -265,6 +276,32 @@ public class SummaryBuilder {
      * Executes all transformation phases to build the summary.
      */
     public void build(boolean includeLibraries) {
+        if (isInstrumentedInput()) {
+            addTransformation("jtp.instrumentedCoverage", body -> {
+                SootMethod method = body.getMethod();
+                if (!method.isConcrete() || InstrumentedCode.isHelper(method.getDeclaringClass().getName())
+                        || !isSelectedMethod(method, includeLibraries)) return;
+                String component = su.getComponentType(method.getDeclaringClass());
+                InstrumentedCode.Result result = InstrumentedCode.inspect(body, instrumentedTag,
+                        Constants.NON_COMPONENT.equals(component) ? null : component);
+                synchronized (this) {
+                    foundProbes |= result.foundProbes;
+                    for (Map.Entry<String, Set<String>> category : result.expected.entrySet()) {
+                        summary.putIfAbsent(category.getKey(), 0);
+                        for (String payload : category.getValue()) incrementComponent(category.getKey(), payload);
+                    }
+                    if (!result.callSites.isEmpty()) collectCallGraph = true;
+                }
+                if (collectCode && result.code != null) codeMethods.put(method.getSignature(), result.code);
+                for (CallSite site : result.callSites) callSites.put(site.key(), site);
+                graphMethods.addAll(result.graphMethods);
+                customPoints.addAll(result.customPoints);
+            });
+            PackManager.v().runPacks();
+            if (!foundProbes) throw new IllegalArgumentException("No AndroLog probes found for tag '" + instrumentedTag
+                    + "'. Choose the instrumented APK and the tag used during instrumentation.");
+            return;
+        }
         if (collectCallGraph || collectCode) collectCallSites(includeLibraries);
         if (collectCode) {
             collectCodeMethods(includeLibraries);

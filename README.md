@@ -6,14 +6,14 @@
 
 **Instrument Android APKs, measure runtime code coverage, and explore dynamic call graphs.**
 
-AndroLog inserts logging probes into an APK, then compares the original application with logs collected while the instrumented app runs. It works from APK bytecode; application source code is not required.
+AndroLog inserts logging probes into an APK, then measures which probes were observed while the instrumented app runs. It works from APK bytecode; application source code is not required.
 
 - **Coverage:** classes, methods, statements, activities, services, broadcast receivers, and content providers.
 - **Dynamic call graphs:** executed callsites and confirmed runtime dispatch targets, including virtual and interface calls.
 - **Interactive HTML reports:** package navigation, continuous class listings, coverage filters, clickable code references, and class-level graph exploration.
 - **Terminal and JSON reports:** aggregate coverage and cumulative coverage by minute.
 - **Integrated capture:** install and launch the instrumented app, collect logs, and generate reports with one command.
-- **Desktop GUI:** instrument an APK, place custom logs in its code, compare runtime logs with the original APK, and explore the results in one window.
+- **Desktop GUI:** instrument an APK, place custom logs in its code, analyze an instrumented APK with its runtime logs, and explore the results in one window.
 - **Custom log points:** write a message at a selected statement, see whether it was reached, and jump directly to that location in the report.
 
 [Wiki](https://github.com/JordanSamhi/AndroLog/wiki) · [Desktop GUI](#desktop-gui) · [Previews](#report-previews) · [Setup](#build-and-configure) · [Quick start](#instrument-run-and-report) · [Reports](#read-the-reports) · [Dynamic call graph](#dynamic-call-graph) · [Options](#command-line-reference) · [Troubleshooting](#troubleshooting)
@@ -93,17 +93,17 @@ Open **Settings** and check the automatically discovered Android SDK paths:
 | **Android Build Tools** | One installed `build-tools/<version>` folder containing `zipalign` and `apksigner`. Required for instrumenting and signing APKs. |
 | **Java executable** | Usually leave empty. Source runs use `JAVA_HOME` or Java on `PATH`; packaged apps use their bundled runtime. Choose an executable to override it. |
 
-Install missing SDK packages with Android Studio's SDK Manager or Android's SDK command-line tools. Settings and custom-point metadata stay in the application's local user-data directory, outside the repository.
+Install missing SDK packages with Android Studio's SDK Manager or Android's SDK command-line tools. SDK settings stay in the application's local user-data directory, outside the repository. Coverage does not depend on local instrumentation history.
 
 ### Instrument, run, and explore
 
 1. **Instrument:** choose the original APK and a Logcat tag. Select classes, methods, statements, components, or **Dynamic call graph**. **Essentials** selects classes, methods, and components; **Everything** enables all five. Optional package and library filters are under **Advanced options**.
 2. **Add custom messages, if needed:** open **Your own messages**, expand packages → classes → methods, select a statement in the whole-class listing, and type a message such as `reached this point`. Click **Use log points**. **Custom only** disables automatic probes while keeping your messages.
-3. **Save and run:** click **Instrument APK**, then **Save instrumented APK**. AndroLog leaves the original APK unchanged and signs the output with its test key. The window then shows `adb install` and Logcat commands using your saved filename and tag. Start capture before launching the app in a fresh process, exercise it, and stop capture with **Ctrl+C**.
-4. **Coverage:** choose the **original APK** and the **runtime log**. Keep the same tag, automatic probes, package prefix, and library filter used for instrumentation, then click **Analyze run**. Cards show observed/total classes, methods, statements, and Android components. Custom logs show their message, location, and a green **Covered** or red **Not covered** status.
+3. **Save and run:** click **Instrument APK**, then **Save instrumented APK**. AndroLog leaves the original APK unchanged and signs the output with its test key. The saved APK is selected automatically in Coverage. The window shows `adb install` and Logcat commands using your saved filename and tag, each with a **Copy** button. Start capture before launching the app in a fresh process, exercise it, and stop capture with **Ctrl+C**.
+4. **Coverage:** choose the **instrumented APK used for the test** and its **runtime log**. Enter the same Logcat tag and click **Analyze run**. Expected probes are read directly from the APK; no probe or scope selection is needed. Cards show observed/total classes, methods, statements, and Android components. Custom logs show their message, location, and a green **Covered** or red **Not covered** status.
 5. **Explore report:** browse packages and methods, scroll through a whole class, follow code links, and inspect the dynamic call graph. Custom messages appear beside their statements with green/red markers. Clicking a custom log in Coverage jumps to that statement here. Use **Export HTML** to save a standalone report.
 
-**The coverage baseline is the original APK.** The only analysis inputs to select are that APK and its log file; there is no APK-build selector. Custom-point locations are recovered automatically from metadata saved when this GUI instruments the APK. If that metadata is missing or ambiguous, AndroLog shows the observations it can identify instead of guessing which points were missed.
+**Coverage works with just the instrumented APK and its log, including on another computer.** The APK contains the expected probes and custom messages, including points that never appear in the log. No original APK, separate baseline, or locally saved custom-point catalog is required. AndroLog's injected instructions and helper classes are excluded from statistics and the code display; code without probes remains unmeasured. Older custom logs without point identifiers can be unconfirmed when several points share the same message.
 
 Custom messages are literal single-line text, emitted immediately before the selected statement on every visit. They do not evaluate variables, and they can be used independently of automatic coverage probes. A red marker means the point was not observed in the supplied log; a late or incomplete capture can miss execution.
 
@@ -160,7 +160,7 @@ Alternatively, configure `src/main/resources/config.properties`, rebuild, and ru
 
 ## Instrument, run, and report
 
-The workflow is: **instrument an APK → exercise it on a device → collect logs → report against the original APK**.
+The workflow is: **instrument an APK → exercise it on a device → collect logs → generate coverage**. The GUI uses the instrumented APK. The CLI supports both the original-APK workflow below and [instrumented-APK analysis](#analyze-an-instrumented-apk).
 
 Run these commands from the repository root. Set the two input paths for your environment:
 
@@ -244,6 +244,21 @@ Report directories are created automatically. Keep the APK version, tag, probes,
 
 To include a cumulative timeline, replace `-pa ./out/runtime.log` with `-pam ./out/runtime.log`. Use one parsing mode at a time. HTML and JSON output options require `-pa`, `-pam`, or `--capture`.
 
+### Analyze an instrumented APK
+
+To analyze the APK actually installed on the device, use `--instrumented-input`. This is the mode used by the GUI and is suitable for sharing an APK and log with another computer:
+
+```bash
+androlog \
+  -a ./out/instrumented/app.apk -p "$androlog_sdk/platforms" \
+  --instrumented-input -pam ./out/runtime.log -l ANDROLOG \
+  -html ./out/coverage.html -j ./out/coverage.json
+```
+
+Use your actual instrumented filename. AndroLog discovers the expected coverage probes, dynamic callsites, and custom points from the APK. Probe flags are not needed. Inserted logging instructions and helper classes are omitted from statistics and code listings; uninstrumented code is not counted as missed. Custom points can be reported even with an empty runtime log, without a saved baseline or local catalog. Use the tag and the exact APK from the test.
+
+Without `--instrumented-input`, the CLI continues to analyze the original APK with the probe and scope options shown above. `--capture` retains that original-APK reporting workflow.
+
 ## Read the reports
 
 ### Explore coverage
@@ -325,7 +340,7 @@ java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 
 | Option | Description |
 | --- | --- |
-| `-a`, `--apk <file>` | Input APK. Use the original APK when reporting. |
+| `-a`, `--apk <file>` | Input APK. Reporting uses the original APK by default, or the instrumented APK with `--instrumented-input`. |
 | `-p`, `--platforms <path>` | Android SDK platforms directory or Android platform file (`android.jar`). |
 | `-o`, `--output <directory>` | Destination for the instrumented APK, or parent directory for a fresh capture session. Defaults to a temporary directory. |
 | `-l`, `--log-identifier <tag>` | Logcat tag. Defaults to `ANDROLOG`. |
@@ -333,6 +348,7 @@ java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 | `-pam`, `--parse-per-minute <file>` | Parse a runtime log and include cumulative coverage by minute. |
 | `-html`, `--html <file>` | Write a standalone HTML report. Requires `-pa`, `-pam`, or `--capture`. |
 | `-j`, `--json <file>` | Write a JSON report. Requires `-pa`, `-pam`, or `--capture`. |
+| `--instrumented-input` | Read expected probes and custom points from the instrumented APK when using `-pa` or `-pam`. No probe flags or local catalog are required. |
 | `--inspect-code <file>` | Export the original Jimple statements to a JSON catalog without changing or signing the APK. |
 | `--custom-logs <file>` | Instrument the exact points in an APK-bound JSON plan. May be used alone or with automatic probes; cannot be combined with capture or reporting. |
 | `--custom-report-only` | Allow an HTML code report without automatic coverage probes. Requires `-pa` or `-pam` and `-html`; used by the GUI for custom-only runs. |
@@ -358,7 +374,7 @@ Capture log tags may contain letters, digits, underscores, dots, and hyphens, an
 | `-cp`, `--components` | Activities, services, broadcast receivers, and content providers. |
 | `-mc`, `--method-calls` | Executed callsites and confirmed runtime targets. |
 
-Select the same probes for instrumentation and reporting. `--capture` requires at least one probe option. HTML reports also require a probe unless `--custom-report-only` is set; `-mc` alone supports a graph-only report.
+Select the same probes for instrumentation and reporting. `--capture` requires at least one probe option. HTML reports also require a probe unless `--custom-report-only` or `--instrumented-input` is set; `-mc` alone supports a graph-only report.
 
 ### Scope and diagnostics
 
@@ -379,7 +395,7 @@ The CLI prints timed stages and generated file paths. Errors go to standard erro
 | GUI cannot read the APK or find signing tools | In **Settings**, choose the SDK `platforms` folder and an installed `build-tools/<version>` folder. Use **Run details** for the backend error. |
 | `Signing tool not configured` or tool not executable in the CLI | Check both paths in your external `config.properties` and use the classpath helper. The files must exist and be executable. |
 | Installation fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | The installed app and instrumented APK have different signing certificates. Use a clean test device or emulator installation. |
-| Coverage is unexpectedly empty or incomplete | Check the original APK version, log tag, probe flags, and scope. Capture before starting a fresh app process and exercise the relevant code. |
+| Coverage is unexpectedly empty or incomplete | In the GUI or with `--instrumented-input`, use the instrumented APK from the test and its tag. In the original-APK CLI workflow, also match the probe flags and scope. Capture before starting a fresh app process and exercise the relevant code. |
 | No dynamic call graph is available | Enable **Dynamic call graph** in the GUI or instrument with `-mc`, install that APK, and capture a new log. Enabling it only during analysis cannot create missing runtime observations. |
 | The graph asks you to choose a starting class | The launcher activity has no matching recorded calls, the app has no launcher declaration, or an older report lacks manifest metadata. Select a class or regenerate the report from the APK. |
 | No timeline entries appear | Use `-pam` with timestamped output such as `adb logcat -v threadtime`. Untimestamped observations count only toward aggregate totals. |

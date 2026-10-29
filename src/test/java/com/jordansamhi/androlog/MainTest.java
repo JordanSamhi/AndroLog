@@ -71,6 +71,16 @@ public class MainTest {
         assertTrue(probes.err.contains("Select probes"));
     }
 
+    @Test public void instrumentedInputRequiresReportingAndInfersItsProbes() throws Exception {
+        Result instrument = invoke("-a", "unused.apk", "-p", "unused", "--instrumented-input", "-m");
+        assertEquals(2, instrument.status);
+        assertTrue(instrument.err.contains("requires --parse"));
+        Result report = invoke("-a", "missing.apk", "-p", "unused", "--instrumented-input", "-pa", "runtime.log", "-html", "out.html");
+        assertEquals(2, report.status);
+        assertTrue(report.err.contains("APK is not a readable file"));
+        assertFalse(report.err.contains("Select probes"));
+    }
+
     @Test public void captureOnlyArgumentsAndInvalidDurationsAreRejected() throws Exception {
         for (String flag : new String[]{"--device", "--adb", "--duration"}) {
             Result result = invoke("-a", "unused.apk", "-p", "unused", flag, "one");

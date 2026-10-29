@@ -74,13 +74,21 @@ public class HtmlReportWriter {
         data.put("appName", apkName);
         data.put("logIdentifier", tag);
         data.put("generatedAt", Instant.now().toString());
+        data.put("instrumentedInput", baseline.isInstrumentedInput());
+        if (baseline.isInstrumentedInput()) {
+            Map<String, Object> custom = CustomPointReport.build(baseline, observations);
+            data.put("custom", custom);
+            data.put("customPoints", ((Map<?, ?>) custom.get("summary")).get("points"));
+        }
         String targetPackage = baseline.getTargetPackage();
         data.put("scope", targetPackage == null ? "Selected APK packages" : "Package prefix: " + targetPackage);
 
         List<String> warnings = new ArrayList<>();
         warnings.add("Uncovered means no matching probe was observed in the supplied log; it does not prove the code never executes.");
         if (!totals.containsKey("statements")) {
-            warnings.add("Statement coverage was not selected. Use -s during both instrumentation and reporting to highlight individual Jimple statements.");
+            warnings.add(baseline.isInstrumentedInput()
+                    ? "No statement probes were found for this tag. Uninstrumented statements remain unmeasured."
+                    : "Statement coverage was not selected. Use -s during both instrumentation and reporting to highlight individual Jimple statements.");
         } else {
             warnings.add("Newly instrumented APKs record arrival before each eligible statement, including branches and throwing operations; this does not imply successful completion. Identity, return and monitor instructions are excluded. Older APKs used after-statement probes; reinstrument and collect fresh logs for the improved coverage.");
         }
@@ -129,9 +137,12 @@ public class HtmlReportWriter {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("line", statement.getLine());
                 row.put("text", statement.getText());
-                String payload = method.getSignature() + "|" + statement.getText() + "|" + statement.getLine();
+                String payload = statement.getCoveragePayload() != null ? statement.getCoveragePayload()
+                        : method.getSignature() + "|" + statement.getText() + "|" + statement.getLine();
                 String status;
-                if (!statement.isEligible()) {
+                if (baseline.isInstrumentedInput() && statement.getCoveragePayload() == null) {
+                    status = "unmeasured";
+                } else if (!statement.isEligible()) {
                     status = "excluded";
                 } else if (!known.contains("statementsSTATEMENT=" + payload)) {
                     status = "unmeasured";

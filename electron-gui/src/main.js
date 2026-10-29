@@ -3,18 +3,17 @@ const { app, BrowserWindow, dialog, ipcMain, protocol, net, clipboard } = requir
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
-const { Backend, copySafely, readCustomMessages, hashFile } = require('./backend');
-const { preparePlan, savePlan, listPlans, resolveSummary, addReportPanel } = require('./custom-report');
+const { Backend, copySafely } = require('./backend');
+const { preparePlan } = require('./custom-report');
 const { desktopVersion } = require('./version');
 
 const andrologVersion = desktopVersion({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, root: path.resolve(__dirname, '../..') });
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'androlog', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
-let window, backend, selectedApk = null, selectedLog = null, result = null, report = null, busy = false, dirty = false, closing = false;
+let window, backend, selectedApk = null, selectedCoverageApk = null, selectedLog = null, result = null, report = null, busy = false, dirty = false, closing = false;
 let settings;
 const temporary = new Set();
 const bundledJar = () => app.isPackaged ? path.join(process.resourcesPath, 'androlog.jar') : path.resolve(__dirname, `../../target/androlog-${andrologVersion}-jar-with-dependencies.jar`);
-const plansDir = () => path.join(app.getPath('userData'), 'custom-plans');
 const configFile = () => path.join(app.getPath('userData'), 'settings.json');
 async function exists(file) { try { await fs.access(file); return true; } catch { return false; } }
 async function defaultSettings() {
@@ -67,20 +66,18 @@ function registerHandlers() {
   handle('select:apk', async () => {
     if (busy || !(await confirmDiscard())) return null;
     const file = await chooseFile('Choose the original APK', ['apk']); if (!file) return null;
-    selectedApk = file; dirty = false; await removeSession(result); result = null; await removeSession(report); report = null; return file;
+    selectedApk = file; dirty = false; await removeSession(result); result = null; return file;
+  });
+  handle('select:coverage-apk', async () => {
+    if (busy) throw new Error('Wait for the current operation to finish.');
+    const file = await chooseFile('Choose the instrumented APK used for this run', ['apk']);
+    if (file) { selectedCoverageApk = file; await removeSession(report); report = null; } return file;
   });
   handle('select:log', async () => {
     if (busy) throw new Error('Wait for the current operation to finish.');
     const file = await chooseFile('Choose a captured runtime log', ['log', 'txt']);
     if (file) { selectedLog = file; await removeSession(report); report = null; } return file;
   });
-  async function customResults(tag) {
-    if (!selectedLog) throw new Error('Choose a runtime log first.');
-    const log = await readCustomMessages(selectedLog, tag);
-    const plans = selectedApk ? await listPlans(plansDir(), await hashFile(selectedApk), tag) : [];
-    return { ...log, summary: resolveSummary(plans, log) };
-  }
-  handle('log:custom', customResults);
   handle('code:inspect', () => exclusive(async () => {
     if (!selectedApk) throw new Error('Choose the original APK first.');
     return backend.inspect(selectedApk, settings);
@@ -90,7 +87,6 @@ function registerHandlers() {
     if (!(await confirmDiscard())) return null;
     const trackedPlan = plan ? preparePlan(plan, opts.tag) : null;
     const next = await backend.instrument(selectedApk, settings, opts, trackedPlan);
-    if (trackedPlan) { try { await savePlan(plansDir(), trackedPlan); } catch (error) { await backend.discard(next.dir); throw new Error(`Could not save custom log point metadata: ${error.message}`); } }
     await removeSession(result); result = next; temporary.add(next.dir); dirty = true;
     return { name: path.basename(next.output) };
   }));
@@ -104,17 +100,12 @@ function registerHandlers() {
       const answer = await dialog.showMessageBox(window, { type: 'warning', buttons: ['Cancel', 'Replace'], defaultId: 0, cancelId: 0, message: `Replace ${path.basename(destination)}?` });
       if (answer.response !== 1) return null;
     }
-    await copySafely(result.output, destination, [selectedApk, selectedLog]); dirty = false; return destination;
+    await copySafely(result.output, destination, [selectedApk, selectedLog]); dirty = false;
+    selectedCoverageApk = destination; await removeSession(report); report = null; return destination;
   });
   handle('coverage:analyze', opts => exclusive(async () => {
-    if (!selectedApk || !selectedLog) throw new Error('Choose the original APK and a runtime log first.');
-    const next = await backend.analyze(selectedApk, selectedLog, settings, opts);
-    try {
-      const custom = await customResults(opts.tag);
-      if (await hashFile(selectedLog) !== next.logHash || await hashFile(selectedApk) !== next.apkHash) throw new Error('The APK or runtime log changed during analysis. Run it again.');
-      if (custom.summary) await fs.writeFile(next.html, addReportPanel(await fs.readFile(next.html, 'utf8'), custom.summary));
-      next.report.custom = custom;
-    } catch (error) { await backend.discard(next.dir); throw error; }
+    if (!selectedCoverageApk || !selectedLog) throw new Error('Choose the instrumented APK and a runtime log first.');
+    const next = await backend.analyze(selectedCoverageApk, selectedLog, settings, opts);
     await removeSession(report); report = next; temporary.add(next.dir); return next.report;
   }));
   handle('coverage:save', async () => {
@@ -126,7 +117,7 @@ function registerHandlers() {
       const answer = await dialog.showMessageBox(window, { type: 'warning', buttons: ['Cancel', 'Replace'], defaultId: 0, cancelId: 0, message: `Replace ${path.basename(destination)}?` });
       if (answer.response !== 1) return null;
     }
-    await copySafely(report.html, destination, [selectedApk, selectedLog]); return destination;
+    await copySafely(report.html, destination, [selectedApk, selectedCoverageApk, selectedLog]); return destination;
   });
   handle('operation:cancel', () => { backend.cancel(); });
 }

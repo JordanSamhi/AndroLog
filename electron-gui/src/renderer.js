@@ -2,7 +2,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const api = window.androlog;
-  const state = { apk: null, log: null, catalog: null, points: new Map(), draft: new Map(), selected: null, selectedClass: null, result: false, report: null, busy: false, stageKind: '', logText: '', pendingCategory: null, pendingCustomPoint: null, reportGeneration: 0, logRead: 0, instrumentTag: null, instrumentProbes: [], customLoading: false, openPackages: new Set(), openClasses: new Set() };
+  const state = { apk: null, coverageApk: null, log: null, catalog: null, points: new Map(), draft: new Map(), selected: null, selectedClass: null, result: false, report: null, busy: false, stageKind: '', logText: '', pendingCategory: null, pendingCustomPoint: null, reportGeneration: 0, instrumentTag: null, instrumentProbes: [], openPackages: new Set(), openClasses: new Set() };
   const metricInfo = [
     ['statements', 'Statements', '#528ee5'], ['methods', 'Methods', '#f08262'], ['classes', 'Classes', '#31b38b'], ['activities', 'Activities', '#e7bc42'],
     ['services', 'Services', '#4fb4a8'], ['broadcast-receivers', 'Broadcast receivers', '#e4956a'], ['content-providers', 'Content providers', '#9a83e9']
@@ -28,7 +28,7 @@
   function clearReport() {
     state.report = null; state.pendingCategory = null; state.pendingCustomPoint = null; $('report-frame').hidden = true; $('report-frame').removeAttribute('src'); $('empty-report').hidden = false;
     $('explore-report').disabled = true; $('save-report').disabled = true; $('report-export').disabled = true; $('coverage-meta').textContent = 'Run an analysis to see your statistics';
-    drawMetrics(null);
+    drawMetrics(null); renderCustomLogs(null);
   }
   function setBusy(busy, kind = '') {
     state.busy = busy; state.stageKind = kind; document.body.classList.toggle('busy', busy); $('operation-panel').hidden = !busy;
@@ -46,9 +46,9 @@
   }
   function updateAvailability() {
     if (state.busy) return;
-    document.querySelectorAll('.custom-point-link').forEach(el => { el.disabled = state.customLoading || !el.dataset.pointId; });
+    document.querySelectorAll('.custom-point-link').forEach(el => { el.disabled = !el.dataset.pointId; });
     $('instrument').disabled = !state.apk; $('open-custom').disabled = !state.apk; $('save-apk').disabled = !state.result;
-    $('analyze').disabled = !(state.apk && state.log) || state.customLoading; $('save-report').disabled = !state.report; $('report-export').disabled = !state.report; $('explore-report').disabled = !state.report;
+    $('analyze').disabled = !(state.coverageApk && state.log); $('save-report').disabled = !state.report; $('report-export').disabled = !state.report; $('explore-report').disabled = !state.report;
   }
   async function run(kind, task) {
     if (state.busy) return null;
@@ -59,9 +59,9 @@
     if (update.type === 'log') { state.logText = (state.logText + update.text).slice(-180000); $('operation-log').textContent = state.logText; $('operation-log').scrollTop = $('operation-log').scrollHeight; }
     if (update.type === 'stage') {
       if (state.stageKind === 'instrument') window.andrologAnimation?.setStage(update.stage);
-      if (state.stageKind === 'coverage') { window.andrologAnimation?.setAnalysis?.(update.stage, true); const labels = ['Reading your APK', 'Building the baseline', 'Matching runtime logs', 'Creating the report', 'Finishing']; $('analysis-title').textContent = labels[Math.min(Math.max(update.stage - 1, 0), labels.length - 1)]; $('analysis-description').textContent = 'Comparing the selected APK with your runtime log.'; document.querySelectorAll('.analysis-stage i').forEach((el, i) => el.classList.toggle('done', i < update.stage)); }
+      if (state.stageKind === 'coverage') { window.andrologAnimation?.setAnalysis?.(update.stage, true); const labels = ['Reading your APK', 'Reading inserted probes', 'Matching runtime logs', 'Creating the report', 'Finishing']; $('analysis-title').textContent = labels[Math.min(Math.max(update.stage - 1, 0), labels.length - 1)]; $('analysis-description').textContent = 'Comparing the selected APK with your runtime log.'; document.querySelectorAll('.analysis-stage i').forEach((el, i) => el.classList.toggle('done', i < update.stage)); }
       document.querySelectorAll('.stage-rail span').forEach((el, i) => el.classList.toggle('done', i < update.stage));
-      const stages = state.stageKind === 'instrument' ? ['Reading your APK', 'Adding your log points', 'Rebuilding the APK', 'Aligning and signing'] : state.stageKind === 'inspect' ? ['Reading your APK', 'Preparing the code browser'] : ['Reading your APK', 'Building the baseline', 'Matching runtime logs', 'Creating the report', 'Finishing'];
+      const stages = state.stageKind === 'instrument' ? ['Reading your APK', 'Adding your log points', 'Rebuilding the APK', 'Aligning and signing'] : state.stageKind === 'inspect' ? ['Reading your APK', 'Preparing the code browser'] : ['Reading your APK', 'Reading inserted probes', 'Matching runtime logs', 'Creating the report', 'Finishing'];
       $('operation-title').textContent = stages[Math.min(Math.max(update.stage - 1, 0), stages.length - 1)];
       $('operation-description').textContent = 'Working locally with your Android SDK.';
     }
@@ -72,59 +72,45 @@
   async function chooseApk() {
     try {
       const selected = await api.chooseApk(); if (!selected) return;
-      state.logRead++; state.customLoading = false; state.apk = selected; state.catalog = null; state.points.clear(); state.result = false; state.instrumentTag = null; state.instrumentProbes = []; $('messages-panel').hidden = true; $('next-steps').hidden = true; clearReport();
+      state.apk = selected; state.catalog = null; state.points.clear(); state.result = false; state.instrumentTag = null; state.instrumentProbes = []; $('next-steps').hidden = true;
       window.andrologAnimation?.setStage(0, true);
       $('apk-name').textContent = basename(selected); $('apk-path').textContent = selected; $('apk-path').title = selected;
-      $('choose-apk').textContent = 'Change APK ↗'; $('coverage-apk').textContent = basename(selected); $('coverage-apk').title = selected;
+      $('choose-apk').textContent = 'Change APK ↗';
       $('custom-count').textContent = 'Place a log in the code'; $('save-apk').hidden = true; $('action-title').textContent = 'Ready to instrument';
-      $('action-description').textContent = 'Your original APK stays unchanged.'; updateAvailability(); if (state.log) refreshMessages();
+      $('action-description').textContent = 'Your original APK stays unchanged.'; updateAvailability();
     } catch (error) { toast(error.message, true); }
   }
-  $('choose-apk').addEventListener('click', chooseApk); $('coverage-choose-apk').addEventListener('click', chooseApk);
-  $('choose-log').addEventListener('click', async () => { try { const selected = await api.chooseLog(); if (!selected) return; state.log = selected; $('log-name').textContent = basename(selected); $('log-name').title = selected; clearReport(); updateAvailability(); refreshMessages(); } catch (e) { toast(e.message, true); } });
-  async function refreshMessages() {
-    if (!state.log) return;
-    const request = ++state.logRead; state.customLoading = true; updateAvailability();
-    $('messages-panel').hidden = false; $('messages-summary').hidden = false; $('messages-summary').textContent = 'Reading custom logs…'; $('messages-list').replaceChildren();
-    try {
-      const result = await api.readCustom($('log-tag').value.trim()); if (request !== state.logRead) return;
-      const summary = result.summary;
-      if (summary) {
-        $('messages-summary').hidden = !summary.partial;
-        if (summary.partial) $('messages-summary').textContent = 'Only recorded custom logs are available.';
-        for (const point of summary.points.filter(point => !summary.partial || point.count > 0)) {
-          const row = document.createElement('button'); row.type = 'button'; row.className = `message-row point-row custom-point-link ${point.count ? 'observed' : 'unobserved'}`; row.dataset.pointId = point.id || '';
-          row.title = 'Open this custom log in the code'; row.addEventListener('click', () => openCustomPoint(point, summary));
-          const detail = document.createElement('span'); detail.className = 'point-detail'; const message = document.createElement('strong'); message.textContent = point.message;
-          const location = document.createElement('small'); location.textContent = `${point.method} · statement ${point.index}`; location.title = point.statement;
-          const status = document.createElement('span'); status.className = 'point-status'; status.textContent = point.count ? 'Covered' : 'Not covered';
-          status.title = point.count ? 'A matching point marker was found in this log.' : 'No matching point marker was found in this log.';
-          detail.append(message, location); row.append(detail, status); $('messages-list').appendChild(row);
-        }
-      } else {
-        $('messages-summary').textContent = result.total ? 'Locations unavailable for these logs.' : 'No custom logs found.';
-        for (const item of result.messages) {
-          const row = document.createElement('div'); row.className = 'message-row';
-          const message = document.createElement('span'); message.textContent = item.message;
-          const status = document.createElement('span'); status.textContent = 'Recorded';
-          row.append(message, status); $('messages-list').appendChild(row);
-        }
-      }
-    } catch (error) { if (request === state.logRead) { $('messages-summary').hidden = false; $('messages-summary').textContent = error.message || 'Could not read custom logs.'; } } finally { if (request === state.logRead) { state.customLoading = false; updateAvailability(); } }
+  $('choose-apk').addEventListener('click', chooseApk);
+  function selectCoverageApk(file) {
+    state.coverageApk = file; $('coverage-apk').textContent = basename(file); $('coverage-apk').title = file;
+    clearReport(); updateAvailability();
   }
-  $('refresh-messages').addEventListener('click', refreshMessages);
+  $('coverage-choose-apk').addEventListener('click', async () => {
+    try { const file = await api.chooseCoverageApk(); if (file) selectCoverageApk(file); } catch (error) { toast(error.message, true); }
+  });
+  $('choose-log').addEventListener('click', async () => { try { const selected = await api.chooseLog(); if (!selected) return; state.log = selected; $('log-name').textContent = basename(selected); $('log-name').title = selected; clearReport(); updateAvailability(); } catch (e) { toast(e.message, true); } });
+  function renderCustomLogs(result) {
+    $('messages-panel').hidden = !result;
+    $('messages-list').replaceChildren(); $('messages-summary').hidden = false;
+    if (!result) return;
+    const points = result.summary?.points || [];
+    $('messages-summary').textContent = result.notice || (points.length ? 'Points found in the instrumented APK.' : 'No custom log points were found in this APK.');
+    for (const point of points) {
+      const statusName = point.status || (point.count == null ? 'unknown' : point.count > 0 ? 'covered' : 'uncovered');
+      const observed = statusName === 'covered', unknown = statusName === 'unknown';
+      const row = document.createElement('button'); row.type = 'button'; row.className = `message-row point-row custom-point-link ${unknown ? 'unknown' : observed ? 'observed' : 'unobserved'}`; row.dataset.pointId = point.id || '';
+      row.title = 'Open this custom log in the code'; row.addEventListener('click', () => openCustomPoint(point));
+      const detail = document.createElement('span'); detail.className = 'point-detail'; const message = document.createElement('strong'); message.textContent = point.message;
+      const location = document.createElement('small'); location.textContent = `${point.method} · statement ${point.index}`; location.title = point.statement;
+      const status = document.createElement('span'); status.className = 'point-status'; status.textContent = unknown ? 'Unconfirmed' : observed ? 'Covered' : 'Not covered';
+      status.title = unknown ? 'These legacy logs do not distinguish this point from another point with the same message.' : observed ? 'A matching point was observed in this log.' : 'No matching point was observed in this log.';
+      detail.append(message, location); row.append(detail, status); $('messages-list').appendChild(row);
+    }
+  }
   for (const [id, values] of [['preset-essentials', [1,1,0,1,0]], ['preset-all', [1,1,1,1,1]], ['preset-custom', [0,0,0,0,0]]]) {
-    $(id).addEventListener('click', () => { document.querySelectorAll('[data-probe]').forEach((el, i) => { el.checked = Boolean(values[i]); }); if (state.report) clearReport(); updateAvailability(); if (id === 'preset-custom' && state.apk && !state.points.size) browseCode(); });
+    $(id).addEventListener('click', () => { document.querySelectorAll('[data-probe]').forEach((el, i) => { el.checked = Boolean(values[i]); }); updateAvailability(); if (id === 'preset-custom' && state.apk && !state.points.size) browseCode(); });
   }
-  document.querySelectorAll('[data-probe], #package-prefix, #exclude-libraries').forEach(el => el.addEventListener('change', () => { if (state.report) { clearReport(); updateAvailability(); } }));
-  for (const id of ['log-tag', 'coverage-tag']) {
-    $(id).addEventListener('input', event => {
-      $(id === 'log-tag' ? 'coverage-tag' : 'log-tag').value = event.target.value;
-      state.logRead++; state.customLoading = false; $('messages-panel').hidden = true; updateAvailability();
-      if (state.report) { clearReport(); updateAvailability(); }
-    });
-    $(id).addEventListener('change', refreshMessages);
-  }
+  $('coverage-tag').addEventListener('input', () => { clearReport(); updateAvailability(); });
   $('instrument').addEventListener('click', async () => {
     const plan = state.points.size ? { apkSha256: state.catalog.apkSha256, points: [...state.points.values()] } : null;
     const selectedOptions = options();
@@ -132,7 +118,7 @@
     if (!output) { window.andrologAnimation?.setStage(0); return; }
     window.andrologAnimation?.setStage(5);
     state.instrumentTag = selectedOptions.tag; state.instrumentProbes = selectedOptions.probes.slice(); $('next-steps').hidden = true;
-    state.result = true; $('save-apk').hidden = false; $('action-title').textContent = 'Your APK is ready.'; $('action-description').textContent = 'Instrumented, aligned, and signed. Choose where to save your new APK.'; updateAvailability(); if (state.log) refreshMessages(); toast('Your instrumented APK is ready to save.');
+    state.result = true; $('save-apk').hidden = false; $('action-title').textContent = 'Your APK is ready.'; $('action-description').textContent = 'Instrumented, aligned, and signed. Choose where to save your new APK.'; updateAvailability(); toast('Your instrumented APK is ready to save.');
   });
   function quoteShell(value) {
     return api.platform === 'win32' ? `'${value.replace(/'/g, "''")}'` : `'${value.replace(/'/g, "'\\''")}'`;
@@ -153,9 +139,7 @@
     $('logcat-command').textContent = api.platform === 'win32'
       ? `cmd /c "adb logcat -v threadtime -s ${tag}:V > androlog-runtime.log"`
       : `adb logcat -v threadtime -s ${quoteShell(`${tag}:V`)} > androlog-runtime.log`;
-    $('next-coverage').textContent = state.instrumentProbes.some(Boolean)
-      ? 'Next, open Coverage, choose the original APK and androlog-runtime.log, and analyze using the same logging options. ADB is included in Android SDK Platform Tools.'
-      : 'Next, open Coverage and choose androlog-runtime.log to see your custom points. You can also analyze the run to explore them in the report. ADB is included in Android SDK Platform Tools.';
+    $('next-coverage').textContent = 'Next, open Coverage and choose androlog-runtime.log. Your saved instrumented APK is already selected. Analyze the run to see coverage and custom points. ADB is included in Android SDK Platform Tools.';
     $('next-steps').hidden = false;
     const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     $('next-steps').scrollIntoView?.({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
@@ -163,22 +147,21 @@
   $('save-apk').addEventListener('click', async () => {
     try { const file = await api.saveApk(); if (file) {
       $('action-title').textContent = 'Saved. Ready to run.'; $('action-description').textContent = file;
-      showNextSteps(file, state.instrumentTag); toast(`Saved ${basename(file)}`);
+      selectCoverageApk(file); $('coverage-tag').value = state.instrumentTag; showNextSteps(file, state.instrumentTag); toast(`Saved ${basename(file)}`);
     } } catch (e) { toast(e.message, true); }
   });
   async function analyzeRun() {
-    const result = await run('coverage', () => api.analyze(options())); if (!result) return null;
-    state.report = result; state.reportGeneration++; state.pendingCategory = null; state.pendingCustomPoint = null; $('coverage-meta').textContent = `${basename(state.apk)} · ${basename(state.log)}`;
+    if (state.busy) return null;
+    clearReport();
+    const result = await run('coverage', () => api.analyze({ tag: $('coverage-tag').value.trim() })); if (!result) return null;
+    state.report = result; state.reportGeneration++; state.pendingCategory = null; state.pendingCustomPoint = null; $('coverage-meta').textContent = `${basename(state.coverageApk)} · ${basename(state.log)}`;
     $('empty-report').hidden = true; $('report-frame').hidden = false; $('report-frame').src = `androlog://report/current?run=${state.reportGeneration}`;
-    drawMetrics(result.coverageSummary); updateAvailability(); refreshMessages(); toast('Your coverage report is ready.');
+    drawMetrics(result.coverageSummary); renderCustomLogs(result.custom); updateAvailability(); toast('Your coverage report is ready.');
     return result;
   }
   $('analyze').addEventListener('click', () => analyzeRun());
-  async function openCustomPoint(point, summary) {
-    if (state.busy || state.customLoading || !point.id) return;
-    if (!state.report || JSON.stringify(state.report.custom?.summary) !== JSON.stringify(summary)) {
-      if (!await analyzeRun()) return;
-    }
+  function openCustomPoint(point) {
+    if (state.busy || !state.report || !point.id) return;
     state.pendingCategory = null; state.pendingCustomPoint = point.id; navigate('explore'); sendReportSelection();
   }
   $('explore-report').addEventListener('click', () => navigate('explore'));
@@ -191,7 +174,7 @@
       const card = document.createElement('button'); card.className = 'stat'; card.type = 'button'; card.disabled = !metric;
       const label = document.createElement('span'); label.className = 'stat-title'; label.textContent = name;
       const value = document.createElement('strong'); value.textContent = valid ? `${(100 * observed / total).toFixed(1)}%` : '—';
-      const detail = document.createElement('small'); detail.textContent = !metric ? (summary ? 'Probe not selected' : 'Awaiting analysis') : total === 0 ? 'Nothing to cover' : `${observed.toLocaleString()} of ${total.toLocaleString()} observed`;
+      const detail = document.createElement('small'); detail.textContent = !metric ? (summary ? 'No probes found' : 'Awaiting analysis') : total === 0 ? 'Nothing to cover' : `${observed.toLocaleString()} of ${total.toLocaleString()} observed`;
       const meter = document.createElement('span'); meter.className = 'meter'; const fill = document.createElement('i');
       fill.style.setProperty('--value', `${valid ? Math.max(0, Math.min(100, 100 * observed / total)) : 0}%`); fill.style.setProperty('--color', color); meter.appendChild(fill);
       card.append(label, value, detail, meter); if (metric) card.addEventListener('click', () => openCategory(key)); grid.appendChild(card);

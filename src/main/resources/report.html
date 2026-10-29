@@ -155,6 +155,17 @@
     .custom-inline-log { display: inline-flex; align-items: baseline; gap: 7px; max-width: 460px; padding: 1px 8px; margin: 0 0 0 18px; border-radius: 5px; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; font: 11px/20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .custom-inline-log.covered { background: #dcf3e5; color: #12623f; }
     .custom-inline-log.uncovered { background: #fde7e3; color: #933c37; }
+    .custom-inline-log.unknown { background: #edf0f3; color: #526476; }
+    .custom-points { margin: 0 0 20px; padding: 17px 20px; background: white; border: 1px solid #dce4e9; border-radius: 12px; }
+    .custom-points h2 { font-size: 16px; margin: 0 0 12px; }
+    .custom-points ul { padding: 0; margin: 0; list-style: none; }
+    .custom-point { color: inherit; text-decoration: none; display: flex; justify-content: space-between; gap: 14px; padding: 12px; border-radius: 8px; margin-top: 7px; overflow-wrap: anywhere; }
+    .custom-point:focus-visible { outline: 3px solid #087c70; outline-offset: 2px; }
+    .custom-point:hover { box-shadow: inset 0 0 0 1px #a4b8ae; }
+    .custom-point.covered { background: #e2f5e9; }.custom-point.uncovered { background: #fff0ee; }.custom-point.unknown { background: #edf0f3; }
+    .custom-point small { display: block; color: #536879; font-size: 11px; margin-top: 4px; }
+    .custom-point .custom-status { white-space: nowrap; font-size: 12px; font-weight: 700; color: #087c70; }
+    .custom-point.uncovered .custom-status { color: #a53e40; }.custom-point.unknown .custom-status { color: #526476; }
     .custom-log-marker { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: currentColor; align-self: center; }
     .custom-navigation-note { margin: 0 0 12px; color: #536879; font-size: 12px; }
     .code-table tr:focus-visible { outline: 2px solid #438ab7; outline-offset: -2px; }
@@ -287,6 +298,7 @@
     </div>
     <p class="scope" id="scope"></p>
     <section class="metrics" id="metrics" aria-label="Coverage totals"></section>
+    <section class="custom-points" id="custom-log-panel" hidden aria-label="Custom logs"><h2>Custom logs</h2><p class="custom-navigation-note" id="custom-log-notice" hidden></p><ul id="custom-log-list"></ul></section>
     <div class="view-tabs" role="tablist" aria-label="Report view">
       <button class="view-tab" id="code-view-tab" type="button" role="tab" aria-selected="true" aria-controls="code-view" data-report-view="code">Code</button>
       <button class="view-tab" id="graph-view-tab" type="button" role="tab" aria-selected="false" aria-controls="graph-view" data-report-view="graph" tabindex="-1">Dynamic call graph</button>
@@ -431,7 +443,7 @@
         });
         node.classes.push(item); classPackages[name] = node;
       });
-      // Resolve selected points against original Jimple coordinates and text. A custom
+      // Resolve selected points against the displayed Jimple coordinates and text. A custom
       // marker never changes the independent automatic statement-coverage status.
       var customById = Object.create(null), customByRow = Object.create(null), statementsByMethod = Object.create(null);
       classes.forEach(function (clazz) { list(clazz.methods).forEach(function (method) {
@@ -443,7 +455,7 @@
         if (Object.prototype.hasOwnProperty.call(customById, point.id)) { customById[point.id].valid = false; return; }
         var rows = statementsByMethod[point.method], row = rows && rows[String(point.index)];
         var valid = Number.isSafeInteger(point.index) && point.index > 0 && typeof point.statement === 'string' && row && String(row.text) === point.statement;
-        var resolved = { id: point.id, method: point.method, index: point.index, message: String(point.message || ''), covered: Number(point.count) > 0, className: codeIndex.methods.get(point.method), valid: Boolean(valid) };
+        var resolved = { id: point.id, method: point.method, index: point.index, message: String(point.message || ''), covered: Number(point.count) > 0, status: point.status === 'unknown' ? 'unknown' : Number(point.count) > 0 ? 'covered' : 'uncovered', className: codeIndex.methods.get(point.method), valid: Boolean(valid) };
         customById[point.id] = resolved;
       });
       Object.keys(customById).forEach(function (id) {
@@ -452,6 +464,18 @@
         if (!customByRow[key]) customByRow[key] = [];
         customByRow[key].push(point);
       });
+      function customStatusText(point) { return point.status === 'unknown' ? 'Unconfirmed' : point.covered ? 'Covered' : 'Not covered'; }
+      Object.keys(customById).forEach(function (id) {
+        var point = customById[id], li = make('li', ''), link = make('a', 'custom-point ' + point.status);
+        link.href = '#custom=' + encodeURIComponent(id); link.setAttribute('data-custom-point', id);
+        var location = make('div', ''); location.appendChild(make('strong', '', point.message));
+        location.appendChild(make('small', '', point.method + ' · statement ' + point.index));
+        link.appendChild(location); link.appendChild(make('span', 'custom-status', customStatusText(point)));
+        if (point.status === 'unknown') link.title = 'This older APK shares the message between several points; the log does not identify which one ran.';
+        li.appendChild(link); $('custom-log-list').appendChild(li);
+      });
+      $('custom-log-panel').hidden = Object.keys(customById).length === 0 && !(data.custom && data.custom.notice);
+      if (data.custom && data.custom.notice) { $('custom-log-notice').textContent = data.custom.notice; $('custom-log-notice').hidden = false; }
       $('class-total').textContent = format(classes.length);
       function matchesQuery(item) {
         return (String(item.name || '') + ' ' + String(item.packageName || '')).toLowerCase().indexOf(searchQuery) !== -1;
@@ -725,11 +749,11 @@
           if (options.statement && options.part === 1) {
             var customPoints = customByRow[JSON.stringify([options.signature, Number(options.statement.line)])] || [];
             customPoints.forEach(function (point) {
-              var status = point.covered ? 'covered' : 'uncovered';
+              var status = point.status;
               var annotation = make('span', 'custom-inline-log ' + status);
               annotation.setAttribute('data-custom-point-id', point.id);
-              annotation.setAttribute('aria-label', 'Custom log: ' + point.message + ' · ' + (point.covered ? 'Covered' : 'Not covered'));
-              annotation.title = point.covered ? 'Custom log covered in the supplied runtime log.' : 'Custom log not covered in the supplied runtime log.';
+              annotation.setAttribute('aria-label', 'Custom log: ' + point.message + ' · ' + customStatusText(point));
+              annotation.title = point.status === 'unknown' ? 'The log cannot identify which point emitted this shared message.' : point.covered ? 'Custom log covered in the supplied runtime log.' : 'Custom log not covered in the supplied runtime log.';
               var marker = make('span', 'custom-log-marker'); marker.setAttribute('aria-hidden', 'true');
               annotation.appendChild(marker); annotation.appendChild(make('span', '', point.message)); cell.appendChild(annotation);
               customTargets[point.id] = tr; tr.tabIndex = -1;
@@ -792,7 +816,7 @@
           if (!customPoint || !customPoint.valid) {
             var oldTargets = $('source-lines').querySelectorAll('.navigation-target');
             for (var c = 0; c < oldTargets.length; c++) oldTargets[c].classList.remove('navigation-target');
-            $('custom-navigation-note').textContent = customPoint ? 'This custom log location is outside the report scope or no longer matches its statement. Analyze the original APK with a scope that includes this method.' : 'This custom log point is not present in this report.';
+            $('custom-navigation-note').textContent = customPoint ? 'This custom log location is outside the report scope or no longer matches its statement. Analyze the matching APK with a scope that includes this method.' : 'This custom log point is not present in this report.';
             $('custom-navigation-note').hidden = false; renderClassList();
             if (typeof $('custom-navigation-note').scrollIntoView === 'function') $('custom-navigation-note').scrollIntoView({ block: 'center' });
             return;

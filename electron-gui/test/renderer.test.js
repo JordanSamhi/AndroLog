@@ -17,8 +17,7 @@ function createUi(overrides = {}) {
   const calls = [];
   const api = {
     settings: async () => ({ platforms: '/sdk/platforms', buildTools: '/sdk/build-tools/36', andrologVersion: '0.1', appVersion: '0.1.3' }),
-    chooseApk: async () => '/apps/original.apk', chooseLog: async () => '/logs/runtime.log',
-    readCustom: async () => ({total: 2, omitted: 0, messages: [{message: 'reached this point', count: 2}]}),
+    chooseApk: async () => '/apps/original.apk', chooseCoverageApk: async () => '/apps/instrumented.apk', chooseLog: async () => '/logs/runtime.log',
     chooseSetting: async () => null, saveSettings: async value => value, cancel: async () => {}, onUpdate: () => {},
     inspectCode: async () => ({ apkSha256: 'a'.repeat(64), methods: [{ className: 'org.example.Main', signature: '<org.example.Main: void run()>', statements: [{ index: 1, text: 'return', selectable: true }] }] }),
     instrument: async (opts, plan) => { calls.push({ opts, plan }); return { name: 'original.apk' }; },
@@ -56,18 +55,27 @@ test('a custom message is bound to an exact selected statement and sent to the J
   assert.equal(calls[0].plan.points[0].index, 1); assert.equal(calls[0].plan.points[0].message, 'reached this point');
   assert.equal(doc.getElementById('save-apk').hidden, false);
 });
-test('coverage requires both inputs and displays matched statistics without inventing zero totals', async t => {
-  const { dom, doc } = createUi(); t.after(() => dom.window.close());
-  doc.getElementById('choose-apk').click(); await tick(); assert.equal(doc.getElementById('analyze').disabled, true);
-  doc.getElementById('choose-log').click(); await tick(); assert.equal(doc.getElementById('analyze').disabled, false);
-  assert.match(doc.getElementById('messages-list').textContent, /reached this point/);
+test('coverage requires an instrumented APK and log, independently of the original APK', async t => {
+  const { dom, window, doc } = createUi(); t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick();
+  doc.getElementById('choose-log').click(); await tick();
+  assert.equal(doc.getElementById('analyze').disabled, true);
+  assert.equal(doc.getElementById('coverage-apk').textContent, 'No APK selected');
+  doc.getElementById('coverage-choose-apk').click(); await tick();
+  assert.equal(doc.getElementById('analyze').disabled, false);
+  assert.equal(doc.getElementById('apk-name').textContent, 'original.apk');
+  assert.equal(doc.getElementById('messages-panel').hidden, true);
   doc.getElementById('analyze').click(); await tick();
   const cards = [...doc.querySelectorAll('.stat')];
   assert.match(cards[1].textContent, /25\.0%/); assert.match(cards[1].textContent, /1 of 4 observed/);
-  assert.match(cards[4].textContent, /Nothing to cover/); assert.equal(doc.getElementById('report-frame').hidden, false);
-  doc.querySelector('[data-probe="1"]').click(); assert.equal(doc.getElementById('report-frame').hidden, true);
+  assert.match(cards[4].textContent, /Nothing to cover/);
+  assert.match(cards[0].textContent, /No probes found/);
+  assert.equal(doc.getElementById('report-frame').hidden, false);
+  doc.querySelector('[data-probe="1"]').click();
+  assert.equal(doc.getElementById('report-frame').hidden, false, 'Instrumentation settings do not change the analyzed APK');
+  doc.getElementById('coverage-tag').value = 'OTHER'; doc.getElementById('coverage-tag').dispatchEvent(new window.Event('input'));
+  assert.equal(doc.getElementById('report-frame').hidden, true);
 });
-
 
 test('the class and statement panes remain independently scrollable in the dialog', async t => {
   const { dom, window, doc } = createUi(); t.after(() => dom.window.close());
@@ -80,15 +88,14 @@ test('the class and statement panes remain independently scrollable in the dialo
   assert.equal(window.getComputedStyle(doc.querySelector('.code-main')).minHeight, '0');
 });
 
-test('the visible Logcat tags stay in sync between instrumentation and coverage', async t => {
+test('instrumentation and coverage tags can describe different APKs', async t => {
   const { dom, window, doc } = createUi(); t.after(() => dom.window.close()); await tick();
   const instrumentTag = doc.getElementById('log-tag'), coverageTag = doc.getElementById('coverage-tag');
-  assert.equal(instrumentTag.closest('details'), null);
-  assert.equal(coverageTag.closest('details'), null);
-  instrumentTag.value = 'TEST_TAG'; instrumentTag.dispatchEvent(new window.Event('input', { bubbles: true }));
-  assert.equal(coverageTag.value, 'TEST_TAG');
-  coverageTag.value = 'ANOTHER_TAG'; coverageTag.dispatchEvent(new window.Event('input', { bubbles: true }));
-  assert.equal(instrumentTag.value, 'ANOTHER_TAG');
+  assert.equal(instrumentTag.closest('details'), null); assert.equal(coverageTag.closest('details'), null);
+  instrumentTag.value = 'NEW_APP'; instrumentTag.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(coverageTag.value, 'ANDROLOG');
+  coverageTag.value = 'OLD_APP'; coverageTag.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(instrumentTag.value, 'NEW_APP');
 });
 
 test('instrumentation stages and completion drive the package illustration', async t => {
@@ -128,6 +135,9 @@ test('saved APK instructions use the saved path and the original instrumentation
   doc.getElementById('save-apk').click(); await tick();
   assert.equal(doc.getElementById('next-steps').hidden, false);
   assert.equal(revealed, true);
+  assert.equal(doc.getElementById('coverage-apk').textContent, 'app.apk');
+  assert.equal(doc.getElementById('coverage-tag').value, 'MY_TAG');
+  assert.equal(doc.getElementById('apk-name').textContent, 'original.apk');
   assert.equal(doc.getElementById('install-command').textContent, "adb install -r '/tmp/Jordan'\\''s app/app.apk'");
   assert.equal(doc.getElementById('logcat-command').textContent, "adb logcat -v threadtime -s 'MY_TAG:V' > androlog-runtime.log");
   for (const button of doc.querySelectorAll('[data-copy-command]')) { button.click(); await tick(); assert.equal(button.disabled, false); }
@@ -154,7 +164,7 @@ test('custom-only APK instructions do not claim coverage probes were enabled', a
   doc.getElementById('code-apply').click(); doc.querySelectorAll('[data-probe]').forEach(input => { input.checked = false; });
   doc.getElementById('instrument').click(); await tick(); doc.getElementById('save-apk').click(); await tick();
   assert.match(doc.getElementById('next-coverage').textContent, /custom points/);
-  assert.match(doc.getElementById('next-coverage').textContent, /analyze the run/);
+  assert.match(doc.getElementById('next-coverage').textContent, /Analyze the run/);
 });
 
 test('custom code explorer groups methods under classes and searches method names', async t => {
@@ -175,24 +185,37 @@ test('custom code explorer groups methods under classes and searches method name
   assert.equal(doc.querySelectorAll('.tree-method').length, 1); assert.match(doc.querySelector('.tree-method').textContent, /third/);
 });
 
-test('custom points show coverage without adding a build-selection input', async t => {
+function customFixture() {
+  return { observed: 1, points: [
+    { id: 'first', message: 'same message', method: '<A: void run()>', index: 1, statement: 'return', count: 2, status: 'covered' },
+    { id: 'second', message: 'same message', method: '<A: void run(int)>', index: 4, statement: 'return', count: 0, status: 'uncovered' }
+  ] };
+}
+async function selectRun(doc) {
+  doc.getElementById('coverage-choose-apk').click(); await tick();
+  doc.getElementById('choose-log').click(); await tick();
+}
+test('portable custom coverage comes from the APK report without any local point catalog', async t => {
   let analysisArguments;
-  const summary = { id: 'a', observed: 1, points: [{ message: 'same', method: '<A: void a()>', index: 1, statement: 'return', count: 3 }, { message: 'same', method: '<A: void b()>', index: 2, statement: 'return', count: 0 }] };
-  const { dom, doc } = createUi({ readCustom: async (...args) => { assert.equal(args.length, 1); return { total: 3, messages: [], summary }; }, analyze: async (...args) => { analysisArguments = args; return { coverageSummary: {} }; } });
+  const summary = customFixture();
+  const { dom, doc } = createUi({ analyze: async (...args) => { analysisArguments = args; return { coverageSummary: {}, custom: { total: 2, summary } }; } });
   t.after(() => dom.window.close());
-  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
-  assert.equal(doc.getElementById('messages-summary').hidden, true);
+  await selectRun(doc);
+  assert.equal(doc.getElementById('messages-panel').hidden, true);
   assert.equal(doc.getElementById('custom-build-picker'), null);
+  doc.getElementById('analyze').click(); await tick();
   assert.match(doc.querySelector('.point-row.observed').textContent, /Covered/);
   assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not covered/);
-  doc.getElementById('analyze').click(); await tick(); assert.equal(analysisArguments.length, 1); assert.equal(analysisArguments[0].tag, 'ANDROLOG');
+  assert.deepEqual(JSON.parse(JSON.stringify(analysisArguments)), [{ tag: 'ANDROLOG' }]);
+  assert.match(doc.getElementById('coverage-meta').textContent, /instrumented\.apk/);
+  assert.equal(doc.getElementById('instrument').disabled, true, 'No original APK is needed for coverage');
 });
 
 test('analysis progress appears while working and follows the reported stages', async t => {
   let update, finish;
   const { dom, window, doc } = createUi({ onUpdate: handler => { update = handler; }, analyze: () => new Promise(resolve => { finish = resolve; }) });
   t.after(() => dom.window.close()); const calls = []; window.andrologAnimation = { setAnalysis: (...args) => calls.push(args) };
-  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick(); doc.getElementById('analyze').click(); await tick();
+  await selectRun(doc); doc.getElementById('analyze').click(); await tick();
   assert.equal(doc.getElementById('analysis-progress').hidden, false);
   update({ type: 'stage', stage: 3 }); assert.match(doc.getElementById('analysis-title').textContent, /Matching/);
   assert.ok(calls.some(([stage, active]) => stage === 3 && active));
@@ -200,64 +223,56 @@ test('analysis progress appears while working and follows the reported stages', 
   assert.equal(doc.getElementById('analysis-progress').hidden, true); assert.deepEqual(calls.at(-1), [0, false]);
 });
 
-test('choosing the original APK after a log reloads custom points without a build menu', async t => {
-  const { dom, doc } = createUi({ readCustom: async () => ({ total: 0, messages: [], summary: { id: 'build', observed: 0, points: [{ message: 'later', method: '<A: void a()>', index: 1, count: 0 }] } }) });
+test('an empty run can show every custom point as unobserved using only the APK', async t => {
+  const summary = customFixture(); summary.observed = 0;
+  for (const point of summary.points) { point.count = 0; point.status = 'uncovered'; }
+  const { dom, doc } = createUi({ analyze: async () => ({ coverageSummary: {}, custom: { total: 0, messages: [], summary } }) });
   t.after(() => dom.window.close());
-  doc.getElementById('choose-log').click(); await tick(); doc.getElementById('choose-apk').click(); await tick();
-  assert.equal(doc.getElementById('custom-build-picker'), null);
-  assert.match(doc.getElementById('messages-list').textContent, /Not covered/);
+  doc.getElementById('choose-log').click(); await tick(); doc.getElementById('coverage-choose-apk').click(); await tick();
+  assert.equal(doc.querySelectorAll('.point-row').length, 0);
+  doc.getElementById('analyze').click(); await tick();
+  assert.equal(doc.querySelectorAll('.point-row.unobserved').length, 2);
 });
 
-test('unknown custom baselines neither request a build selection nor block APK and log analysis', async t => {
-  let analyses = 0;
-  const { dom, doc } = createUi({
-    readCustom: async () => ({ messages: [{ message: 'recorded message', count: 1 }], total: 1, summary: null }),
-    analyze: async (...args) => { assert.equal(args.length, 1); analyses++; return { coverageSummary: {} }; }
-  }); t.after(() => dom.window.close());
-  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
-  assert.equal(doc.getElementById('custom-build-picker'), null);
+test('changing the original APK preserves coverage; changing the tested APK clears it', async t => {
+  const { dom, doc } = createUi({ analyze: async () => ({ coverageSummary: {}, custom: { summary: customFixture() } }) });
+  t.after(() => dom.window.close()); await selectRun(doc);
+  doc.getElementById('analyze').click(); await tick();
+  doc.getElementById('choose-apk').click(); await tick();
+  assert.equal(doc.getElementById('report-frame').hidden, false);
+  assert.equal(doc.querySelectorAll('.point-row').length, 2);
+  doc.getElementById('coverage-choose-apk').click(); await tick();
+  assert.equal(doc.getElementById('report-frame').hidden, true);
+  assert.equal(doc.querySelectorAll('.point-row').length, 0);
+});
+
+test('legacy ambiguous custom observations are unconfirmed rather than falsely red', async t => {
+  const summary = customFixture(); summary.points[1].count = null; summary.points[1].status = 'unknown';
+  const { dom, doc } = createUi({ analyze: async () => ({ coverageSummary: {}, custom: { summary, notice: 'Some runtime markers are not present in this APK.' } }) });
+  t.after(() => dom.window.close()); await selectRun(doc); doc.getElementById('analyze').click(); await tick();
   assert.equal(doc.querySelectorAll('.point-row.unobserved').length, 0);
-  assert.match(doc.getElementById('messages-list').textContent, /recorded message/);
-  assert.equal(doc.getElementById('analyze').disabled, false);
-  doc.getElementById('analyze').click(); await tick(); assert.equal(analyses, 1);
+  assert.match(doc.querySelector('.point-row.unknown').textContent, /Unconfirmed/);
+  assert.match(doc.getElementById('messages-summary').textContent, /Some runtime markers/);
 });
 
-test('partial custom metadata shows only recorded points without inventing red rows', async t => {
-  const summary = { partial: true, points: [
-    { id: 'observed', message: 'known', method: '<A: void run()>', index: 1, count: 2 },
-    { id: 'unknown', message: 'unconfirmed', method: '<A: void run()>', index: 2, count: 0 }
-  ] };
-  const { dom, doc } = createUi({ readCustom: async () => ({ messages: [], summary }) }); t.after(() => dom.window.close());
-  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
-  assert.equal(doc.querySelectorAll('.point-row').length, 1); assert.equal(doc.querySelectorAll('.point-row.unobserved').length, 0);
-  assert.equal(doc.getElementById('analyze').disabled, false);
-});
-
-function clickableCustomFixture() {
-  return { id: 'build', observed: 1, points: [
-    { id: 'first', message: 'same message', method: '<A: void run()>', index: 1, statement: 'return', count: 2 },
-    { id: 'second', message: 'same message', method: '<A: void run(int)>', index: 4, statement: 'return', count: 0 }
-  ] };
-}
-test('clicking a custom log creates a report if needed and forwards the exact point after iframe load', async t => {
-  const summary = clickableCustomFixture(); let analyses = 0;
-  const { dom, window, doc } = createUi({ readCustom: async () => ({ messages: [], summary }), analyze: async (...args) => { analyses++; assert.equal(args.length, 1); return { coverageSummary: {}, custom: { summary } }; } });
-  t.after(() => dom.window.close());
-  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
-  doc.querySelectorAll('.custom-point-link')[1].click(); await tick(); await tick();
+test('custom points jump to their exact report locations without analyzing again', async t => {
+  let analyses = 0;
+  const { dom, window, doc } = createUi({ analyze: async () => { analyses++; return { coverageSummary: {}, custom: { summary: customFixture() } }; } });
+  t.after(() => dom.window.close()); await selectRun(doc); doc.getElementById('analyze').click(); await tick();
+  doc.querySelectorAll('.custom-point-link')[1].click();
   assert.equal(analyses, 1); assert.equal(doc.getElementById('page-explore').hidden, false);
   const received = []; const frame = doc.getElementById('report-frame'); frame.contentWindow.postMessage = value => received.push(value);
   frame.dispatchEvent(new window.Event('load'));
   assert.equal(received[0].type, 'androlog.selectCustomPoint'); assert.equal(received[0].pointId, 'second');
-  doc.querySelectorAll('.custom-point-link')[0].click(); await tick();
-  assert.equal(analyses, 1, 'Existing matching report is reused'); assert.equal(received.at(-1).pointId, 'first');
+  doc.querySelectorAll('.custom-point-link')[0].click();
+  assert.equal(analyses, 1); assert.equal(received.at(-1).pointId, 'first');
 });
-test('a failed analysis does not navigate a custom log to an unrelated report', async t => {
-  const summary = clickableCustomFixture();
-  const { dom, doc } = createUi({ readCustom: async () => ({ messages: [], summary }), analyze: async () => { throw Error('analysis failed'); } });
-  t.after(() => dom.window.close());
-  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick(); doc.getElementById('tab-coverage').click();
-  doc.querySelector('.custom-point-link').click(); await tick();
-  assert.equal(doc.getElementById('page-coverage').hidden, false); assert.equal(doc.getElementById('report-frame').hidden, true);
-  assert.match(doc.getElementById('toast').textContent, /analysis failed/);
+test('failed reanalysis removes stale custom coverage and reports the backend error', async t => {
+  let analyses = 0;
+  const { dom, doc } = createUi({ analyze: async () => { if (analyses++) throw Error('APK and log do not match'); return { coverageSummary: {}, custom: { summary: customFixture() } }; } });
+  t.after(() => dom.window.close()); await selectRun(doc); doc.getElementById('analyze').click(); await tick();
+  assert.equal(doc.querySelectorAll('.point-row').length, 2);
+  doc.getElementById('analyze').click(); await tick();
+  assert.equal(doc.getElementById('report-frame').hidden, true); assert.equal(doc.querySelectorAll('.point-row').length, 0);
+  assert.match(doc.getElementById('toast').textContent, /APK and log do not match/);
 });

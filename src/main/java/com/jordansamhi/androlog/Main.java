@@ -103,7 +103,7 @@ public class Main {
             console.context("APK", apk.toString());
             console.context("Scope", (packageName == null ? "all APK packages" : "package prefix " + packageName)
                     + (includeLibraries ? "; bundled libraries included" : "; known libraries excluded"));
-            console.context("Probes", selectedProbes(command));
+            console.context("Probes", command.hasOption("instrumented-input") ? "Read from the instrumented APK" : selectedProbes(command));
             console.context("Log tag", logIdentifier);
             if (command.hasOption("t")) console.context("Threads", command.getOptionValue("t"));
             console.context(parsing ? "Runtime log" : "Output APK", parsing ? absolute(logFile).toString() : exportedApk.toString());
@@ -123,8 +123,9 @@ public class Main {
                 baseline.setTargetPackage(packageName);
                 baseline.setCollectCode(command.hasOption("html"));
                 baseline.setCollectCallGraph(command.hasOption("mc"));
-                console.stage("Analyze coverage baseline", () -> {
-                    if (command.hasOption("html") || command.hasOption("mc")) {
+                if (command.hasOption("instrumented-input")) baseline.setInstrumentedInput(logIdentifier);
+                console.stage(command.hasOption("instrumented-input") ? "Read probes from instrumented APK" : "Analyze coverage baseline", () -> {
+                    if (command.hasOption("html") || command.hasOption("mc") || command.hasOption("instrumented-input")) {
                         baseline.setLauncherActivities(LauncherActivities.read(apk));
                     }
                     baseline.build(includeLibraries);
@@ -192,6 +193,9 @@ public class Main {
         boolean parsing = command.hasOption("pa") || command.hasOption("pam");
         boolean capture = command.hasOption("capture");
         boolean inspecting = command.hasOption("inspect-code");
+        if (command.hasOption("instrumented-input") && !parsing) {
+            throw new UsageException("--instrumented-input requires --parse or --parse-per-minute.");
+        }
         if (inspecting && (parsing || capture || command.hasOption("custom-logs") || command.hasOption("html") || command.hasOption("j"))) {
             throw new UsageException("--inspect-code cannot be combined with instrumentation, capture or reporting options.");
         }
@@ -225,7 +229,7 @@ public class Main {
             throw new UsageException("--html and --json require --parse, --parse-per-minute or --capture.");
         }
         if (command.hasOption("custom-report-only") && (!parsing || !command.hasOption("html"))) throw new UsageException("--custom-report-only requires --parse and --html.");
-        if ((command.hasOption("html") || capture) && !command.hasOption("custom-report-only") && !command.hasOption("c") && !command.hasOption("m")
+        if ((command.hasOption("html") || capture) && !command.hasOption("instrumented-input") && !command.hasOption("custom-report-only") && !command.hasOption("c") && !command.hasOption("m")
                 && !command.hasOption("s") && !command.hasOption("cp") && !command.hasOption("mc")) {
             throw new UsageException("Select probes with -c, -m, -s, -cp or -mc, matching instrumentation.");
         }
@@ -328,6 +332,7 @@ public class Main {
                 new CommandLineOption("log-identifier", "l", "Logcat tag (default: ANDROLOG)", true, false),
                 new CommandLineOption("inspect-code", "inspect-code", "Write original Jimple statements to a JSON catalog without modifying the APK", true, false),
                 new CommandLineOption("custom-report-only", "custom-report-only", "Allow a code report without automatic coverage probes", false, false),
+                new CommandLineOption("instrumented-input", "instrumented-input", "Read expected probes and custom points directly from the instrumented APK (reporting only)", false, false),
                 new CommandLineOption("custom-logs", "custom-logs", "Insert literal messages at points selected in a JSON plan (instrumentation only)", true, false),
                 new CommandLineOption("classes", "c", "Instrument or measure classes", false, false),
                 new CommandLineOption("methods", "m", "Instrument or measure methods", false, false),
@@ -363,8 +368,10 @@ public class Main {
                         + "  Instrument: -a app.apk -p /sdk/platforms -o ./instrumented -c -m -s -cp\n"
                         + "  Capture:    -a app.apk -p /sdk/platforms -o ./out -c -m -s -cp -mc --capture\n"
                         + "  Report:     -a app.apk -p /sdk/platforms -pa runtime.log -c -m -s -cp -html report.html\n"
+                        + "  Portable:   -a app-instrumented.apk -p /sdk/platforms -pa runtime.log --instrumented-input -html report.html\n"
                         + "  Timeline:   -a app.apk -p /sdk/platforms -pam runtime.log -m -j coverage.json\n\n"
-                        + "Reports use the original APK and the same probe/scope options as instrumentation.\n"
+                        + "Reports use the original APK and matching probe/scope options by default.\n"
+                        + "With --instrumented-input, expected probes and custom points are read directly from the instrumented APK.\n"
                         + "For instrumentation, configure apksignerPath and zipalignPath in config.properties.", false);
         writer.flush();
     }

@@ -72,7 +72,7 @@ test('custom message summaries use the exact tag and count repeated records', as
   assert.equal(result.omitted, 0);
 });
 
-test('custom-only analysis accepts baseline and log without a saved build selection', async t => {
+test('portable coverage reads probes from the instrumented APK without instrumentation settings', async t => {
   const { Backend } = require('../src/backend');
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'androlog-baseline-log-')); t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const platforms = path.join(dir, 'platforms'); await fs.mkdir(path.join(platforms, 'android-test'), { recursive: true });
@@ -80,10 +80,12 @@ test('custom-only analysis accepts baseline and log without a saved build select
   const apk = path.join(dir, 'input.apk'), log = path.join(dir, 'runtime.log'); await fs.writeFile(apk, 'apk'); await fs.writeFile(log, '');
   const backend = new Backend({ jar: 'unused', tempRoot: dir }); t.after(() => backend.shutdown());
   backend.run = async (_settings, args) => {
-    assert.ok(args.includes('--custom-report-only'));
+    assert.ok(args.includes('--instrumented-input'));
+    for (const flag of ['-c','-m','-s','-cp','-mc','-pkg','-n','--custom-report-only']) assert.equal(args.includes(flag), false);
+    assert.equal(args[args.indexOf('-a') + 1], apk);
     await fs.writeFile(args[args.indexOf('-j') + 1], JSON.stringify({ coverageSummary: {} }));
     await fs.writeFile(args[args.indexOf('-html') + 1], '<html></html>');
   };
-  const result = await backend.analyze(apk, log, { platforms }, { probes: [false,false,false,false,false], tag: 'ANDROLOG', packagePrefix: '', excludeLibraries: false });
+  const result = await backend.analyze(apk, log, { platforms }, { tag: 'ANDROLOG', probes: [true,true,true,true,true], packagePrefix: 'different.app', excludeLibraries: true });
   assert.deepEqual(result.report.coverageSummary, {});
 });

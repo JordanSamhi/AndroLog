@@ -68,6 +68,15 @@ public class LogParser {
                 Matcher tagged = taggedLine.matcher(line);
                 if (!tagged.matches()) continue;
                 String message = tagged.group(1);
+                if (message.startsWith("CUSTOM_POINT=")) {
+                    String id = message.substring("CUSTOM_POINT=".length());
+                    if (id.matches("[a-f0-9]{32}")) summaryLogBuilder.recordCustomMarker(id);
+                    continue;
+                }
+                if (message.startsWith("CUSTOM=")) {
+                    summaryLogBuilder.recordCustomMessage(message.substring("CUSTOM=".length()));
+                    continue;
+                }
                 if (message.startsWith("MC2|") || message.startsWith("CALL=")) {
                     summaryLogBuilder.getCallGraph().accept(message,
                             summaryBuilder.getCallSites(), summaryBuilder.getGraphMethods());

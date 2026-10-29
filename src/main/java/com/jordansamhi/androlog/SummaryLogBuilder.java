@@ -29,6 +29,12 @@ public class SummaryLogBuilder {
             .ofPattern("uuuu-MM-dd HH:mm", Locale.US).withResolverStyle(ResolverStyle.STRICT);
     private int unattributedCount;
     private final CallGraph callGraph = new CallGraph();
+    private final Map<String, Integer> customMessages = new LinkedHashMap<>();
+    private final Map<String, Integer> customMarkers = new LinkedHashMap<>();
+    public Map<String, Integer> getCustomMessages() { return Collections.unmodifiableMap(customMessages); }
+    public Map<String, Integer> getCustomMarkers() { return Collections.unmodifiableMap(customMarkers); }
+    public void recordCustomMessage(String message) { customMessages.merge(message, 1, Integer::sum); }
+    public void recordCustomMarker(String id) { customMarkers.merge(id, 1, Integer::sum); }
 
     public CallGraph getCallGraph() { return callGraph; }
 

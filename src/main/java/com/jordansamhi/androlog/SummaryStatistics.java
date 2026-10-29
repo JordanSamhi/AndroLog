@@ -137,6 +137,10 @@ public class SummaryStatistics {
     }
 
     private void addCallGraph(Map<String, Object> report, SummaryBuilder baseline, SummaryLogBuilder observations) {
+        if (baseline.isInstrumentedInput()) {
+            report.put("instrumentedInput", true);
+            report.put("custom", CustomPointReport.build(baseline, observations));
+        }
         if (baseline.isCallGraphRequested() || observations.getCallGraph().hasData()) {
             java.util.Set<String> code = new java.util.HashSet<>();
             for (CoverageMethod method : baseline.getCodeMethods()) code.add(method.getSignature());

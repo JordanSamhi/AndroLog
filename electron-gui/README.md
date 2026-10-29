@@ -38,7 +38,7 @@ Open **Settings** at the bottom of the sidebar. AndroLog checks `ANDROID_HOME`, 
 
 Install missing packages using Android Studio's SDK Manager or the Android SDK command-line tools. Save your settings. APK analysis needs Platforms; instrumentation also needs Build Tools. GUI signing settings are separate from the CLI's `config.properties`.
 
-Preferences and custom-point metadata are stored in the application's user-data directory, outside the repository. Each instrumentation or analysis job runs in a separate Java process. **Run details** in the upper-right corner shows its diagnostics.
+SDK preferences are stored in the application's user-data directory, outside the repository. Coverage does not depend on a local custom-point catalog. Each instrumentation or analysis job runs in a separate Java process. **Run details** in the upper-right corner shows its diagnostics.
 
 ## Instrument an APK
 
@@ -47,7 +47,7 @@ Preferences and custom-point metadata are stored in the application's user-data 
 3. Choose what to log: **Classes**, **Methods**, **Statements**, **Components**, or **Dynamic call graph**. **Essentials** selects classes, methods, and components; **Everything** selects all five. Package prefix and library exclusion settings are under **Advanced options**.
 4. Optionally add [your own messages](#place-your-own-messages).
 5. Click **Instrument APK**. The scanning APK animation and stage label show activity while the backend adds probes, rebuilds, aligns, and signs the APK. Animations respect the operating system's reduced-motion setting.
-6. Click **Save instrumented APK** and choose its destination. The original APK is protected; the output uses AndroLog's bundled test signing key.
+6. Click **Save instrumented APK** and choose its destination. The original APK is protected; the output uses AndroLog's bundled test signing key. The saved APK and its Logcat tag are selected automatically in Coverage.
 
 Save the output before choosing another APK or closing the app. The GUI warns if you have an unsaved instrumented APK. Use a test device or emulator: an existing installation signed by the original publisher may conflict with the test-signed copy.
 
@@ -63,7 +63,7 @@ The listing is Jimple reconstructed from APK bytecode, not the original Java or 
 
 ## Run the app and collect logs
 
-After saving, AndroLog shows commands using the actual saved path and Logcat tag. For example, in a terminal with `adb` on `PATH`:
+After saving, AndroLog shows commands using the actual saved path and Logcat tag. Use **Copy** beside either command to copy it to your clipboard. For example, in a terminal with `adb` on `PATH`:
 
 ```bash
 adb install -r "/path/to/app-instrumented.apk"
@@ -78,17 +78,17 @@ The GUI currently reads files; it does not capture from a connected device. The 
 
 ## Analyze coverage
 
-Open **Coverage**, select the **original APK** and the **runtime log**, and click **Analyze run**. These are the only file inputs: there is no APK-build selector. The APK is the baseline against which observations in the log are compared.
+Open **Coverage**, select the **instrumented APK that was installed for the test** and its **runtime log**, enter the same Logcat tag, and click **Analyze run**. These are the only file inputs. You can copy both files to another computer and analyze them there; no original APK, saved baseline, or instrumentation history is required.
 
-Use the same Logcat tag, automatic probes, package prefix, and library exclusion setting as instrumentation. **Review options** takes you back to those controls. If the app was instrumented elsewhere or in a previous session, set these options before analysis. Clicking **Analyze run** again re-reads the log.
+AndroLog reads the expected probes and custom points directly from the APK. Coverage uses the probes actually inserted, so you do not need to reselect automatic probes, package scope, or library settings. The original APK selected in Instrument is separate from the APK selected in Coverage. Clicking **Analyze run** again re-reads both files.
 
-The dashboard shows observed counts, totals, and percentages for statements, methods, classes, activities, services, broadcast receivers, and content providers. A category with no eligible elements is unavailable, rather than reported as 0% coverage. Select a statistics card to explore its category in the report.
+The dashboard shows observed counts, totals, and percentages for statements, methods, classes, activities, services, broadcast receivers, and content providers. Elements without probes are **not measured**. AndroLog's logging instructions and helper classes are excluded from statistics and the code display. A category with no eligible elements is unavailable, rather than reported as 0% coverage. Select a statistics card to explore its category in the report.
 
-**Custom logs** shows each known message, its method/statement location, and a green **Covered** or red **Not covered** marker. Click a row to jump to that statement in **Explore report**. AndroLog generates a report first when needed, including for runs with only custom points.
+After analysis, **Custom logs** shows every point found in the instrumented APK, its message and method/statement location, and a green **Covered** or red **Not covered** marker. Points are listed even when none of them appear in the log. Click a row to jump to that statement in **Explore report**. Custom-only instrumentations work the same way.
 
-Custom-point locations are resolved automatically from locally saved metadata matched to the original APK fingerprint and Logcat tag. Repeated instrumentations with identical custom-point definitions share the same baseline. If a complete baseline cannot be identified, only known observations are shown; AndroLog does not invent red markers for unknown points. An APK instrumented on another computer, or before point tracking was added, may have only recorded messages without locations.
+Current GUI instrumentations include a distinct point marker, allowing identical messages at different locations to be distinguished. Older instrumentations may emit only message text: if the same message appears at several points and was observed, the individual points are **Unconfirmed** rather than guessed to be covered or missed.
 
-**Not covered means no matching marker was found in the supplied log.** It does not prove the point never ran: capture may be incomplete, late, or from another instrumentation. Automatic coverage counts distinct observed elements, not execution frequency.
+**Not covered means no matching observation was found in the supplied log.** It does not prove the point is unreachable: capture may be incomplete, late, or from another instrumentation. Use the exact APK installed for the test, even if another instrumentation later overwrote the same output filename. Automatic coverage counts distinct observed elements, not execution frequency.
 
 ## Explore and export
 
@@ -96,11 +96,11 @@ Custom-point locations are resolved automatically from locally saved metadata ma
 
 - Expand packages and select a class; its methods appear in the tree for quick navigation.
 - Read the whole class in one scrollable listing, follow code references, and filter covered or unobserved code.
-- See custom messages beside their original statements, with green/red markers independent of automatic statement coverage. A location outside the report scope is marked unavailable rather than attached to different code.
+- See custom messages beside their statements, with green/red markers independent of automatic statement coverage. A location outside the report scope is marked unavailable rather than attached to different code.
 - Inspect cumulative coverage over time when the log includes timestamps.
 - Explore the **dynamic call graph**. Enable its probe before instrumentation to collect the required records. The graph starts from a manifest-declared launcher activity when recorded calls are available. Selecting a class changes the graph's scope; selecting a node emphasizes its incoming and outgoing edges and dims the others.
 
-Use **Export HTML** to save a standalone report that opens offline in a browser. It includes available custom-point feedback and links to the exact statements, so the exported report can be shared without the GUI's local metadata.
+Use **Export HTML** to save a standalone report that opens offline in a browser. It includes available custom-point feedback and links to the exact statements, so the exported report can be shared on its own.
 
 ## Package for your platform
 
@@ -134,9 +134,9 @@ For an unpacked local app image, use `npm run dist:dir`; the script prints its t
 | APK cannot be read | Select the SDK `platforms` folder in Settings and confirm it contains `android-<version>/android.jar`. Inspect **Run details** for the specific failure. |
 | Signing fails | Select an installed Build Tools version containing both signing tools. |
 | Installation reports a signing conflict | The installed app uses another signing key. Use a clean test device or emulator installation. |
-| Coverage is empty or unexpectedly low | Check the original APK, tag, enabled probes, and scope. Capture before launching a fresh process. |
+| Coverage is empty or unexpectedly low | Check that you selected the instrumented APK used for this test and the matching tag. Capture before launching a fresh process. |
 | No dynamic call graph | Instrument with **Dynamic call graph** enabled, then install and capture that APK. Selecting it only during analysis cannot create missing records. |
-| Custom messages have no locations | Matching local point metadata is unavailable. Existing recorded messages can still be shown. |
+| Custom messages have no locations | Analyze the instrumented APK and its log. Locations are read from the APK; old logs with duplicate message text may be unconfirmed. |
 | Packaging reports an architecture mismatch | Use a JDK and Node installation built for the same architecture as the target machine. |
 
 ## Development checks

@@ -47,11 +47,18 @@ public final class CoverageMethod {
         private final int line;
         private final String text;
         private final boolean eligible;
+        private final String coveragePayload;
 
         public Statement(int line, String text, boolean eligible) {
+            this(line, text, eligible, null);
+        }
+
+        /** Probe identity is independent of display positions after DEX has been reloaded. */
+        public Statement(int line, String text, boolean eligible, String coveragePayload) {
             this.line = line;
             this.text = text;
             this.eligible = eligible;
+            this.coveragePayload = coveragePayload;
         }
 
         public int getLine() {
@@ -65,5 +72,7 @@ public final class CoverageMethod {
         public boolean isEligible() {
             return eligible;
         }
+
+        public String getCoveragePayload() { return coveragePayload; }
     }
 }
