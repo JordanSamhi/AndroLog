@@ -2,7 +2,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const api = window.androlog;
-  const state = { apk: null, log: null, catalog: null, points: new Map(), draft: new Map(), selected: null, selectedClass: null, result: false, report: null, busy: false, stageKind: '', logText: '', pendingCategory: null, reportGeneration: 0, logRead: 0, instrumentTag: null, instrumentProbes: [], preferredPlan: null, resolvedPlan: null, planSelectionNeeded: false, customLoading: false, openPackages: new Set(), openClasses: new Set() };
+  const state = { apk: null, log: null, catalog: null, points: new Map(), draft: new Map(), selected: null, selectedClass: null, result: false, report: null, busy: false, stageKind: '', logText: '', pendingCategory: null, pendingCustomPoint: null, reportGeneration: 0, logRead: 0, instrumentTag: null, instrumentProbes: [], preferredPlan: null, resolvedPlan: null, planSelectionNeeded: false, customLoading: false, openPackages: new Set(), openClasses: new Set() };
   const metricInfo = [
     ['statements', 'Statements', '#528ee5'], ['methods', 'Methods', '#f08262'], ['classes', 'Classes', '#31b38b'], ['activities', 'Activities', '#e7bc42'],
     ['services', 'Services', '#4fb4a8'], ['broadcast-receivers', 'Broadcast receivers', '#e4956a'], ['content-providers', 'Content providers', '#9a83e9']
@@ -26,7 +26,7 @@
   });
   function options() { return { probes: [...document.querySelectorAll('[data-probe]')].map(el => el.checked), tag: $('log-tag').value.trim(), packagePrefix: $('package-prefix').value.trim(), excludeLibraries: $('exclude-libraries').checked }; }
   function clearReport() {
-    state.report = null; state.pendingCategory = null; $('report-frame').hidden = true; $('report-frame').removeAttribute('src'); $('empty-report').hidden = false;
+    state.report = null; state.pendingCategory = null; state.pendingCustomPoint = null; $('report-frame').hidden = true; $('report-frame').removeAttribute('src'); $('empty-report').hidden = false;
     $('explore-report').disabled = true; $('save-report').disabled = true; $('report-export').disabled = true; $('coverage-meta').textContent = 'Run an analysis to see your statistics';
     drawMetrics(null);
   }
@@ -39,12 +39,14 @@
     $('cancel-coverage').hidden = !(busy && kind === 'coverage');
     $('analyze').textContent = busy && kind === 'coverage' ? 'Analyzing…' : 'Analyze run →';
     for (const id of ['choose-apk','coverage-choose-apk','choose-log','custom-build','open-custom','instrument','save-apk','analyze','settings-save','save-report','report-export','preset-essentials','preset-all','preset-custom']) $(id).disabled = busy;
+    document.querySelectorAll('.custom-point-link').forEach(el => { el.disabled = busy; });
     document.querySelectorAll('[data-probe], #log-tag, #coverage-tag, #package-prefix, #exclude-libraries, [data-setting]').forEach(el => { el.disabled = busy; });
     if (!busy) updateAvailability();
     if (busy) { $('operation-title').textContent = kind === 'inspect' ? 'Reading your APK' : kind === 'coverage' ? 'Analyzing your run' : 'Preparing your APK'; $('operation-description').textContent = 'Starting the Java analysis…'; document.querySelectorAll('.stage-rail span').forEach(el => el.classList.remove('done')); }
   }
   function updateAvailability() {
     if (state.busy) return;
+    document.querySelectorAll('.custom-point-link').forEach(el => { el.disabled = state.customLoading || !el.dataset.pointId; });
     $('instrument').disabled = !state.apk; $('open-custom').disabled = !state.apk; $('save-apk').disabled = !state.result;
     $('analyze').disabled = !(state.apk && state.log) || state.customLoading || state.planSelectionNeeded; $('save-report').disabled = !state.report; $('report-export').disabled = !state.report; $('explore-report').disabled = !state.report;
   }
@@ -98,8 +100,9 @@
       if (summary) {
         $('messages-summary').hidden = true;
         for (const point of summary.points) {
-          const row = document.createElement('div'); row.className = `message-row point-row ${point.count ? 'observed' : 'unobserved'}`;
-          const detail = document.createElement('div'); const message = document.createElement('strong'); message.textContent = point.message;
+          const row = document.createElement('button'); row.type = 'button'; row.className = `message-row point-row custom-point-link ${point.count ? 'observed' : 'unobserved'}`; row.dataset.pointId = point.id || '';
+          row.title = 'Open this custom log in the code'; row.addEventListener('click', () => openCustomPoint(point, summary));
+          const detail = document.createElement('span'); detail.className = 'point-detail'; const message = document.createElement('strong'); message.textContent = point.message;
           const location = document.createElement('small'); location.textContent = `${point.method} · statement ${point.index}`; location.title = point.statement;
           const status = document.createElement('span'); status.className = 'point-status'; status.textContent = point.count ? 'Covered' : 'Not covered';
           status.title = point.count ? 'A matching point marker was found in this log.' : 'No matching point marker was found in this log.';
@@ -163,12 +166,21 @@
       showNextSteps(file, state.instrumentTag); toast(`Saved ${basename(file)}`);
     } } catch (e) { toast(e.message, true); }
   });
-  $('analyze').addEventListener('click', async () => {
-    const result = await run('coverage', () => api.analyze(options(), state.resolvedPlan)); if (!result) return;
-    state.report = result; state.reportGeneration++; $('coverage-meta').textContent = `${basename(state.apk)} · ${basename(state.log)}`;
+  async function analyzeRun(planId = state.resolvedPlan) {
+    const result = await run('coverage', () => api.analyze(options(), planId)); if (!result) return null;
+    state.report = result; state.reportGeneration++; state.pendingCategory = null; state.pendingCustomPoint = null; $('coverage-meta').textContent = `${basename(state.apk)} · ${basename(state.log)}`;
     $('empty-report').hidden = true; $('report-frame').hidden = false; $('report-frame').src = `androlog://report/current?run=${state.reportGeneration}`;
     drawMetrics(result.coverageSummary); updateAvailability(); refreshMessages(); toast('Your coverage report is ready.');
-  });
+    return result;
+  }
+  $('analyze').addEventListener('click', () => analyzeRun());
+  async function openCustomPoint(point, summary) {
+    if (state.busy || state.customLoading || !point.id) return;
+    if (!state.report || JSON.stringify(state.report.custom?.summary) !== JSON.stringify(summary)) {
+      if (!await analyzeRun(summary.id)) return;
+    }
+    state.pendingCategory = null; state.pendingCustomPoint = point.id; navigate('explore'); sendReportSelection();
+  }
   $('explore-report').addEventListener('click', () => navigate('explore'));
   for (const id of ['save-report','report-export']) $(id).addEventListener('click', async () => { try { const file = await api.saveReport(); if (file) toast(`Saved ${basename(file)}`); } catch (e) { toast(e.message, true); } });
   function drawMetrics(summary) {
@@ -185,9 +197,13 @@
       card.append(label, value, detail, meter); if (metric) card.addEventListener('click', () => openCategory(key)); grid.appendChild(card);
     }
   }
-  function openCategory(category) { state.pendingCategory = category; navigate('explore'); sendCategory(); }
-  function sendCategory() { if (state.pendingCategory && $('report-frame').contentWindow) { $('report-frame').contentWindow.postMessage({ type: 'androlog.selectCategory', category: state.pendingCategory }, '*'); } }
-  $('report-frame').addEventListener('load', sendCategory);
+  function openCategory(category) { state.pendingCustomPoint = null; state.pendingCategory = category; navigate('explore'); sendReportSelection(); }
+  function sendReportSelection() {
+    const target = $('report-frame').contentWindow; if (!target) return;
+    if (state.pendingCustomPoint) target.postMessage({ type: 'androlog.selectCustomPoint', pointId: state.pendingCustomPoint }, '*');
+    else if (state.pendingCategory) target.postMessage({ type: 'androlog.selectCategory', category: state.pendingCategory }, '*');
+  }
+  $('report-frame').addEventListener('load', sendReportSelection);
   function updateSettings(values) {
     if (values.appVersion) { $('app-version').textContent = `Electron ${values.appVersion}`; document.title = `AndroLog · ${values.appVersion}`; }
     for (const key of ['platforms','buildTools','java']) $(`settings-${key}`).value = values[key] || '';

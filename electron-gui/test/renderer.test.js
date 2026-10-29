@@ -211,3 +211,32 @@ test('ambiguous custom builds ask for a selection instead of coloring unknown po
   assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not covered/);
   assert.equal(doc.getElementById('analyze').disabled, false);
 });
+
+function clickableCustomFixture() {
+  return { id: 'build', observed: 1, points: [
+    { id: 'first', message: 'same message', method: '<A: void run()>', index: 1, statement: 'return', count: 2 },
+    { id: 'second', message: 'same message', method: '<A: void run(int)>', index: 4, statement: 'return', count: 0 }
+  ] };
+}
+test('clicking a custom log creates a report if needed and forwards the exact point after iframe load', async t => {
+  const summary = clickableCustomFixture(); let analyses = 0;
+  const { dom, window, doc } = createUi({ readCustom: async () => ({ messages: [], summary }), analyze: async (_opts, id) => { analyses++; assert.equal(id, 'build'); return { coverageSummary: {}, custom: { summary } }; } });
+  t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
+  doc.querySelectorAll('.custom-point-link')[1].click(); await tick(); await tick();
+  assert.equal(analyses, 1); assert.equal(doc.getElementById('page-explore').hidden, false);
+  const received = []; const frame = doc.getElementById('report-frame'); frame.contentWindow.postMessage = value => received.push(value);
+  frame.dispatchEvent(new window.Event('load'));
+  assert.equal(received[0].type, 'androlog.selectCustomPoint'); assert.equal(received[0].pointId, 'second');
+  doc.querySelectorAll('.custom-point-link')[0].click(); await tick();
+  assert.equal(analyses, 1, 'Existing matching report is reused'); assert.equal(received.at(-1).pointId, 'first');
+});
+test('a failed analysis does not navigate a custom log to an unrelated report', async t => {
+  const summary = clickableCustomFixture();
+  const { dom, doc } = createUi({ readCustom: async () => ({ messages: [], summary }), analyze: async () => { throw Error('analysis failed'); } });
+  t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick(); doc.getElementById('tab-coverage').click();
+  doc.querySelector('.custom-point-link').click(); await tick();
+  assert.equal(doc.getElementById('page-coverage').hidden, false); assert.equal(doc.getElementById('report-frame').hidden, true);
+  assert.match(doc.getElementById('toast').textContent, /analysis failed/);
+});

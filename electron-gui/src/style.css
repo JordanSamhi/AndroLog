@@ -48,3 +48,5 @@ body.busy .package-box,body.busy .box-top{animation:none}
 .package-art{height:135px}.package-art svg{height:130px;width:180px}.action-panel>.animation-caption{font-size:11px;color:#47806b;text-align:center;margin:0 0 18px;min-height:17px}
 
 .point-row.unobserved{background:#fff0ee}.point-row.unobserved strong{color:#713e39}.point-row.unobserved .point-status{color:#a53e40}.point-row.unobserved small{color:#886a64}.point-row>div{min-width:0}.point-row strong{white-space:normal}.messages-heading p[hidden]{display:none}
+
+.custom-point-link{width:100%;text-align:left;cursor:pointer}.custom-point-link:hover:not(:disabled){box-shadow:inset 0 0 0 1px #92b7a2}.custom-point-link .point-detail{min-width:0}.custom-point-link:focus-visible{outline:3px solid #168b69;outline-offset:2px}

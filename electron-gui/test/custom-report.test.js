@@ -20,7 +20,11 @@ test('point markers distinguish identical messages, persist per build and appear
   const logPath = path.join(dir, 'test.log'); await fs.writeFile(logPath, `I/TEST( 123): CUSTOM_POINT=${plan.points[0].id}\nTEST: CUSTOM_POINT=${plan.points[0].id}\nOTHER: CUSTOM_POINT=${plan.points[1].id}\n`);
   const log = await readCustomMessages(logPath, 'TEST'); const summary = summarize(stored, log);
   assert.equal(summary.observed, 1); assert.equal(summary.points[0].count, 2); assert.equal(summary.points[1].count, 0);
-  const html = addReportPanel('<section class="metrics" id="metrics"></section>', summary);
+  const html = addReportPanel('<section class="metrics" id="metrics"></section><script type="application/json" id="report-data">{"appName":"Fixture"}</script>', summary);
+  const embedded = JSON.parse(html.match(/id="report-data">([\s\S]*?)<\/script>/)[1]);
+  assert.deepEqual(embedded.customPoints, summary.points);
+  assert.equal(embedded.appName, 'Fixture');
+  assert.ok(html.includes(`href="#custom=${plan.points[0].id}"`));
   assert.match(html, /<h2>Custom logs<\/h2>/); assert.match(html, />Covered<\/span>/); assert.match(html, />Not covered<\/span>/);
   assert.match(html, /&lt;script&gt;same/); assert.doesNotMatch(html, /<script>same/);
   assert.match(html, /&lt;A: void one\(\)&gt; · statement 1/);

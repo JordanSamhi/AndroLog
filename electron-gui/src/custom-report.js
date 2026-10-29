@@ -48,10 +48,16 @@ function summarize(plan, log) {
 function escape(value) { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function addReportPanel(html, summary) {
   if (!summary) return html;
-  const rows = summary.points.map(point => `<li class="custom-point ${point.count ? 'seen' : 'unseen'}"><div><strong>${escape(point.message)}</strong><small>${escape(point.method)} · statement ${escape(point.index)}</small></div><span title="${point.count ? 'A matching point marker was found in the supplied log.' : 'No matching point marker was found in the supplied log.'}">${point.count ? 'Covered' : 'Not covered'}</span></li>`).join('');
-  const panel = `<style>.custom-points{margin:0 0 20px;padding:17px 20px;background:white;border:1px solid #dce4e9;border-radius:12px}.custom-points h2{font-size:16px;color:#172e43;margin:0 0 12px}.custom-points ul{padding:0;margin:0;list-style:none}.custom-point{display:flex;justify-content:space-between;gap:14px;padding:12px;border-radius:8px;margin-top:7px;overflow-wrap:anywhere}.custom-point.seen{background:#e2f5e9}.custom-point.unseen{background:#fff0ee}.custom-point small{display:block;color:#536879;font-size:11px;margin-top:4px}.custom-point span{white-space:nowrap;font-size:12px;font-weight:700;color:#087c70}.custom-point.unseen span{color:#a53e40}</style><section class="custom-points" aria-label="Custom logs"><h2>Custom logs</h2><ul>${rows}</ul></section>`;
+  const dataElement = /(<script\b[^>]*\bid="report-data"[^>]*>)([\s\S]*?)(<\/script>)/;
+  const match = dataElement.exec(html);
+  if (!match) throw new Error('Could not attach custom log locations to the report.');
+  const data = JSON.parse(match[2]); data.customPoints = summary.points;
+  const json = JSON.stringify(data).replace(/[<>&\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+  html = html.replace(dataElement, (_match, open, _data, close) => open + json + close);
+  const rows = summary.points.map(point => `<li><a href="#custom=${encodeURIComponent(point.id)}" data-custom-point="${escape(point.id)}" class="custom-point ${point.count ? 'seen' : 'unseen'}"><div><strong>${escape(point.message)}</strong><small>${escape(point.method)} · statement ${escape(point.index)}</small></div><span title="${point.count ? 'A matching point marker was found in the supplied log.' : 'No matching point marker was found in the supplied log.'}">${point.count ? 'Covered' : 'Not covered'}</span></a></li>`).join('');
+  const panel = `<style>.custom-points{margin:0 0 20px;padding:17px 20px;background:white;border:1px solid #dce4e9;border-radius:12px}.custom-points h2{font-size:16px;color:#172e43;margin:0 0 12px}.custom-points ul{padding:0;margin:0;list-style:none}.custom-point{color:inherit;text-decoration:none;display:flex;justify-content:space-between;gap:14px;padding:12px;border-radius:8px;margin-top:7px;overflow-wrap:anywhere}.custom-point:focus-visible{outline:3px solid #087c70;outline-offset:2px}.custom-point:hover{box-shadow:inset 0 0 0 1px #a4b8ae}.custom-point.seen{background:#e2f5e9}.custom-point.unseen{background:#fff0ee}.custom-point small{display:block;color:#536879;font-size:11px;margin-top:4px}.custom-point span{white-space:nowrap;font-size:12px;font-weight:700;color:#087c70}.custom-point.unseen span{color:#a53e40}</style><section class="custom-points" aria-label="Custom logs"><h2>Custom logs</h2><ul>${rows}</ul></section>`;
   const anchor = '<section class="metrics" id="metrics"';
   if (!html.includes(anchor)) throw new Error('Could not add custom points to the report.');
-  return html.replace(anchor, panel + anchor);
+  return html.replace(anchor, () => panel + anchor);
 }
 module.exports = { preparePlan, savePlan, listPlans, selectPlan, summarize, addReportPanel };

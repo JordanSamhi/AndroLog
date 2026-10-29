@@ -152,6 +152,11 @@
     .code-table tr.declaration.uncovered > .line-code { background: #fde5e1; }
     .code-table tr.declaration.covered.navigation-target > .line-code { background: #c6ead4; }
     .code-table tr.declaration.uncovered.navigation-target > .line-code { background: #f9d5ce; }
+    .custom-inline-log { display: inline-flex; align-items: baseline; gap: 7px; max-width: 460px; padding: 1px 8px; margin: 0 0 0 18px; border-radius: 5px; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; font: 11px/20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .custom-inline-log.covered { background: #dcf3e5; color: #12623f; }
+    .custom-inline-log.uncovered { background: #fde7e3; color: #933c37; }
+    .custom-log-marker { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: currentColor; align-self: center; }
+    .custom-navigation-note { margin: 0 0 12px; color: #536879; font-size: 12px; }
     .code-table tr:focus-visible { outline: 2px solid #438ab7; outline-offset: -2px; }
     .graph-header { padding: 20px 23px 15px; border-bottom: 1px solid var(--line); }
     .graph-header h2 { margin-bottom: 5px; }
@@ -286,6 +291,7 @@
       <button class="view-tab" id="code-view-tab" type="button" role="tab" aria-selected="true" aria-controls="code-view" data-report-view="code">Code</button>
       <button class="view-tab" id="graph-view-tab" type="button" role="tab" aria-selected="false" aria-controls="graph-view" data-report-view="graph" tabindex="-1">Dynamic call graph</button>
     </div>
+    <p id="custom-navigation-note" class="custom-navigation-note" role="status" hidden></p>
     <section class="workspace" id="code-view" role="tabpanel" aria-labelledby="code-view-tab">
       <aside class="sidebar panel" aria-label="Class navigation">
         <div class="sidebar-head">
@@ -400,7 +406,7 @@
       var codeIndex = codeLinks.createIndex(classes);
       var classByName = Object.create(null), classPackages = Object.create(null), classMetrics = Object.create(null);
       var activeCategory = 'classes';
-      var selected = null, activeFilter = 'all', methodTargets = Object.create(null), classTarget = null;
+      var selected = null, activeFilter = 'all', methodTargets = Object.create(null), customTargets = Object.create(null), classTarget = null;
       var expandedPackages = Object.create(null), searchCollapsed = Object.create(null);
       var packageLimits = Object.create(null), searchLimits = Object.create(null);
       var searchQuery = '', nextPackageId = 0, selectedAnchor = null;
@@ -424,6 +430,27 @@
           node = node.children[part];
         });
         node.classes.push(item); classPackages[name] = node;
+      });
+      // Resolve selected points against original Jimple coordinates and text. A custom
+      // marker never changes the independent automatic statement-coverage status.
+      var customById = Object.create(null), customByRow = Object.create(null), statementsByMethod = Object.create(null);
+      classes.forEach(function (clazz) { list(clazz.methods).forEach(function (method) {
+        var rows = Object.create(null); list(method.statements).forEach(function (row) { rows[String(row.line)] = row; });
+        statementsByMethod[String(method.signature)] = rows;
+      }); });
+      list(data.customPoints).forEach(function (point) {
+        if (!point || typeof point.id !== 'string' || !point.id || typeof point.method !== 'string') return;
+        if (Object.prototype.hasOwnProperty.call(customById, point.id)) { customById[point.id].valid = false; return; }
+        var rows = statementsByMethod[point.method], row = rows && rows[String(point.index)];
+        var valid = Number.isSafeInteger(point.index) && point.index > 0 && typeof point.statement === 'string' && row && String(row.text) === point.statement;
+        var resolved = { id: point.id, method: point.method, index: point.index, message: String(point.message || ''), covered: Number(point.count) > 0, className: codeIndex.methods.get(point.method), valid: Boolean(valid) };
+        customById[point.id] = resolved;
+      });
+      Object.keys(customById).forEach(function (id) {
+        var point = customById[id]; if (!point.valid) return;
+        var key = JSON.stringify([point.method, point.index]);
+        if (!customByRow[key]) customByRow[key] = [];
+        customByRow[key].push(point);
       });
       $('class-total').textContent = format(classes.length);
       function matchesQuery(item) {
@@ -467,13 +494,13 @@
         if (activeCategory === 'methods' && selected) $('method-select').focus({ preventScroll: true });
         else if (selectedAnchor) selectedAnchor.focus({ preventScroll: true });
       }
-      // The desktop shell may open a selected coverage category in this report.
-      // No code or data is accepted from the parent window.
+      // Parent messages select only categories or points already embedded in this report.
       window.addEventListener('message', function (event) {
-        if (window.parent === window || event.source !== window.parent || !event.data ||
-            event.data.type !== 'androlog.selectCategory' || typeof event.data.category !== 'string' ||
-            !Object.prototype.hasOwnProperty.call(categoryLabels, event.data.category)) return;
-        selectCategory(event.data.category);
+        if (window.parent === window || event.source !== window.parent || !event.data) return;
+        if (event.data.type === 'androlog.selectCategory' && typeof event.data.category === 'string' &&
+            Object.prototype.hasOwnProperty.call(categoryLabels, event.data.category)) selectCategory(event.data.category);
+        else if (event.data.type === 'androlog.selectCustomPoint' && typeof event.data.pointId === 'string' &&
+            Object.prototype.hasOwnProperty.call(customById, event.data.pointId)) navigateCustomPoint(event.data.pointId);
       });
       function updateMatches(node) {
         node.matches = node.classes.filter(matchesFilters);
@@ -644,7 +671,7 @@
         });
       }
       function renderSource() {
-        clear($('source-lines')); methodTargets = Object.create(null); classTarget = null;
+        clear($('source-lines')); methodTargets = Object.create(null); customTargets = Object.create(null); classTarget = null;
         var methods = list(selected && selected.methods), shownMethods = 0, shownStatements = 0, totalStatements = 0;
         var sourceLine = 0, fragment = document.createDocumentFragment();
         var markers = { covered: '+', uncovered: '−', excluded: '·', unmeasured: '·' };
@@ -694,7 +721,21 @@
           } else {
             code.textContent = text || ' ';
           }
-          cell.appendChild(code); tr.appendChild(cell); fragment.appendChild(tr);
+          cell.appendChild(code);
+          if (options.statement && options.part === 1) {
+            var customPoints = customByRow[JSON.stringify([options.signature, Number(options.statement.line)])] || [];
+            customPoints.forEach(function (point) {
+              var status = point.covered ? 'covered' : 'uncovered';
+              var annotation = make('span', 'custom-inline-log ' + status);
+              annotation.setAttribute('data-custom-point-id', point.id);
+              annotation.setAttribute('aria-label', 'Custom log: ' + point.message + ' · ' + (point.covered ? 'Covered' : 'Not covered'));
+              annotation.title = point.covered ? 'Custom log covered in the supplied runtime log.' : 'Custom log not covered in the supplied runtime log.';
+              var marker = make('span', 'custom-log-marker'); marker.setAttribute('aria-hidden', 'true');
+              annotation.appendChild(marker); annotation.appendChild(make('span', '', point.message)); cell.appendChild(annotation);
+              customTargets[point.id] = tr; tr.tabIndex = -1;
+            });
+          }
+          tr.appendChild(cell); fragment.appendChild(tr);
           return tr;
         }
         classTarget = appendLine(String(selected.name || 'Class'), 'class-declaration declaration', { classDeclaration: true, status: statusFor(selected.classCovered) });
@@ -740,10 +781,25 @@
       }
       function parseRoute() {
         var params = new URLSearchParams(window.location.hash.slice(1));
-        return { className: params.get('class'), methodSignature: params.get('method') };
+        var pointId = params.get('custom'), point = pointId && customById[pointId];
+        return { className: point && point.valid ? point.className : params.get('class'), methodSignature: point && point.valid ? point.method : params.get('method'), customPointId: pointId };
       }
       function applyRoute(moveFocus) {
         var route = parseRoute();
+        $('custom-navigation-note').hidden = true;
+        if (route.customPointId) {
+          var customPoint = customById[route.customPointId];
+          if (!customPoint || !customPoint.valid) {
+            var oldTargets = $('source-lines').querySelectorAll('.navigation-target');
+            for (var c = 0; c < oldTargets.length; c++) oldTargets[c].classList.remove('navigation-target');
+            $('custom-navigation-note').textContent = customPoint ? 'This custom log location is outside the report scope or no longer matches its statement. Analyze the original APK with a scope that includes this method.' : 'This custom log point is not present in this report.';
+            $('custom-navigation-note').hidden = false; renderClassList();
+            if (typeof $('custom-navigation-note').scrollIntoView === 'function') $('custom-navigation-note').scrollIntoView({ block: 'center' });
+            return;
+          }
+          activeCategory = 'classes'; searchQuery = ''; $('class-search').value = '';
+          searchCollapsed = Object.create(null); searchLimits = Object.create(null);
+        }
         if (!route.className) {
           if (window.location.hash && window.location.hash !== '#' && selected) return;
           if (!classes.length) { renderClassList(); return; }
@@ -758,7 +814,7 @@
           $('explorer-empty').appendChild(make('p', '', 'The linked class is not present in this report. Select a class from the package tree.'));
           renderClassList(); return;
         }
-        var needsRender = selected !== item || activeFilter !== 'all';
+        var needsRender = Boolean(route.customPointId) || selected !== item || activeFilter !== 'all';
         selected = item; setFilter('all'); revealSelectedClass();
         if (needsRender) renderSelectedClass();
         else {
@@ -766,7 +822,7 @@
           for (var i = 0; i < previousTargets.length; i++) previousTargets[i].classList.remove('navigation-target');
         }
         $('method-select').value = route.methodSignature || '';
-        var target = route.methodSignature ? methodTargets[route.methodSignature] : classTarget;
+        var target = route.customPointId ? customTargets[route.customPointId] : route.methodSignature ? methodTargets[route.methodSignature] : classTarget;
         if (!target) {
           target = classTarget;
           $('detail-status').textContent = 'The linked method is not present in this class. All available methods are shown.';
@@ -779,6 +835,12 @@
           viewport.scrollTop = Math.max(0, targetTop - 18);
         } else viewport.scrollTop = 0;
         if ((moveFocus || route.methodSignature) && target) target.focus({ preventScroll: true });
+        if (route.customPointId && target && typeof $('code-explorer').scrollIntoView === 'function') $('code-explorer').scrollIntoView({ block: 'start' });
+      }
+      function navigateCustomPoint(id) {
+        activateView('code');
+        var next = '#custom=' + encodeURIComponent(id);
+        if (window.location.hash === next) applyRoute(true); else window.location.hash = next;
       }
       function navigate(className, methodSignature) {
         activateView('code');
@@ -808,6 +870,8 @@
       document.addEventListener('click', function (event) {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         var element = event.target.nodeType === 1 ? event.target : event.target.parentElement;
+        var customAnchor = element && element.closest('a[data-custom-point]');
+        if (customAnchor) { event.preventDefault(); navigateCustomPoint(customAnchor.getAttribute('data-custom-point')); return; }
         var anchor = element && element.closest('a[data-code-class]');
         if (!anchor) return;
         event.preventDefault(); navigate(anchor.getAttribute('data-code-class'), anchor.getAttribute('data-code-method') || undefined);
