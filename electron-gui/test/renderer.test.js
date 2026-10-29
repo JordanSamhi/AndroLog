@@ -413,3 +413,84 @@ test('a successful capture returned after a late cancel still synchronizes the s
   doc.getElementById('analyze').click(); await tick();
   assert.equal(analyses, 1); assert.equal(analyzedTag, 'FINISHED');
 });
+
+function variableCatalog() {
+  return { apkSha256: 'a'.repeat(64), methods: [{ className: 'org.example.Main', signature: '<org.example.Main: void run()>', statements: [
+    { index: 1, text: 'i0 = 3', selectable: true, locals: [] },
+    { index: 2, text: 'i1 = i0 + 1', selectable: true, locals: [{ name: 'i0', type: 'int' }, { name: 'z0', type: 'boolean' }, { name: '$r1', type: 'java.lang.String' }, { name: 'object', type: 'java.lang.Object' }] },
+    { index: 3, text: 'return', selectable: true, locals: [{ name: 'i1', type: 'int' }] }
+  ] }] };
+}
+async function openVariableEditor(doc) {
+  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('open-custom').click(); await tick();
+}
+function enterMessage(window, doc, message) {
+  const input = doc.getElementById('point-message'); input.value = message; input.dispatchEvent(new window.Event('input', { bubbles: true })); return input;
+}
+function insertVariable(doc, name) {
+  doc.getElementById('insert-variable').click();
+  [...doc.querySelectorAll('.variable-choice')].find(button => button.dataset.variable === name).click();
+}
+test('Insert variable offers only initialized supported locals at the selected point', async t => {
+  const { dom, doc } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
+  await openVariableEditor(doc);
+  assert.equal(doc.getElementById('insert-variable').disabled, true);
+  doc.querySelectorAll('.code-line')[0].click();
+  assert.equal(doc.getElementById('insert-variable').disabled, true); assert.match(doc.getElementById('variable-hint').textContent, /No initialized/);
+  doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('insert-variable').click();
+  assert.equal(doc.getElementById('variable-picker').hidden, false);
+  assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['i0', 'z0', '$r1']);
+  assert.match(doc.querySelectorAll('.variable-choice')[1].textContent, /boolean/); assert.match(doc.querySelectorAll('.variable-choice')[2].textContent, /String/);
+  doc.querySelectorAll('.code-line')[2].click(); assert.equal(doc.getElementById('variable-picker').hidden, true);
+  doc.getElementById('insert-variable').click();
+  assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['i1']);
+});
+test('variable insertion replaces the selected text at the cursor and sends typed bindings', async t => {
+  const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();
+  const input = enterMessage(window, doc, 'score = xx end'); input.setSelectionRange(8, 10); insertVariable(doc, 'i0');
+  assert.equal(input.value, 'score = {i0} end'); assert.equal(input.selectionStart, 12); assert.equal(doc.activeElement, input);
+  input.setSelectionRange(input.value.length, input.value.length); insertVariable(doc, 'z0'); insertVariable(doc, '$r1');
+  assert.equal(input.value, 'score = {i0} end{z0}{$r1}');
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[0].variables)), [{ name: 'i0', type: 'int' }, { name: 'z0', type: 'boolean' }, { name: '$r1', type: 'java.lang.String' }]);
+});
+test('typed variable bindings survive point changes and reopening while Cancel preserves applied points', async t => {
+  const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); insertVariable(doc, 'i0');
+  doc.querySelectorAll('.code-line')[2].click(); enterMessage(window, doc, 'last');
+  doc.querySelectorAll('.code-line')[1].click(); assert.equal(doc.getElementById('point-message').value, '{i0}');
+  doc.getElementById('code-apply').click(); doc.getElementById('open-custom').click(); await tick();
+  doc.querySelectorAll('.code-line')[1].click(); assert.equal(doc.getElementById('point-message').value, '{i0}');
+  doc.getElementById('remove-point').click(); doc.getElementById('code-cancel').click();
+  doc.getElementById('instrument').click(); await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[0].variables)), [{ name: 'i0', type: 'int' }]);
+  assert.equal(calls[0].plan.points[0].message, '{i0}');
+});
+test('removing the last variable token prunes its binding and manually typed braces stay literal', async t => {
+  const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); insertVariable(doc, 'i0'); insertVariable(doc, 'i0');
+  enterMessage(window, doc, 'one {i0}'); doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  assert.equal(calls[0].plan.points[0].variables.length, 1);
+  doc.getElementById('open-custom').click(); await tick(); doc.querySelectorAll('.code-line')[1].click();
+  enterMessage(window, doc, 'no token'); enterMessage(window, doc, 'literal {i0}');
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  assert.equal(calls[1].plan.points[0].message, 'literal {i0}'); assert.equal(calls[1].plan.points[0].variables, undefined);
+});
+test('Escape closes the variable picker without dismissing the code editor', async t => {
+  const { dom, window, doc } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('insert-variable').click();
+  const event = new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  doc.querySelector('.variable-choice').dispatchEvent(event);
+  assert.equal(event.defaultPrevented, true); assert.equal(doc.getElementById('variable-picker').hidden, true); assert.equal(doc.getElementById('code-dialog').open, true);
+  assert.equal(doc.activeElement, doc.getElementById('insert-variable'));
+});
+test('coverage shows the latest actual variable message as inert text and preserves the code link', async t => {
+  const samples = ['score=1', '<img src=x onerror="window.bad=true"> score=2'];
+  const { dom, window, doc } = createUi({ analyze: async () => ({ coverageSummary: {}, custom: { summary: { points: [{ id: 'variables', message: 'score={i0}', method: '<A: void run()>', index: 2, status: 'covered', count: 2, samples }] } } }) });
+  t.after(() => dom.window.close()); await selectRun(doc); doc.getElementById('analyze').click(); await tick();
+  const sample = doc.querySelector('.point-sample'); assert.equal(sample.textContent, 'Latest: ' + samples.at(-1));
+  assert.equal(sample.querySelector('img'), null); assert.equal(window.bad, undefined);
+  assert.match(doc.querySelector('.point-status').textContent, /Covered/); doc.querySelector('.custom-point-link').click();
+  assert.equal(doc.getElementById('page-explore').hidden, false);
+});

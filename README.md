@@ -39,14 +39,14 @@ Open the **original APK** in **Instrument**. Select classes, methods, statements
 
 [![Instrument view: choose an APK, logging options, and a Logcat tag](data/screenshots/gui-instrument.png)](data/screenshots/gui-instrument.png)
 
-Want a message at one specific point? Open **Your own messages**, browse the package → class → method tree, select a statement, and type a message such as `reached this point`.
+Want a message at one specific point? Open **Your own messages**, browse the package → class → method tree, select a statement, and type a message such as `reached this point`. Use **Insert variable** to include an available local number, boolean, or string, for example `score = {i3}`.
 
 <details>
 <summary>See custom log selection</summary>
 
-[![Custom log editor with package and method navigation, a selected statement, and a message field](data/screenshots/gui-custom-logs.png)](data/screenshots/gui-custom-logs.png)
+[![Custom log editor with a selected statement and the Insert variable picker showing local names and types](data/screenshots/gui-custom-logs.png)](data/screenshots/gui-custom-logs.png)
 
-The code browser shows Jimple reconstructed from the APK. Messages are literal text, emitted whenever the selected point is reached.
+The code browser shows Jimple reconstructed from the APK. Messages and selected variable values are logged just before the chosen statement executes.
 
 </details>
 
@@ -69,7 +69,7 @@ Each test keeps the exact APK and its logs together. You can also use the comman
 
 [![Coverage dashboard with observed totals, percentages, and custom log results](data/screenshots/gui-coverage.png)](data/screenshots/gui-coverage.png)
 
-Custom logs show their location and a green **Covered** or red **Not covered** marker. Click one to jump to its statement. Red means not observed in this capture, not necessarily unreachable.
+Custom logs show their location, latest recorded value when available, and a green **Covered** or red **Not covered** marker. Click one to jump to its statement. Red means not observed in this capture, not necessarily unreachable.
 
 **The instrumented APK and its logs are enough to analyze a run on another computer.** No original APK or local instrumentation history is required. AndroLog's added code is excluded from the statistics.
 

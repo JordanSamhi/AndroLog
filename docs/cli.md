@@ -240,8 +240,8 @@ java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 | `-html`, `--html <file>` | Write a standalone HTML report. Requires `-pa`, `-pam`, or `--capture`. |
 | `-j`, `--json <file>` | Write a JSON report. Requires `-pa`, `-pam`, or `--capture`. |
 | `--instrumented-input` | Read expected probes and custom points from the instrumented APK when using `-pa` or `-pam`. No probe flags or local catalog are required. |
-| `--inspect-code <file>` | Export the original Jimple statements to a JSON catalog without changing or signing the APK. |
-| `--custom-logs <file>` | Instrument the exact points in an APK-bound JSON plan. May be used alone or with automatic probes; cannot be combined with capture or reporting. |
+| `--inspect-code <file>` | Export original Jimple statements and initialized supported locals to a JSON catalog without changing or signing the APK. |
+| `--custom-logs <file>` | Instrument text and selected local values at exact points in an APK-bound JSON plan. May be used alone or with automatic probes; cannot be combined with capture or reporting. |
 | `--custom-report-only` | Allow an HTML code report without automatic coverage probes. Requires `-pa` or `-pam` and `-html`. Not needed with `--instrumented-input`. |
 
 ### Capture

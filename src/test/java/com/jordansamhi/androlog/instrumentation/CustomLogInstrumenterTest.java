@@ -90,6 +90,71 @@ public class CustomLogInstrumenterTest {
         try { missing.verifyComplete(); fail("Expected missing point failure"); } catch (IOException expected) { assertTrue(expected.getMessage().contains("not found")); }
     }
 
+    @Test public void generatedBytecodeLogsTypedLocalValuesAndRepeatedPlaceholders() throws Exception {
+        runtimeSignatures();
+        List<Type> types = Arrays.asList(IntType.v(), BooleanType.v(), string(), LongType.v(), FloatType.v(), DoubleType.v(), ByteType.v(), ShortType.v());
+        JimpleBody body = body(method(app, "values", types, VoidType.v()));
+        List<CustomLogPlan.Variable> variables = new ArrayList<>();
+        for (int i = 0; i < types.size(); i++) {
+            parameter(body, "v" + i, types.get(i), i); variables.add(new CustomLogPlan.Variable("v" + i, types.get(i).toString()));
+        }
+        Unit end = Jimple.v().newReturnVoidStmt(); body.getUnits().add(end);
+        CustomLogPlan.Point point = new CustomLogPlan.Point(body.getMethod().getSignature(), 9, end.toString(),
+                "{v0}|{v1}|{v2}|{v3}|{v4}|{v5}|{v6}|{v7}|again={v0}");
+        point.variables = variables;
+        CustomLogInstrumenter custom = new CustomLogInstrumenter("TEST", new CustomLogPlan(String.join("", Collections.nCopies(64, "a")), Collections.singletonList(point)));
+        custom.capture(body); custom.instrument(body); custom.verifyComplete();
+        Set<String> valueSignatures = new HashSet<>();
+        for (Unit unit : body.getUnits()) if (unit instanceof Stmt && ((Stmt) unit).containsInvokeExpr()) {
+            SootMethodRef reference = ((Stmt) unit).getInvokeExpr().getMethodRef();
+            if (reference.declaringClass().getName().equals(CustomLogInstrumenter.RUNTIME_CLASS) && reference.name().equals("value")) {
+                valueSignatures.add(reference.getSubSignature().toString());
+            }
+        }
+        assertTrue(valueSignatures.contains("void value(java.lang.StringBuilder,byte)"));
+        assertTrue(valueSignatures.contains("void value(java.lang.StringBuilder,short)"));
+        ByteArrayOutputStream output = new ByteArrayOutputStream(); PrintStream previous = System.out;
+        try {
+            System.setOut(new PrintStream(output, true, "UTF-8"));
+            load().getMethod("values", int.class, boolean.class, String.class, long.class, float.class, double.class, byte.class, short.class)
+                    .invoke(null, 42, true, "line\nnext", 1234567890123L, 1.5f, 2.25d, (byte) -7, (short) 300);
+        } finally { System.setOut(previous); }
+        assertTrue(output.toString("UTF-8").contains("CUSTOM_VALUE=" + point.id + "|42|true|line\\nnext|1234567890123|1.5|2.25|-7|300|again=42"));
+        assertTrue(output.toString("UTF-8").contains("CUSTOM_POINT=" + point.id));
+    }
+
+    @Test public void variablesMustBeInitializedBeforeTheSelectedStatement() throws Exception {
+        JimpleBody body = body(method(app, "tooEarly", Collections.emptyList(), VoidType.v()));
+        Local value = local(body, "value", IntType.v());
+        Unit assignment = Jimple.v().newAssignStmt(value, IntConstant.v(42));
+        Collections.addAll(body.getUnits(), assignment, Jimple.v().newReturnVoidStmt());
+        CustomLogPlan.Point point = new CustomLogPlan.Point(body.getMethod().getSignature(), 1, assignment.toString(), "{value}");
+        point.variables.add(new CustomLogPlan.Variable("value", "int"));
+        CustomLogInstrumenter custom = new CustomLogInstrumenter("TEST", new CustomLogPlan(String.join("", Collections.nCopies(64, "a")), Collections.singletonList(point)));
+        try { custom.capture(body); fail("Expected uninitialized local rejection"); }
+        catch (IllegalArgumentException expected) { assertTrue(expected.getMessage().contains("not initialized")); }
+    }
+
+    @Test public void bracesRemainLiteralWithoutAnExplicitVariableSelection() throws Exception {
+        JimpleBody body = body(method(app, "literalBraces", Collections.emptyList(), VoidType.v()));
+        Unit end = Jimple.v().newReturnVoidStmt(); body.getUnits().add(end);
+        CustomLogInstrumenter custom = custom(body, 1, end.toString(), "value={value}");
+        custom.capture(body); custom.instrument(body); load().getMethod("literalBraces").invoke(null);
+        assertEquals(Collections.singletonList("CUSTOM=value={value}"), messages);
+    }
+
+    private void runtimeSignatures() {
+        SootClass builder = type("java.lang.StringBuilder", object);
+        SootClass runtime = type(CustomLogInstrumenter.RUNTIME_CLASS, object);
+        runtime.setResolvingLevel(SootClass.SIGNATURES); builder.setResolvingLevel(SootClass.SIGNATURES);
+        method(runtime, "create", Collections.emptyList(), builder.getType());
+        method(runtime, "text", Arrays.asList(builder.getType(), string()), VoidType.v());
+        for (Type type : Arrays.asList(ByteType.v(), ShortType.v(), IntType.v(), BooleanType.v(), string(), LongType.v(), FloatType.v(), DoubleType.v())) {
+            method(runtime, "value", Arrays.asList(builder.getType(), type), VoidType.v());
+        }
+        method(runtime, "write", Arrays.asList(string(), string(), string(), builder.getType()), VoidType.v());
+    }
+
     private CustomLogInstrumenter custom(Body body, int index, String statement, String message) throws IOException {
         return new CustomLogInstrumenter("TEST", new CustomLogPlan(String.join("", Collections.nCopies(64, "a")), Collections.singletonList(
                 new CustomLogPlan.Point(body.getMethod().getSignature(), index, statement, message))));

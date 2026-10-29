@@ -170,6 +170,7 @@ public class Main {
                     if (custom != null) custom.registerInstrumentation();
                     Logger.v().instrument();
                     if (custom != null) { custom.verifyComplete(); customPlan.verifyApk(apk); }
+                    if (custom != null) custom.includeRuntimeClasses();
                     if (calls != null) calls.includeRuntimeClasses();
                 });
                 console.stage("Export instrumented APK", () -> Logger.v().exportNewApk(outputDirectory.toString()));
@@ -333,7 +334,7 @@ public class Main {
                 new CommandLineOption("inspect-code", "inspect-code", "Write original Jimple statements to a JSON catalog without modifying the APK", true, false),
                 new CommandLineOption("custom-report-only", "custom-report-only", "Allow a code report without automatic coverage probes", false, false),
                 new CommandLineOption("instrumented-input", "instrumented-input", "Read expected probes and custom points directly from the instrumented APK (reporting only)", false, false),
-                new CommandLineOption("custom-logs", "custom-logs", "Insert literal messages at points selected in a JSON plan (instrumentation only)", true, false),
+                new CommandLineOption("custom-logs", "custom-logs", "Insert text and selected local values at points in a JSON plan (instrumentation only)", true, false),
                 new CommandLineOption("classes", "c", "Instrument or measure classes", false, false),
                 new CommandLineOption("methods", "m", "Instrument or measure methods", false, false),
                 new CommandLineOption("statements", "s", "Instrument or measure statements", false, false),

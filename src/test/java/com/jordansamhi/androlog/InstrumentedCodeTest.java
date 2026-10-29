@@ -118,6 +118,60 @@ public class InstrumentedCodeTest {
         assertEquals(2, scan.customPoints.get(1).get("index"));
     }
 
+    @Test public void variableTemplatesRemainPortableAndDoNotHideOriginalValueDefinitions() {
+        SootClass helper = type("com.jordansamhi.androlog.runtime.CustomLogRuntime", object);
+        RefType builderType = type("java.lang.StringBuilder", object).getType();
+        SootMethod create = method(helper, "create", Collections.emptyList(), builderType);
+        SootMethod text = method(helper, "text", Arrays.asList(builderType, string()), VoidType.v());
+        SootMethod value = method(helper, "value", Arrays.asList(builderType, IntType.v()), VoidType.v());
+        SootMethod write = method(helper, "write", Arrays.asList(string(), string(), string(), builderType), VoidType.v());
+        JimpleBody body = body("dynamic");
+        Local number = local(body, "i3", IntType.v()), copied = local(body, "copy", IntType.v());
+        Local builder = local(body, "$custom", builderType), template = local(body, "$template", string());
+        body.getUnits().add(Jimple.v().newAssignStmt(number, IntConstant.v(42)));
+        body.getUnits().add(Jimple.v().newAssignStmt(copied, number));
+        body.getUnits().add(Jimple.v().newAssignStmt(builder, Jimple.v().newStaticInvokeExpr(create.makeRef())));
+        body.getUnits().add(invoke(text, builder, StringConstant.v("score=")));
+        body.getUnits().add(invoke(value, builder, copied));
+        body.getUnits().add(Jimple.v().newAssignStmt(template, StringConstant.v("score={i3}")));
+        body.getUnits().add(invoke(write, StringConstant.v("TEST"), StringConstant.v("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), template, builder));
+        body.getUnits().add(Jimple.v().newReturnVoidStmt());
+        InstrumentedCode.Result scan = InstrumentedCode.inspect(body, "TEST", null);
+        assertTrue(scan.foundProbes); assertTrue(scan.expected.isEmpty());
+        assertEquals(3, scan.code.getStatements().size());
+        assertEquals("i3 = 42", scan.code.getStatements().get(0).getText());
+        assertEquals("copy = i3", scan.code.getStatements().get(1).getText());
+        assertEquals("return", scan.code.getStatements().get(2).getText());
+        Map<String, Object> point = scan.customPoints.get(0);
+        assertEquals("score={i3}", point.get("message")); assertEquals(Boolean.TRUE, point.get("dynamic"));
+        assertEquals("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", point.get("id")); assertEquals(3, point.get("index"));
+        assertTrue(InstrumentedCode.isHelper(helper.getName()));
+        assertFalse(InstrumentedCode.inspect(body, "OTHER", null).foundProbes);
+    }
+
+    @Test public void narrowPrimitiveHelperOverloadsAreHiddenWithoutLosingTheOriginalAssignment() {
+        SootClass helper = type("com.jordansamhi.androlog.runtime.CustomLogRuntime", object);
+        RefType builderType = type("java.lang.StringBuilder", object).getType();
+        SootMethod create = method(helper, "create", Collections.emptyList(), builderType);
+        SootMethod write = method(helper, "write", Arrays.asList(string(), string(), string(), builderType), VoidType.v());
+        for (Type primitive : Arrays.asList(ByteType.v(), ShortType.v())) {
+            SootMethod value = method(helper, "value", Arrays.asList(builderType, primitive), VoidType.v());
+            JimpleBody body = body("narrow" + primitive);
+            Local number = local(body, "number", primitive), builder = local(body, "$custom", builderType);
+            body.getUnits().add(Jimple.v().newAssignStmt(number, IntConstant.v(7)));
+            body.getUnits().add(Jimple.v().newAssignStmt(builder, Jimple.v().newStaticInvokeExpr(create.makeRef())));
+            body.getUnits().add(invoke(value, builder, number));
+            body.getUnits().add(invoke(write, StringConstant.v("TEST"), StringConstant.v("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+                    StringConstant.v("{number}"), builder));
+            body.getUnits().add(Jimple.v().newReturnVoidStmt());
+            InstrumentedCode.Result scan = InstrumentedCode.inspect(body, "TEST", null);
+            assertEquals(2, scan.code.getStatements().size());
+            assertEquals("number = 7", scan.code.getStatements().get(0).getText());
+            assertEquals("return", scan.code.getStatements().get(1).getText());
+            assertEquals(2, scan.customPoints.get(0).get("index"));
+        }
+    }
+
     @Test public void applicationLoggingAndUnpairedMarkersAreNotHiddenByTheirTagOrTextAlone() {
         JimpleBody body = body("ordinary");
         SootMethod appLog = method(application, "log", Arrays.asList(string(), string()), VoidType.v());

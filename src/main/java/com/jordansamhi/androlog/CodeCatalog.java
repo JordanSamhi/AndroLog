@@ -36,6 +36,7 @@ public final class CodeCatalog {
         public int index;
         public String text;
         public boolean selectable;
+        public List<CustomLogPlan.Variable> locals = new ArrayList<>();
         public Statement() { }
         public Statement(int index, String text, boolean selectable) { this.index = index; this.text = text; this.selectable = selectable; }
     }
@@ -47,10 +48,16 @@ public final class CodeCatalog {
                 SootMethod method = body.getMethod(); SootClass owner = method.getDeclaringClass();
                 if (!method.isConcrete() || owner.getName().equals(Constants.LOG_CHECKER_CLASS)
                         || owner.getName().startsWith(MethodCallInstrumenter.RUNTIME_CLASS)
+                        || owner.getName().equals(CustomLogInstrumenter.RUNTIME_CLASS)
                         || !PackageScope.includes(targetPackage, owner.getPackageName())
                         || (!includeLibraries && LibrariesManager.v().isLibrary(owner))) return;
                 List<Statement> statements = new ArrayList<>(); int index = 0;
-                for (Unit unit : body.getUnits()) statements.add(new Statement(++index, unit.toString(), CustomLogInstrumenter.isEligible((Stmt) unit)));
+                LocalVariableAvailability available = new LocalVariableAvailability(body);
+                for (Unit unit : body.getUnits()) {
+                    Statement statement = new Statement(++index, unit.toString(), CustomLogInstrumenter.isEligible((Stmt) unit));
+                    if (statement.selectable) statement.locals = available.at(unit);
+                    statements.add(statement);
+                }
                 collected.put(method.getSignature(), new Method(owner.getName(), method.getSignature(), statements));
             }
         }));

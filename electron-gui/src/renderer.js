@@ -8,6 +8,8 @@
     ['services', 'Services'], ['broadcast-receivers', 'Broadcast receivers'], ['content-providers', 'Content providers']
   ];
   const basename = value => value ? value.split(/[\\/]/).pop() : '';
+  const localTypes = new Set(['byte', 'short', 'int', 'long', 'float', 'double', 'boolean', 'java.lang.String']);
+  let variableSelection = null;
   let toastTimer;
   const deviceTest = { active: false, loading: false, phase: '', started: null, timer: null, request: 0, cancelled: false };
   function toast(text, error = false) { const el = $('toast'); el.textContent = text; el.classList.toggle('error', error); el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 6000); }
@@ -107,7 +109,13 @@
       const location = document.createElement('small'); location.textContent = `${point.method} · statement ${point.index}`; location.title = point.statement;
       const status = document.createElement('span'); status.className = 'point-status'; status.textContent = unknown ? 'Unconfirmed' : observed ? 'Covered' : 'Not covered';
       status.title = unknown ? 'These legacy logs do not distinguish this point from another point with the same message.' : observed ? 'A matching point was observed in this log.' : 'No matching point was observed in this log.';
-      detail.append(message, location); row.append(detail, status); $('messages-list').appendChild(row);
+      detail.append(message, location);
+      const samples = Array.isArray(point.samples) ? point.samples.filter(sample => typeof sample === 'string') : [];
+      if (samples.length) {
+        const sample = document.createElement('small'); sample.className = 'point-sample'; sample.textContent = `Latest: ${samples.at(-1)}`;
+        detail.appendChild(sample);
+      }
+      row.append(detail, status); $('messages-list').appendChild(row);
     }
   }
   for (const [id, values] of [['preset-essentials', [1,1,0,1,0]], ['preset-all', [1,1,1,1,1]], ['preset-custom', [0,0,0,0,0]]]) {
@@ -330,9 +338,9 @@
       toast('The APK changed. Choose the log points again.');
     }
     state.catalog = catalog;
-    state.draft = new Map([...state.points].map(([key, point]) => [key, { ...point }])); state.selected = null; state.selectedClass = null;
+    state.draft = new Map([...state.points].map(([key, point]) => [key, { ...point, ...(point.variables ? { variables: point.variables.map(variable => ({ ...variable })) } : {}) }])); state.selected = null; state.selectedClass = null;
     $('class-search').value = ''; $('point-message').value = ''; $('point-message').disabled = true; $('point-label').textContent = 'Select a statement'; $('remove-point').disabled = true;
-    const first = [...new Set(state.catalog.methods.map(m => m.className))].sort()[0]; if (first) { revealPackage(first); state.openClasses.add(first); renderClass(first); } else renderClasses(); $('code-dialog').showModal(); updateDraftCount();
+    const first = [...new Set(state.catalog.methods.map(m => m.className))].sort()[0]; if (first) { revealPackage(first); state.openClasses.add(first); renderClass(first); } else renderClasses(); updateVariables(); $('code-dialog').showModal(); updateDraftCount();
   }
   $('open-custom').addEventListener('click', browseCode);
   function renderClasses() {
@@ -383,7 +391,7 @@
   }
   $('class-search').addEventListener('input', renderClasses);
   function renderClass(name, selectedMethod = null) {
-    state.selectedClass = name; state.selected = null; $('point-message').value = ''; $('point-message').disabled = true; $('remove-point').disabled = true; $('point-label').textContent = 'Select a statement'; $('code-class').textContent = name;
+    state.selectedClass = name; state.selected = null; $('point-message').value = ''; $('point-message').disabled = true; $('remove-point').disabled = true; $('point-label').textContent = 'Select a statement'; $('code-class').textContent = name; updateVariables();
     const lines = $('code-lines'); lines.replaceChildren(); let target = null;
     for (const method of state.catalog.methods.filter(m => m.className === name)) {
       const heading = document.createElement('div'); heading.className = 'code-method'; heading.textContent = method.signature; lines.appendChild(heading); if (method.signature === selectedMethod) target = heading;
@@ -398,18 +406,65 @@
   }
   function selectPoint(method, statement, row, number) {
     $('code-lines').querySelectorAll('.code-line.active').forEach(el => el.classList.remove('active')); row.classList.add('active');
-    const key = identity(method.signature, statement.index); state.selected = { key, method, statement, number };
+    const key = identity(method.signature, statement.index); state.selected = { key, method, statement, number, variables: (state.draft.get(key)?.variables || []).map(variable => ({ ...variable })) };
     $('point-label').textContent = `Before statement ${statement.index}`; $('point-label').title = method.signature;
-    $('point-message').disabled = false; $('point-message').value = state.draft.get(key)?.message || ''; $('remove-point').disabled = !state.draft.has(key); $('point-message').focus();
+    $('point-message').disabled = false; $('point-message').value = state.draft.get(key)?.message || ''; $('remove-point').disabled = !state.draft.has(key); updateVariables(); $('point-message').focus();
   }
+  function availableVariables() {
+    const unique = new Map();
+    for (const local of state.selected?.statement.locals || []) {
+      if (local && typeof local.name === 'string' && /^[^\s{}\u0000-\u001f\u007f]{1,200}$/u.test(local.name) && localTypes.has(local.type)) unique.set(local.name, { name: local.name, type: local.type });
+    }
+    return [...unique.values()];
+  }
+  function closeVariables(focus = false) {
+    $('variable-picker').hidden = true; $('insert-variable').setAttribute('aria-expanded', 'false'); variableSelection = null;
+    if (focus) $('insert-variable').focus();
+  }
+  function updateVariables() {
+    closeVariables();
+    const available = availableVariables(); $('insert-variable').disabled = !available.length;
+    $('variable-hint').textContent = !state.selected ? 'Select a statement to insert a local variable.' : available.length ? 'Insert variables to log their values before this statement.' : 'No initialized number, boolean, or string is available here.';
+    $('insert-variable').title = $('variable-hint').textContent;
+  }
+  $('insert-variable').addEventListener('click', () => {
+    if (!$('variable-picker').hidden) { closeVariables(true); return; }
+    const available = availableVariables(); if (!available.length) return;
+    const input = $('point-message'); variableSelection = { start: input.selectionStart ?? input.value.length, end: input.selectionEnd ?? input.value.length };
+    $('variable-list').replaceChildren();
+    for (const variable of available) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'variable-choice'; button.dataset.variable = variable.name;
+      const name = document.createElement('span'); name.textContent = variable.name;
+      const type = document.createElement('small'); type.textContent = variable.type === 'java.lang.String' ? 'String' : variable.type;
+      button.append(name, type);
+      button.addEventListener('click', () => {
+        if (!state.selected || !variableSelection) return;
+        const token = `{${variable.name}}`, position = variableSelection.start;
+        input.setRangeText(token, variableSelection.start, variableSelection.end, 'end');
+        if (!state.selected.variables.some(selected => selected.name === variable.name)) state.selected.variables.push({ ...variable });
+        closeVariables(); input.focus(); input.setSelectionRange(position + token.length, position + token.length);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      $('variable-list').appendChild(button);
+    }
+    $('variable-picker').hidden = false; $('insert-variable').setAttribute('aria-expanded', 'true'); $('variable-list').firstElementChild?.focus();
+  });
+  $('variable-close').addEventListener('click', () => closeVariables(true));
+  $('variable-picker').addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeVariables(true); }
+  });
+  document.addEventListener('click', event => {
+    if (!$('variable-picker').hidden && !$('variable-picker').contains(event.target) && !$('insert-variable').contains(event.target)) closeVariables();
+  });
   function updateDraftCount() { $('dialog-count').textContent = state.draft.size ? `${state.draft.size} log ${state.draft.size === 1 ? 'point' : 'points'} selected` : 'No log points selected'; }
   $('point-message').addEventListener('input', () => {
     if (!state.selected) return; const { key, method, statement, number } = state.selected; const message = $('point-message').value;
-    if (message.trim()) state.draft.set(key, { method: method.signature, index: statement.index, statement: statement.text, message }); else state.draft.delete(key);
+    state.selected.variables = state.selected.variables.filter(variable => message.includes(`{${variable.name}}`));
+    if (message.trim()) state.draft.set(key, { method: method.signature, index: statement.index, statement: statement.text, message, ...(state.selected.variables.length ? { variables: state.selected.variables.map(variable => ({ ...variable })) } : {}) }); else state.draft.delete(key);
     const marked = state.draft.has(key); number.textContent = `${marked ? '● ' : ''}${statement.index}`; number.classList.toggle('marked', marked); $('remove-point').disabled = !marked; updateDraftCount();
   });
   $('remove-point').addEventListener('click', () => { $('point-message').value = ''; $('point-message').dispatchEvent(new Event('input')); });
-  function closeCode() { $('code-dialog').close(); }
+  function closeCode() { closeVariables(); $('code-dialog').close(); }
   $('code-close').addEventListener('click', closeCode); $('code-cancel').addEventListener('click', closeCode);
   $('code-apply').addEventListener('click', () => {
     for (const point of state.draft.values()) if (/[\n\r\0]/.test(point.message) || new TextEncoder().encode(point.message).length > 1000) { toast('Each message must fit on one line and within 1,000 UTF-8 bytes.', true); return; }

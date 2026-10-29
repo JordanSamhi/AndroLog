@@ -31,10 +31,36 @@ public class SummaryLogBuilder {
     private final CallGraph callGraph = new CallGraph();
     private final Map<String, Integer> customMessages = new LinkedHashMap<>();
     private final Map<String, Integer> customMarkers = new LinkedHashMap<>();
+    private final Map<String, LinkedHashSet<String>> customValues = new LinkedHashMap<>();
+    private final Map<String, Integer> customValueCounts = new LinkedHashMap<>();
+    private int customMessageTotal, omittedCustomMessages;
+    private static final int MAX_CUSTOM_MESSAGES = 1000, MAX_VALUE_SAMPLES = 3;
     public Map<String, Integer> getCustomMessages() { return Collections.unmodifiableMap(customMessages); }
     public Map<String, Integer> getCustomMarkers() { return Collections.unmodifiableMap(customMarkers); }
-    public void recordCustomMessage(String message) { customMessages.merge(message, 1, Integer::sum); }
+    public int getCustomMessageTotal() { return customMessageTotal; }
+    public int getOmittedCustomMessages() { return omittedCustomMessages; }
+    public void recordCustomMessage(String message) {
+        // Literal messages also identify legacy unmarked points; never discard their counts.
+        customMessageTotal++; customMessages.merge(message, 1, Integer::sum);
+    }
+    public void recordCustomValueMessage(String message) {
+        customMessageTotal++;
+        if (customMessages.containsKey(message) || customMessages.size() < MAX_CUSTOM_MESSAGES) customMessages.merge(message, 1, Integer::sum);
+        else omittedCustomMessages++;
+    }
     public void recordCustomMarker(String id) { customMarkers.merge(id, 1, Integer::sum); }
+    /** Retain the last three distinct values in observation order, without growing with loop iterations. */
+    public void recordCustomValue(String id, String value) {
+        customValueCounts.merge(id, 1, Integer::sum);
+        LinkedHashSet<String> values = customValues.computeIfAbsent(id, key -> new LinkedHashSet<>());
+        values.remove(value); values.add(value);
+        if (values.size() > MAX_VALUE_SAMPLES) values.remove(values.iterator().next());
+    }
+    public List<String> getCustomValues(String id) {
+        Set<String> values = customValues.get(id);
+        return values == null ? Collections.emptyList() : new ArrayList<>(values);
+    }
+    public int getCustomValueCount(String id) { return customValueCounts.getOrDefault(id, 0); }
 
     public CallGraph getCallGraph() { return callGraph; }
 

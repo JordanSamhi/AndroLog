@@ -33,17 +33,22 @@ public class LogParser {
     private final Pattern taggedLine;
     private final SummaryBuilder summaryBuilder;
     private final Map<String, Set<String>> baseline = new HashMap<>();
+    private final Set<String> dynamicCustomPointIds = new HashSet<>();
     private final SummaryLogBuilder summaryLogBuilder = SummaryLogBuilder.v();
 
     public LogParser(String logIdentifier, SummaryBuilder summaryBuilder) {
         this.summaryBuilder = summaryBuilder;
+        for (Map<String, Object> point : summaryBuilder.getCustomPoints()) {
+            Object id = point.get("id");
+            if (id instanceof String && Boolean.TRUE.equals(point.get("dynamic"))) dynamicCustomPointIds.add((String) id);
+        }
         // Standard threadtime/time/tag-only and brief logcat formats. Match the
         // complete tag, so a tag substring inside another message cannot add edges.
         String timestamp = "(?:\\d{4}-)?\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?";
         String tag = Pattern.quote(logIdentifier);
         this.taggedLine = Pattern.compile("^(?:(?:" + timestamp + "\\s+\\d+\\s+\\d+\\s+[VDIWEFA]\\s+)?"
                 + tag + "\\s*:\\s*|(?:" + timestamp + "\\s+)?[VDIWEFA]/" + tag
-                + "(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)(.*)$");
+                + "(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)(.*)$", Pattern.DOTALL);
         for (String type : TYPES.values()) {
             baseline.put(type, new HashSet<>());
         }
@@ -71,6 +76,18 @@ public class LogParser {
                 if (message.startsWith("CUSTOM_POINT=")) {
                     String id = message.substring("CUSTOM_POINT=".length());
                     if (id.matches("[a-f0-9]{32}")) summaryLogBuilder.recordCustomMarker(id);
+                    continue;
+                }
+                if (message.startsWith("CUSTOM_VALUE=")) {
+                    String payload = message.substring("CUSTOM_VALUE=".length());
+                    if (payload.length() >= 33 && payload.charAt(32) == '|') {
+                        String id = payload.substring(0, 32);
+                        if (id.matches("[a-f0-9]{32}")) {
+                            String value = payload.substring(33);
+                            summaryLogBuilder.recordCustomValueMessage(value);
+                            if (dynamicCustomPointIds.contains(id)) summaryLogBuilder.recordCustomValue(id, value);
+                        }
+                    }
                     continue;
                 }
                 if (message.startsWith("CUSTOM=")) {

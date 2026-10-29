@@ -45,6 +45,19 @@ public class CustomLogPlanTest {
         expectFailure(() -> CodeCatalog.read(file), "incomplete");
     }
 
+    @Test public void variableReferencesRoundTripAndRejectUnsupportedOrMissingPlaceholders() throws Exception {
+        CustomLogPlan.Point point = new CustomLogPlan.Point("<example.App: void run()>", 2, "return", "value={$i0}");
+        point.variables.add(new CustomLogPlan.Variable("$i0", "int"));
+        CustomLogPlan plan = new CustomLogPlan(repeat("a", 64), Collections.singletonList(point));
+        Path file = temporary.newFile("variables.json").toPath(); plan.write(file);
+        CustomLogPlan restored = CustomLogPlan.read(file);
+        assertEquals("$i0", restored.points.get(0).variables.get(0).name);
+        assertEquals("int", restored.points.get(0).variables.get(0).type);
+        point.variables.get(0).type = "java.lang.Object"; expectFailure(plan::validate, "supported local");
+        point.variables.get(0).type = "int"; point.message = "literal"; expectFailure(plan::validate, "placeholder");
+        point.message = "{$i0}"; point.variables.add(new CustomLogPlan.Variable("$i0", "int")); expectFailure(plan::validate, "only be listed once");
+    }
+
     private static String repeat(String value, int count) { return String.join("", Collections.nCopies(count, value)); }
     private interface Action { void run() throws IOException; }
     private static void expectFailure(Action action, String message) throws Exception {

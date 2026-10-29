@@ -15,6 +15,8 @@ import java.util.*;
 /** Reads the probes already in a DEX body without relying on a machine-local instrumentation plan. */
 public final class InstrumentedCode {
     private static final String CUSTOM_LOG = "int i(java.lang.String,java.lang.String)";
+    private static final String CUSTOM_RUNTIME = "com.jordansamhi.androlog.runtime.CustomLogRuntime";
+    private static final String CUSTOM_WRITE = "void write(java.lang.String,java.lang.String,java.lang.String,java.lang.StringBuilder)";
     private static final String BEFORE = "long before(java.lang.String,java.lang.String,int,java.lang.String,java.lang.String,java.lang.Object)";
     private static final String ENTER = "void enter(java.lang.String,java.lang.Object)";
     private static final Set<String> KINDS = new HashSet<>(Arrays.asList("static", "interface", "virtual", "special", "constructor", "dynamic"));
@@ -29,7 +31,7 @@ public final class InstrumentedCode {
 
     public static boolean isHelper(String name) {
         return Constants.LOG_CHECKER_CLASS.equals(name) || MethodCallInstrumenter.RUNTIME_CLASS.equals(name)
-                || name.startsWith(MethodCallInstrumenter.RUNTIME_CLASS + "$");
+                || name.startsWith(MethodCallInstrumenter.RUNTIME_CLASS + "$") || CUSTOM_RUNTIME.equals(name);
     }
 
     public static final class Result {
@@ -54,6 +56,7 @@ public final class InstrumentedCode {
         Map<Unit, CallSite> callProbes = new IdentityHashMap<>();
         Map<Unit, Custom> customs = new IdentityHashMap<>();
         Map<Unit, String> markers = new IdentityHashMap<>();
+        Set<Unit> applicationDefinitions = identitySet();
         // Many methods have no probes; avoid building def-use graphs for those bodies.
         boolean candidates = false;
         for (Unit unit : units) {
@@ -61,7 +64,7 @@ public final class InstrumentedCode {
             if (!stmt.containsInvokeExpr()) continue;
             String clazz = stmt.getInvokeExpr().getMethodRef().declaringClass().getName();
             if (Constants.LOG_CHECKER_CLASS.equals(clazz) || MethodCallInstrumenter.RUNTIME_CLASS.equals(clazz)
-                    || "android.util.Log".equals(clazz)) { candidates = true; break; }
+                    || CUSTOM_RUNTIME.equals(clazz) || "android.util.Log".equals(clazz)) { candidates = true; break; }
         }
         Resolver resolver = candidates ? new Resolver(body) : null;
         for (Unit unit : units) {
@@ -115,6 +118,24 @@ public final class InstrumentedCode {
                 } else if ("void after(long)".equals(signature) || "void caught()".equals(signature)) {
                     hidden.add(unit);
                 }
+            } else if (CUSTOM_RUNTIME.equals(clazz)) {
+                if (CUSTOM_WRITE.equals(signature)) {
+                    hidden.add(unit);
+                    String id = resolver.string(invoke.getArg(1), unit);
+                    String template = resolver.string(invoke.getArg(2), unit);
+                    if (Objects.equals(tag, resolver.string(invoke.getArg(0), unit))
+                            && id != null && id.matches("[a-f0-9]{32}") && template != null) {
+                        Custom point = new Custom(template); point.id = id; point.dynamic = true;
+                        customs.put(unit, point); result.foundProbes = true;
+                    }
+                } else if ("java.lang.StringBuilder create()".equals(signature)
+                        || "void text(java.lang.StringBuilder,java.lang.String)".equals(signature)) {
+                    hidden.add(unit);
+                } else if (signature.matches("void value\\(java\\.lang\\.StringBuilder,(byte|short|int|long|float|double|boolean|java\\.lang\\.String)\\)")) {
+                    hidden.add(unit);
+                    // A local read only by a custom value is still application code, not probe setup.
+                    protectDefinitions(invoke.getArg(1), unit, applicationDefinitions, resolver);
+                }
             } else if ("android.util.Log".equals(clazz) && CUSTOM_LOG.equals(signature)
                     && Objects.equals(tag, resolver.string(invoke.getArg(0), unit))) {
                 String message = resolver.string(invoke.getArg(1), unit);
@@ -129,16 +150,16 @@ public final class InstrumentedCode {
         }
         if (resolver != null) {
             Set<Unit> pairingHidden = identitySet(); pairingHidden.addAll(hidden); pairingHidden.addAll(markers.keySet());
-            hideProbeSetup(units, pairingHidden, resolver);
+            hideProbeSetup(units, pairingHidden, applicationDefinitions, resolver);
             for (int i = 0; i < units.size(); i++) {
-                Custom custom = customs.get(units.get(i)); if (custom == null) continue;
+                Custom custom = customs.get(units.get(i)); if (custom == null || custom.id != null) continue;
                 for (int j = i + 1; j < units.size(); j++) {
                     Unit next = units.get(j);
                     if (markers.containsKey(next)) { custom.id = markers.get(next); hidden.add(next); break; }
                     if (customs.containsKey(next) || !pairingHidden.contains(next)) break;
                 }
             }
-            hideProbeSetup(units, hidden, resolver);
+            hideProbeSetup(units, hidden, applicationDefinitions, resolver);
         }
         Map<Unit, List<String>> payloadsByUnit = new IdentityHashMap<>();
         Map<Unit, Unit> nextVisible = new IdentityHashMap<>();
@@ -186,6 +207,7 @@ public final class InstrumentedCode {
                 Map<String, Object> point = new LinkedHashMap<>();
                 point.put("id", custom.id); point.put("method", method);
                 point.put("index", row == null ? 0 : row); point.put("statement", textByUnit.get(target)); point.put("message", custom.message);
+                if (custom.dynamic) point.put("dynamic", true);
                 result.customPoints.add(point);
             }
             CallSite site = callProbes.get(unit);
@@ -208,7 +230,7 @@ public final class InstrumentedCode {
     }
 
     /** Remove only side-effect-free local setup whose every use belongs to hidden instrumentation. */
-    private static void hideProbeSetup(List<Unit> units, Set<Unit> hidden, Resolver resolver) {
+    private static void hideProbeSetup(List<Unit> units, Set<Unit> hidden, Set<Unit> applicationDefinitions, Resolver resolver) {
         Set<Unit> candidates = identitySet();
         Deque<Unit> work = new ArrayDeque<>(hidden);
         while (!work.isEmpty()) {
@@ -216,6 +238,7 @@ public final class InstrumentedCode {
             for (ValueBox box : unit.getUseBoxes()) {
                 if (!(box.getValue() instanceof Local)) continue;
                 for (Unit definition : resolver.defs.getDefsOfAt((Local) box.getValue(), unit)) {
+                    if (applicationDefinitions.contains(definition)) continue;
                     if (!(definition instanceof AssignStmt)) continue;
                     AssignStmt assignment = (AssignStmt) definition;
                     if (!(assignment.getLeftOp() instanceof Local)) continue;
@@ -240,9 +263,18 @@ public final class InstrumentedCode {
         hidden.addAll(candidates);
     }
 
+    private static void protectDefinitions(Value value, Unit at, Set<Unit> protectedUnits, Resolver resolver) {
+        if (!(value instanceof Local)) return;
+        for (Unit definition : resolver.defs.getDefsOfAt((Local) value, at)) {
+            if (!protectedUnits.add(definition) || !(definition instanceof AssignStmt)) continue;
+            Value source = ((AssignStmt) definition).getRightOp();
+            if (source instanceof Local) protectDefinitions(source, definition, protectedUnits, resolver);
+        }
+    }
+
     private static Set<Unit> identitySet() { return Collections.newSetFromMap(new IdentityHashMap<Unit, Boolean>()); }
     private static final class Custom {
-        final String message; String id;
+        final String message; String id; boolean dynamic;
         Custom(String message) { this.message = message; }
     }
     private static final class Resolver {

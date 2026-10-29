@@ -89,3 +89,27 @@ test('portable coverage reads probes from the instrumented APK without instrumen
   const result = await backend.analyze(apk, log, { platforms }, { tag: 'ANDROLOG', probes: [true,true,true,true,true], packagePrefix: 'different.app', excludeLibraries: true });
   assert.deepEqual(result.report.coverageSummary, {});
 });
+
+test('variable plans accept only explicit supported template bindings and leave literal braces alone', () => {
+  const point = { method: '<A: void x()>', index: 1, statement: 'return', message: 'value={i0}, text={$r1}', variables: [{ name: 'i0', type: 'int' }, { name: '$r1', type: 'java.lang.String' }] };
+  const plan = value => ({ apkSha256: 'a'.repeat(64), points: [value] });
+  assert.doesNotThrow(() => validatePlan(plan(point)));
+  assert.doesNotThrow(() => validatePlan(plan({ ...point, variables: undefined })));
+  for (const type of ['byte', 'short', 'int', 'long', 'float', 'double', 'boolean', 'java.lang.String']) assert.doesNotThrow(() => validatePlan(plan({ ...point, variables: [{ name: 'i0', type }] })));
+  for (const variables of [null, []]) assert.doesNotThrow(() => validatePlan(plan({ ...point, variables })));
+  for (const variables of [false, {}, 'i0']) assert.throws(() => validatePlan(plan({ ...point, variables })), /variables/);
+  for (const name of ['', 'two names', 'bad\nname', '{i0}', 'x'.repeat(201)]) assert.throws(() => validatePlan(plan({ ...point, variables: [{ name, type: 'int' }] })), /Insert variable/);
+  for (const type of ['char', 'java.lang.Object', 'int[]']) assert.throws(() => validatePlan(plan({ ...point, variables: [{ name: 'i0', type }] })), /Insert variable/);
+  assert.throws(() => validatePlan(plan({ ...point, variables: [{ name: 'i0', type: 'int' }, { name: 'i0', type: 'int' }] })), /only be listed once/);
+  assert.throws(() => validatePlan(plan({ ...point, variables: [{ name: 'other', type: 'int' }] })), /missing/);
+});
+
+test('custom message summaries include tagged variable values without counting their marker twice', async t => {
+  const { readCustomMessages } = require('../src/backend');
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'androlog-variable-messages-')); t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'runtime.log'), id = 'a'.repeat(32);
+  await fs.writeFile(file, [`TEST: CUSTOM_VALUE=${id}|score=42`, `TEST: CUSTOM_POINT=${id}`, `OTHER: CUSTOM_VALUE=${id}|wrong tag`, 'TEST: CUSTOM_VALUE=invalid|wrong id', 'TEST: CUSTOM=literal', `TEST: CUSTOM_VALUE=${id}|unicode=one\u2028two\u2029three`].join('\n'));
+  const summary = await readCustomMessages(file, 'TEST');
+  assert.equal(summary.total, 3); assert.equal(summary.markers[id], 1);
+  assert.deepEqual(summary.messages, [{ message: 'score=42', count: 1 }, { message: 'literal', count: 1 }, { message: 'unicode=one\u2028two\u2029three', count: 1 }]);
+});

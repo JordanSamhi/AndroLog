@@ -97,3 +97,16 @@ test('hostile message text remains inert in the panel and inline annotations', t
   assert.equal(doc.querySelector('.navigation-target').dataset.jimpleLine, '1');
   assert.deepEqual(errors.map(e => e.message), []);
 });
+
+test('variable templates show the latest sample safely in the panel and beside their statement', t => {
+  const sample = '<img src=x onerror="window.__executed=true"> | value=42';
+  const { dom, doc, errors } = fixture({ points: [{ id: 'variable', method: first, index: 1, statement: text,
+    message: 'value={i3}', count: 3, samples: ['value=1', 'value=2', sample] }], hash: '#custom=variable' });
+  t.after(() => dom.window.close());
+  assert.equal(doc.querySelector('.custom-point strong').textContent, 'value={i3}');
+  assert.equal(doc.querySelector('.custom-value').textContent, 'Latest: ' + sample);
+  assert.equal(doc.querySelector('.custom-inline-value').textContent, 'Latest: ' + sample);
+  assert.match(doc.querySelector('.custom-inline-log').title, /value=1\nvalue=2/);
+  assert.equal(doc.querySelector('.custom-inline-log img'), null); assert.equal(doc.querySelector('.custom-value img'), null);
+  assert.equal(dom.window.__executed, undefined); assert.deepEqual(errors.map(e => e.message), []);
+});

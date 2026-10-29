@@ -220,7 +220,7 @@ public class SummaryBuilder {
 
     private boolean isLogCheckerClass(SootMethod sm) {
         String className = sm.getDeclaringClass().getName();
-        return className.equals(Constants.LOG_CHECKER_CLASS);
+        return InstrumentedCode.isHelper(className);
     }
 
     /**

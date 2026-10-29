@@ -5,7 +5,6 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
-const readline = require('node:readline');
 const { spawn } = require('node:child_process');
 
 const FLAGS = ['-c', '-m', '-s', '-cp', '-mc'];
@@ -65,6 +64,16 @@ function validatePlan(plan) {
   for (const point of plan.points) {
     if (!point || typeof point.method !== 'string' || !point.method.trim() || !Number.isSafeInteger(point.index) || point.index < 1 || typeof point.statement !== 'string' || !point.statement.trim()) throw new Error('A custom log point is incomplete.');
     if (typeof point.message !== 'string' || !point.message.trim() || /[\n\r\0]/.test(point.message) || Buffer.byteLength(point.message, 'utf8') > 1000) throw new Error('Use a nonempty single-line message of at most 1,000 UTF-8 bytes.');
+    if (point.variables != null) {
+      if (!Array.isArray(point.variables)) throw new Error('The custom log variables are invalid. Browse the statement again.');
+      const variables = new Set(), types = new Set(['byte', 'short', 'int', 'long', 'float', 'double', 'boolean', 'java.lang.String']);
+      for (const variable of point.variables) {
+        if (!variable || typeof variable.name !== 'string' || !/^[^\s{}\u0000-\u001f\u007f]{1,200}$/u.test(variable.name) || !types.has(variable.type)) throw new Error('Choose a local number, boolean, or string from Insert variable.');
+        if (variables.has(variable.name)) throw new Error('A custom log variable may only be listed once.');
+        if (!point.message.includes(`{${variable.name}}`)) throw new Error('A selected variable is missing from the custom log message.');
+        variables.add(variable.name);
+      }
+    }
     const key = `${point.method}\n${point.index}`; if (seen.has(key)) throw new Error('Only one message can be attached to a statement.'); seen.add(key);
   }
 }
@@ -73,18 +82,24 @@ async function readCustomMessages(file, tag, limit = 1000) {
   if (!TAG.test(tag || '')) throw new Error('Enter the same valid Logcat tag used during instrumentation.');
   const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const timestamp = '(?:\\d{4}-)?\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?';
-  const tagged = new RegExp(`^(?:(?:${timestamp}\\s+\\d+\\s+\\d+\\s+[VDIWEFA]\\s+)?${escaped}\\s*:\\s*|(?:${timestamp}\\s+)?[VDIWEFA]/${escaped}(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)CUSTOM=(.*)$`);
+  const tagged = new RegExp(`^(?:(?:${timestamp}\\s+\\d+\\s+\\d+\\s+[VDIWEFA]\\s+)?${escaped}\\s*:\\s*|(?:${timestamp}\\s+)?[VDIWEFA]/${escaped}(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)(?:CUSTOM=|CUSTOM_VALUE=[a-f0-9]{32}\\|)(.*)$`, 's');
   const markerPattern = new RegExp(`^(?:(?:${timestamp}\\s+\\d+\\s+\\d+\\s+[VDIWEFA]\\s+)?${escaped}\\s*:\\s*|(?:${timestamp}\\s+)?[VDIWEFA]/${escaped}(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)CUSTOM_POINT=([a-f0-9]{32})$`);
   const markers = {}; const messages = new Map(); let total = 0, omitted = 0;
-  const lines = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
-  for await (const line of lines) {
-    const marker = markerPattern.exec(line); if (marker) { markers[marker[1]] = (markers[marker[1]] || 0) + 1; continue; }
-    const match = tagged.exec(line); if (!match) continue;
+  const consume = line => {
+    const marker = markerPattern.exec(line); if (marker) { markers[marker[1]] = (markers[marker[1]] || 0) + 1; return; }
+    const match = tagged.exec(line); if (!match) return;
     total++; const message = match[1];
     if (messages.has(message)) messages.set(message, messages.get(message) + 1);
     else if (messages.size < limit) messages.set(message, 1);
     else omitted++;
+  };
+  // Logcat separates records with CR/LF; Unicode separators may belong to a logged string.
+  let pending = '';
+  for await (const chunk of fs.createReadStream(file, { encoding: 'utf8' })) {
+    const lines = (pending + chunk).split(/\r\n|\r|\n/); pending = lines.pop();
+    for (const line of lines) consume(line);
   }
+  if (pending) consume(pending);
   return { total, omitted, markers, messages: [...messages].map(([message, count]) => ({ message, count })) };
 }
 async function copySafely(source, destination, protectedFiles = []) {

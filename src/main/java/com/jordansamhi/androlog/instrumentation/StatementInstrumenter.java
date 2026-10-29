@@ -59,6 +59,7 @@ public final class StatementInstrumenter {
         if (!body.getMethod().isConcrete() || name.equals(Constants.LOG_CHECKER_CLASS)
                 || name.equals(MethodCallInstrumenter.RUNTIME_CLASS)
                 || name.startsWith(MethodCallInstrumenter.RUNTIME_CLASS + "$")
+                || name.equals(CustomLogInstrumenter.RUNTIME_CLASS)
                 || !PackageScope.includes(targetPackage, owner.getPackageName())
                 || (!includeLibraries && LibrariesManager.v().isLibrary(owner))) return;
 

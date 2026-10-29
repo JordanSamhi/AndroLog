@@ -156,6 +156,7 @@
     .custom-inline-log.covered { background: #dcf3e5; color: #12623f; }
     .custom-inline-log.uncovered { background: #fde7e3; color: #933c37; }
     .custom-inline-log.unknown { background: #edf0f3; color: #526476; }
+    .custom-inline-value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; opacity: .9; }
     .custom-points { margin: 0 0 20px; padding: 17px 20px; background: white; border: 1px solid #dce4e9; border-radius: 12px; }
     .custom-points h2 { font-size: 16px; margin: 0 0 12px; }
     .custom-points ul { padding: 0; margin: 0; list-style: none; }
@@ -455,7 +456,7 @@
         if (Object.prototype.hasOwnProperty.call(customById, point.id)) { customById[point.id].valid = false; return; }
         var rows = statementsByMethod[point.method], row = rows && rows[String(point.index)];
         var valid = Number.isSafeInteger(point.index) && point.index > 0 && typeof point.statement === 'string' && row && String(row.text) === point.statement;
-        var resolved = { id: point.id, method: point.method, index: point.index, message: String(point.message || ''), covered: Number(point.count) > 0, status: point.status === 'unknown' ? 'unknown' : Number(point.count) > 0 ? 'covered' : 'uncovered', className: codeIndex.methods.get(point.method), valid: Boolean(valid) };
+        var resolved = { id: point.id, method: point.method, index: point.index, message: String(point.message || ''), samples: list(point.samples).filter(function (value) { return typeof value === 'string'; }).slice(-3), covered: Number(point.count) > 0, status: point.status === 'unknown' ? 'unknown' : Number(point.count) > 0 ? 'covered' : 'uncovered', className: codeIndex.methods.get(point.method), valid: Boolean(valid) };
         customById[point.id] = resolved;
       });
       Object.keys(customById).forEach(function (id) {
@@ -470,6 +471,10 @@
         link.href = '#custom=' + encodeURIComponent(id); link.setAttribute('data-custom-point', id);
         var location = make('div', ''); location.appendChild(make('strong', '', point.message));
         location.appendChild(make('small', '', point.method + ' · statement ' + point.index));
+        if (point.samples.length) {
+          var sample = make('small', 'custom-value', 'Latest: ' + point.samples[point.samples.length - 1]);
+          sample.title = 'Recent distinct values:\n' + point.samples.join('\n'); location.appendChild(sample);
+        }
         link.appendChild(location); link.appendChild(make('span', 'custom-status', customStatusText(point)));
         if (point.status === 'unknown') link.title = 'This older APK shares the message between several points; the log does not identify which one ran.';
         li.appendChild(link); $('custom-log-list').appendChild(li);
@@ -755,7 +760,12 @@
               annotation.setAttribute('aria-label', 'Custom log: ' + point.message + ' · ' + customStatusText(point));
               annotation.title = point.status === 'unknown' ? 'The log cannot identify which point emitted this shared message.' : point.covered ? 'Custom log covered in the supplied runtime log.' : 'Custom log not covered in the supplied runtime log.';
               var marker = make('span', 'custom-log-marker'); marker.setAttribute('aria-hidden', 'true');
-              annotation.appendChild(marker); annotation.appendChild(make('span', '', point.message)); cell.appendChild(annotation);
+              annotation.appendChild(marker); annotation.appendChild(make('span', '', point.message));
+              if (point.samples.length) {
+                annotation.appendChild(make('span', 'custom-inline-value', 'Latest: ' + point.samples[point.samples.length - 1]));
+                annotation.title += '\nRecent distinct values:\n' + point.samples.join('\n');
+              }
+              cell.appendChild(annotation);
               customTargets[point.id] = tr; tr.tabIndex = -1;
             });
           }

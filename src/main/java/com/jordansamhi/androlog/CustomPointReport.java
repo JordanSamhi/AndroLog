@@ -23,6 +23,9 @@ public final class CustomPointReport {
             if (id != null) {
                 knownMarkers.add(id);
                 count = log.getCustomMarkers().getOrDefault(id, 0);
+                // A value event already proves arrival, even if capture ends before its companion marker.
+                // Paired events describe the same visit and must not be added together.
+                if (Boolean.TRUE.equals(point.get("dynamic"))) count = Math.max(count, log.getCustomValueCount(id));
             } else {
                 // Old probes recorded only their message. A shared message cannot identify a location.
                 int hits = log.getCustomMessages().getOrDefault(message, 0);
@@ -33,18 +36,18 @@ public final class CustomPointReport {
             if ("covered".equals(status)) observed++;
             if ("unknown".equals(status)) unknown++;
             point.put("count", count); point.put("status", status); points.add(point);
+            if (id != null && Boolean.TRUE.equals(point.get("dynamic"))) point.put("samples", log.getCustomValues(id));
         }
         List<Map<String, Object>> messages = new ArrayList<>();
-        int total = 0;
         for (Map.Entry<String, Integer> message : log.getCustomMessages().entrySet()) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("message", message.getKey()); row.put("count", message.getValue());
-            messages.add(row); total += message.getValue();
+            messages.add(row);
         }
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("points", points); summary.put("observed", observed); summary.put("unknown", unknown);
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("total", total); result.put("omitted", 0); result.put("messages", messages);
+        result.put("total", log.getCustomMessageTotal()); result.put("omitted", log.getOmittedCustomMessages()); result.put("messages", messages);
         result.put("markers", log.getCustomMarkers()); result.put("summary", summary);
         long unmatched = log.getCustomMarkers().keySet().stream().filter(id -> !knownMarkers.contains(id)).count();
         result.put("unmatchedMarkers", unmatched);

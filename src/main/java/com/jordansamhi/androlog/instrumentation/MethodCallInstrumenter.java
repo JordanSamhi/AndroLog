@@ -91,6 +91,7 @@ public final class MethodCallInstrumenter {
         String name = declaring.getName();
         return method.isConcrete() && !name.equals(Constants.LOG_CHECKER_CLASS)
                 && !name.equals(RUNTIME_CLASS) && !name.startsWith(RUNTIME_CLASS + "$")
+                && !name.equals(CustomLogInstrumenter.RUNTIME_CLASS)
                 && PackageScope.includes(targetPackage, declaring.getPackageName())
                 && (includeLibraries || !LibrariesManager.v().isLibrary(declaring));
     }

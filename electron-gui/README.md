@@ -53,11 +53,15 @@ Save the output before choosing another APK or closing the app. The GUI warns if
 
 ### Place your own messages
 
-Open **Your own messages** to inspect the APK. Expand the nested **package → class → method** tree, choose a method, and scroll through its class's Jimple listing. Select a statement, type a literal message such as `reached this point`, and click **Use log points**. You can edit or remove a point before applying the selection; **Cancel** discards changes in the code browser.
+Open **Your own messages** to inspect the APK. Expand the nested **package → class → method** tree, choose a method, and scroll through its class's Jimple listing. Select a statement, type a message such as `reached this point`, and click **Use log points**. You can edit or remove a point before applying the selection; **Cancel** discards changes in the code browser.
+
+To record a value, click **Insert variable** and choose a local from the list. The picker shows its name and type and inserts a placeholder at the cursor: `score = {i3}` might produce `score = 42`. You can combine several variables with text, or log a variable on its own. Only locals initialized on every incoming path are offered, using their value **before** the selected statement. To observe the result of an assignment, select the following statement.
+
+Supported types are `byte`, `short`, `int`, `long`, `float`, `double`, `boolean`, and `java.lang.String`. APKs may expose names such as `i3` or `r2` instead of the original source names. Use the picker to bind placeholders; ordinary braces in existing text messages stay literal. Object fields, arrays, characters, and expressions are not supported. Locals created with `new String(...)` and their aliases are conservatively omitted; string parameters, constants, and values returned by calls are supported.
 
 Choose **Custom only** if you want these messages without automatic probes. Explicit custom points are independent of the automatic package and library filters.
 
-Each visit emits `CUSTOM=<your message>` immediately **before** the selected statement executes, plus a unique point marker used by the GUI. Repeated visits emit repeated messages, including before statements that subsequently throw. Messages are single-line text of up to 1,000 UTF-8 bytes; variables and expressions are not evaluated. Setup and monitor statements cannot be selected.
+Each visit logs the message immediately **before** the selected statement executes, plus a unique point marker used by the GUI. Repeated visits capture fresh values, including before statements that subsequently throw. Message templates are limited to 1,000 UTF-8 bytes. String values are null-safe, line breaks are escaped, and long rendered messages are truncated with an ellipsis to fit a Logcat record. Setup and monitor statements cannot be selected.
 
 The listing is Jimple reconstructed from APK bytecode, not the original Java or Kotlin source. Selections are bound to the original APK fingerprint and checked against the method and statement. Selecting a different APK clears them.
 
@@ -92,7 +96,7 @@ AndroLog reads the expected probes and custom points directly from the APK. Cove
 
 The dashboard shows observed counts, totals, and percentages for statements, methods, classes, activities, services, broadcast receivers, and content providers. Elements without probes are **not measured**. AndroLog's logging instructions and helper classes are excluded from statistics and the code display. A category with no eligible elements is unavailable, rather than reported as 0% coverage. Select a statistics card to explore its category in the report.
 
-After analysis, **Custom logs** shows every point found in the instrumented APK, its message and method/statement location, and a green **Covered** or red **Not covered** marker. Points are listed even when none of them appear in the log. Click a row to jump to that statement in **Explore report**. Custom-only instrumentations work the same way.
+After analysis, **Custom logs** shows every point found in the instrumented APK, its message template and method/statement location, and a green **Covered** or red **Not covered** marker. Variable logs also show their latest recorded message. Points are listed even when none of them appear in the log. Click a row to jump to that statement in **Explore report**. Custom-only instrumentations work the same way; templates and locations are recovered from the APK without the original plan.
 
 Current GUI instrumentations include a distinct point marker, allowing identical messages at different locations to be distinguished. Older instrumentations may emit only message text: if the same message appears at several points and was observed, the individual points are **Unconfirmed** rather than guessed to be covered or missed.
 
