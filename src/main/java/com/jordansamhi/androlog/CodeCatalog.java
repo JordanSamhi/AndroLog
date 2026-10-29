@@ -1,7 +1,6 @@
 package com.jordansamhi.androlog;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
 import com.jordansamhi.androlog.instrumentation.CustomLogInstrumenter;
 import com.jordansamhi.androlog.instrumentation.MethodCallInstrumenter;
@@ -26,6 +25,7 @@ public final class CodeCatalog {
     public static final class Method {
         public String className;
         public String signature;
+        public List<CustomLogPlan.Variable> locals = new ArrayList<>();
         public List<Statement> statements = new ArrayList<>();
         public Method() { }
         public Method(String className, String signature, List<Statement> statements) {
@@ -36,7 +36,10 @@ public final class CodeCatalog {
         public int index;
         public String text;
         public boolean selectable;
-        public List<CustomLogPlan.Variable> locals = new ArrayList<>();
+        /** Bits index the containing method's locals table, using BitSet's little-endian bytes. */
+        public String localMask;
+        /** Accepted when reading catalogs written before compact variable metadata. */
+        public List<CustomLogPlan.Variable> locals;
         public Statement() { }
         public Statement(int index, String text, boolean selectable) { this.index = index; this.text = text; this.selectable = selectable; }
     }
@@ -51,20 +54,27 @@ public final class CodeCatalog {
                         || owner.getName().equals(CustomLogInstrumenter.RUNTIME_CLASS)
                         || !PackageScope.includes(targetPackage, owner.getPackageName())
                         || (!includeLibraries && LibrariesManager.v().isLibrary(owner))) return;
-                List<Statement> statements = new ArrayList<>(); int index = 0;
-                LocalVariableAvailability available = new LocalVariableAvailability(body);
-                for (Unit unit : body.getUnits()) {
-                    Statement statement = new Statement(++index, unit.toString(), CustomLogInstrumenter.isEligible((Stmt) unit));
-                    if (statement.selectable) statement.locals = available.at(unit);
-                    statements.add(statement);
-                }
-                collected.put(method.getSignature(), new Method(owner.getName(), method.getSignature(), statements));
+                collected.put(method.getSignature(), describe(body));
             }
         }));
         PackManager.v().runPacks();
         List<Method> methods = new ArrayList<>(collected.values());
         methods.sort(Comparator.comparing((Method method) -> method.className).thenComparing(method -> method.signature));
         return new CodeCatalog(sha256, methods);
+    }
+
+    static Method describe(Body body) {
+        SootMethod method = body.getMethod();
+        Method result = new Method(method.getDeclaringClass().getName(), method.getSignature(), Collections.emptyList());
+        LocalVariableAvailability available = new LocalVariableAvailability(body);
+        result.locals = available.locals();
+        int index = 0;
+        for (Unit unit : body.getUnits()) {
+            Statement statement = new Statement(++index, unit.toString(), CustomLogInstrumenter.isEligible((Stmt) unit));
+            if (statement.selectable) statement.localMask = available.maskAt(unit);
+            result.statements.add(statement);
+        }
+        return result;
     }
 
     public static CodeCatalog read(Path path) throws IOException {
@@ -87,6 +97,6 @@ public final class CodeCatalog {
     public void write(Path path) throws IOException {
         Path parent = path.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
-        try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) { new GsonBuilder().setPrettyPrinting().create().toJson(this, writer); }
+        try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) { new Gson().toJson(this, writer); }
     }
 }

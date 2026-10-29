@@ -16,7 +16,10 @@ async function mainFixture(t) {
   let ready, window;
   class Backend {
     async discard() {}
+    async closeCodeBrowser() { controls.browserCloses = (controls.browserCloses || 0) + 1; }
     async inspect(apk) { calls.push({ inspect: apk }); return { methods: [] }; }
+    async inspectClass(apk, settings, className) { calls.push({ classApk: apk, className }); return controls.readClass ? controls.readClass() : { className, methods: [] }; }
+    async inspectVariables(apk, settings, method) { calls.push({ variableApk: apk, method }); return { signature: method, locals: [], statements: [] }; }
     async instrument(apk, settings, options, plan) {
       calls.push({ instrument: apk, options, plan });
       const output = path.join(dir, 'working.apk'); await fs.writeFile(output, 'instrumented');
@@ -117,4 +120,22 @@ test('capture locks conflicting operations, allows stop, and releases the lock o
   fail(new Error('Disconnected; partial log kept')); await failure;
   await assert.rejects(invoke('device:stop'), /No device test/);
   assert.equal((await invoke('device:list')).length, 1);
+});
+
+test('lazy code requests use the selected original APK and do not lock navigation behind a pending class', async t => {
+  const { dir, files, calls, controls, invoke } = await mainFixture(t);
+  await assert.rejects(invoke('code:class', 'example.One'), /Choose an APK/);
+  const original = path.join(dir, 'original.apk'); files.push(original); await invoke('select:apk');
+  let complete;
+  controls.readClass = () => new Promise(resolve => { complete = resolve; });
+  const pending = invoke('code:class', 'example.One');
+  const variables = await invoke('code:variables', '<example.Two: void run()>');
+  assert.equal(variables.signature, '<example.Two: void run()>');
+  assert.equal(calls[0].classApk, original); assert.equal(calls[1].variableApk, original);
+  complete({ className: 'example.One', methods: [] }); await pending;
+  const closes = controls.browserCloses;
+  await invoke('settings:save', { platforms: '/sdk/platforms', buildTools: '/sdk/tools', java: '' });
+  assert.equal(controls.browserCloses, closes + 1);
+  files.push(path.join(dir, 'next.apk')); await invoke('select:apk');
+  assert.equal(controls.browserCloses, closes + 2);
 });

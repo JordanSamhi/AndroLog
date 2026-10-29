@@ -60,12 +60,14 @@ function registerHandlers() {
   handle('settings:save', async next => {
     if (busy) throw new Error('Wait for the current operation to finish.');
     for (const key of ['platforms', 'buildTools', 'java']) if (typeof next[key] !== 'string' || next[key].length > 4096) throw new Error('Invalid setting.');
+    await backend.closeCodeBrowser();
     settings = { platforms: next.platforms.trim(), buildTools: next.buildTools.trim(), java: next.java.trim() };
     await fs.mkdir(path.dirname(configFile()), { recursive: true }); await fs.writeFile(configFile(), JSON.stringify(settings, null, 2), { mode: 0o600 }); return settings;
   });
   handle('select:apk', async () => {
     if (busy || !(await confirmDiscard())) return null;
     const file = await chooseFile('Choose the original APK', ['apk']); if (!file) return null;
+    await backend.closeCodeBrowser();
     selectedApk = file; dirty = false; await removeSession(result); result = null; return file;
   });
   handle('select:coverage-apk', async () => {
@@ -82,9 +84,18 @@ function registerHandlers() {
     if (!selectedApk) throw new Error('Choose the original APK first.');
     return backend.inspect(selectedApk, settings);
   }));
+  handle('code:class', name => {
+    if (busy || !selectedApk) throw new Error('Choose an APK and wait for the current operation to finish.');
+    return backend.inspectClass(selectedApk, settings, name);
+  });
+  handle('code:variables', method => {
+    if (busy || !selectedApk) throw new Error('Choose an APK and wait for the current operation to finish.');
+    return backend.inspectVariables(selectedApk, settings, method);
+  });
   handle('apk:instrument', (opts, plan) => exclusive(async () => {
     if (!selectedApk) throw new Error('Choose an APK first.');
     if (!(await confirmDiscard())) return null;
+    await backend.closeCodeBrowser();
     const trackedPlan = plan ? preparePlan(plan, opts.tag) : null;
     const next = await backend.instrument(selectedApk, settings, opts, trackedPlan);
     await removeSession(result); result = { ...next, tag: opts.tag }; temporary.add(next.dir); dirty = true;
@@ -105,6 +116,7 @@ function registerHandlers() {
   });
   handle('coverage:analyze', opts => exclusive(async () => {
     if (!selectedCoverageApk || !selectedLog) throw new Error('Choose the instrumented APK and a runtime log first.');
+    await backend.closeCodeBrowser();
     const next = await backend.analyze(selectedCoverageApk, selectedLog, settings, opts);
     await removeSession(report); report = next; temporary.add(next.dir); return next.report;
   }));
@@ -112,6 +124,7 @@ function registerHandlers() {
   handle('device:start', opts => exclusive(async () => {
     if (!result) throw new Error('Instrument an APK before testing it on a device.');
     if (!opts || typeof opts.device !== 'string' || !opts.device.trim()) throw new Error('Choose a ready device.');
+    await backend.closeCodeBrowser();
     capturing = true;
     try {
       const captured = await backend.capture(result.output, settings, { device: opts.device, tag: result.tag }, path.join(app.getPath('userData'), 'captures'));

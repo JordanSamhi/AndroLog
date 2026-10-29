@@ -14,6 +14,8 @@ public final class LocalVariableAvailability {
     public LocalVariableAvailability(Body body) {
         Set<Local> allocatedStrings = allocationDerivedStrings(body);
         for (Local local : body.getLocals()) if (supported(local.getType().toString()) && !allocatedStrings.contains(local)) locals.add(local);
+        // Every picker uses this same order; avoid sorting again for each statement.
+        locals.sort(Comparator.comparing(Local::getName));
         if (body.getUnits().isEmpty() || locals.isEmpty()) return;
         List<Unit> units = new ArrayList<>(); for (Unit unit : body.getUnits()) units.add(unit);
         Map<Local, Integer> positions = new IdentityHashMap<>();
@@ -51,7 +53,10 @@ public final class LocalVariableAvailability {
             before.put(unit, reachable.contains(unit) ? (BitSet) universe.clone() : new BitSet());
             after.put(unit, reachable.contains(unit) ? (BitSet) universe.clone() : new BitSet());
         }
-        Deque<Unit> work = new ArrayDeque<>(reachable);
+        // IdentityHashMap iteration is arbitrary. Visit statements in body order
+        // so ordinary forward edges see their predecessors' facts on the first pass.
+        Deque<Unit> work = new ArrayDeque<>();
+        for (Unit unit : units) if (reachable.contains(unit)) work.addLast(unit);
         Set<Unit> queued = identitySet(reachable);
         while (!work.isEmpty()) {
             Unit unit = work.removeFirst(); queued.remove(unit);
@@ -73,8 +78,20 @@ public final class LocalVariableAvailability {
         if (available != null) for (int i = available.nextSetBit(0); i >= 0; i = available.nextSetBit(i + 1)) {
             Local local = locals.get(i); result.add(new CustomLogPlan.Variable(local.getName(), local.getType().toString()));
         }
-        result.sort(Comparator.comparing(variable -> variable.name));
         return result;
+    }
+
+    /** Method-wide table; maskAt uses the indices in this stable, name-sorted list. */
+    public List<CustomLogPlan.Variable> locals() {
+        List<CustomLogPlan.Variable> result = new ArrayList<>();
+        for (Local local : locals) result.add(new CustomLogPlan.Variable(local.getName(), local.getType().toString()));
+        return result;
+    }
+
+    /** Compact little-endian availability bits, with an empty string meaning no locals. */
+    public String maskAt(Unit unit) {
+        BitSet available = before.get(unit);
+        return available == null || available.isEmpty() ? "" : Base64.getEncoder().encodeToString(available.toByteArray());
     }
 
     public Local resolve(Unit unit, CustomLogPlan.Variable variable) {

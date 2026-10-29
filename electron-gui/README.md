@@ -55,6 +55,8 @@ Save the output before choosing another APK or closing the app. The GUI warns if
 
 Open **Your own messages** to inspect the APK. Expand the nested **package → class → method** tree, choose a method, and scroll through its class's Jimple listing. Select a statement, type a message such as `reached this point`, and click **Use log points**. You can edit or remove a point before applying the selection; **Cancel** discards changes in the code browser.
 
+The tree loads first. Class code is read when you open it, and variable availability is analyzed only for the method you select. Results are reused while browsing the same APK, so reopening a class does not repeat the analysis.
+
 To record a value, click **Insert variable** and choose a local from the list. The picker shows its name and type and inserts a placeholder at the cursor: `score = {i3}` might produce `score = 42`. You can combine several variables with text, or log a variable on its own. Only locals initialized on every incoming path are offered, using their value **before** the selected statement. To observe the result of an assignment, select the following statement.
 
 Supported types are `byte`, `short`, `int`, `long`, `float`, `double`, `boolean`, and `java.lang.String`. APKs may expose names such as `i3` or `r2` instead of the original source names. Use the picker to bind placeholders; ordinary braces in existing text messages stay literal. Object fields, arrays, characters, and expressions are not supported. Locals created with `new String(...)` and their aliases are conservatively omitted; string parameters, constants, and values returned by calls are supported.

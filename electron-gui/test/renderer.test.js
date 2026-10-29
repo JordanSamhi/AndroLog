@@ -445,6 +445,150 @@ test('Insert variable offers only initialized supported locals at the selected p
   doc.getElementById('insert-variable').click();
   assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['i1']);
 });
+test('compact variable masks use the selected method dictionary across byte boundaries', async t => {
+  const dictionary = Array.from({ length: 10 }, (_, i) => ({ name: `i${i}`, type: 'int' }));
+  dictionary[7] = { name: 'enabled', type: 'boolean' }; dictionary[8] = { name: 'title', type: 'java.lang.String' };
+  const catalog = { apkSha256: 'a'.repeat(64), methods: [
+    { className: 'org.example.Main', signature: '<org.example.Main: void run()>', locals: dictionary, statements: [
+      { index: 1, text: 'i0 = 3', selectable: true, localMask: '', locals: [{ name: 'stale', type: 'int' }] },
+      { index: 2, text: 'return', selectable: true, localMask: Buffer.from([0x81, 0x01]).toString('base64') }
+    ] },
+    { className: 'org.example.Main', signature: '<org.example.Main: void second()>', locals: [{ name: 'other', type: 'long' }], statements: [
+      { index: 1, text: 'return', selectable: true, localMask: 'AQ==' }
+    ] }
+  ] };
+  const { dom, doc, calls } = createUi({ inspectCode: async () => catalog }); t.after(() => dom.window.close());
+  await openVariableEditor(doc);
+  doc.querySelectorAll('.code-line')[0].click(); assert.equal(doc.getElementById('insert-variable').disabled, true);
+  doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('insert-variable').click();
+  assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['i0', 'enabled', 'title']);
+  doc.querySelector('.variable-choice[data-variable="title"]').click();
+  doc.querySelectorAll('.code-line')[2].click(); doc.getElementById('insert-variable').click();
+  assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['other']);
+  doc.querySelector('.variable-choice').click();
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  const points = JSON.parse(JSON.stringify(calls[0].plan.points));
+  assert.equal(points[0].message, '{title}'); assert.deepEqual(points[0].variables, [{ name: 'title', type: 'java.lang.String' }]);
+  assert.equal(points[1].message, '{other}'); assert.deepEqual(points[1].variables, [{ name: 'other', type: 'long' }]);
+  assert.equal(catalog.methods[0].statements[1].locals, undefined, 'Browsing does not expand the entire catalog');
+});
+test('invalid compact variable masks do not fall back to stale variable lists', async t => {
+  const catalog = variableCatalog(); catalog.methods[0].statements[1].localMask = 'invalid%';
+  const { dom, doc } = createUi({ inspectCode: async () => catalog }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();
+  assert.equal(doc.getElementById('insert-variable').disabled, true);
+});
+function pendingResult() {
+  let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject };
+}
+function lazyCatalog(hash = 'a') {
+  return { apkSha256: hash.repeat(64), lazy: true, methods: [
+    { className: 'org.example.Main', signature: '<org.example.Main: void first()>' },
+    { className: 'org.example.Main', signature: '<org.example.Main: void second()>' },
+    { className: 'org.other.Other', signature: '<org.other.Other: void run()>' }
+  ] };
+}
+function lazyClass(name, marker = 'return') {
+  return { className: name, methods: lazyCatalog().methods.filter(method => method.className === name).map(method => ({ ...method, statements: [
+    { index: 1, text: `${marker} 1`, selectable: true }, { index: 2, text: `${marker} 2`, selectable: true }
+  ] })) };
+}
+function lazyVariables(signature, name = 'value') {
+  return { signature, locals: [{ name, type: 'int' }], statements: [{ index: 1, localMask: 'AQ==' }, { index: 2, localMask: 'AQ==' }] };
+}
+function chooseClass(doc, name) { [...doc.querySelectorAll('.class-item')].find(button => button.textContent === name).click(); }
+test('lazy browsing loads only opened classes and selected methods and caches them across reopening', async t => {
+  const variables = pendingResult(), classCalls = [], variableCalls = [];
+  const { dom, window, doc, calls } = createUi({
+    inspectCode: async () => lazyCatalog(),
+    inspectClass: async name => { classCalls.push(name); return lazyClass(name); },
+    inspectVariables: signature => { variableCalls.push(signature); return variables.promise; }
+  }); t.after(() => dom.window.close());
+  await openVariableEditor(doc);
+  assert.equal(doc.getElementById('code-class').textContent, 'Choose a class');
+  assert.deepEqual(classCalls, []); assert.deepEqual(variableCalls, []);
+  assert.equal(doc.querySelectorAll('.tree-method').length, 0, 'Closed classes do not build every method button');
+  chooseClass(doc, 'Main'); await tick();
+  assert.deepEqual(classCalls, ['org.example.Main']); assert.equal(doc.querySelectorAll('.code-line').length, 4);
+  assert.equal(doc.querySelectorAll('.tree-method').length, 2); assert.deepEqual(variableCalls, []);
+  doc.querySelectorAll('.code-line')[0].click(); await tick();
+  assert.equal(doc.getElementById('point-message').disabled, false);
+  assert.match(doc.getElementById('variable-hint').textContent, /Reading available variables/);
+  enterMessage(window, doc, 'first'); doc.querySelectorAll('.code-line')[1].click(); await tick();
+  const input = enterMessage(window, doc, 'selected: ');
+  assert.equal(variableCalls.length, 1, 'Two points in the same method share one pending analysis');
+  variables.resolve(lazyVariables(variableCalls[0])); await tick();
+  assert.equal(input.value, 'selected: '); insertVariable(doc, 'value');
+  doc.getElementById('code-apply').click(); doc.getElementById('open-custom').click(); await tick();
+  chooseClass(doc, 'Main'); await tick(); doc.querySelectorAll('.code-line')[1].click(); await tick();
+  assert.equal(classCalls.length, 1); assert.equal(variableCalls.length, 1);
+  assert.equal(doc.getElementById('point-message').value, 'selected: {value}');
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[1].variables)), [{ name: 'value', type: 'int' }]);
+});
+test('late lazy class and variable responses cannot replace a newer selection', async t => {
+  const main = pendingResult(), first = pendingResult(), second = pendingResult();
+  const { dom, doc } = createUi({
+    inspectCode: async () => lazyCatalog(),
+    inspectClass: name => name === 'org.example.Main' ? main.promise : Promise.resolve(lazyClass(name, 'other')),
+    inspectVariables: signature => signature.includes('first') ? first.promise : second.promise
+  }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); chooseClass(doc, 'Main'); await tick(); chooseClass(doc, 'Other'); await tick();
+  main.resolve(lazyClass('org.example.Main', 'main')); await tick();
+  assert.equal(doc.getElementById('code-class').textContent, 'org.other.Other'); assert.match(doc.querySelector('.code-line').textContent, /other/);
+  chooseClass(doc, 'Main'); await tick();
+  doc.querySelectorAll('.code-line')[0].click(); await tick(); doc.querySelectorAll('.code-line')[2].click(); await tick();
+  second.resolve(lazyVariables('<org.example.Main: void second()>', 'secondValue')); await tick();
+  first.resolve(lazyVariables('<org.example.Main: void first()>', 'firstValue')); await tick();
+  doc.getElementById('insert-variable').click();
+  assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['secondValue']);
+});
+test('a new inspection session invalidates class and variable caches even for the same APK hash', async t => {
+  let session = 'first', classCalls = 0, variableCalls = 0;
+  const { dom, doc } = createUi({
+    inspectCode: async () => ({ ...lazyCatalog(), sessionId: session }),
+    inspectClass: async name => { classCalls++; return lazyClass(name, session); },
+    inspectVariables: async signature => { variableCalls++; return lazyVariables(signature, session); }
+  }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); chooseClass(doc, 'Main'); await tick(); doc.querySelector('.code-line').click(); await tick();
+  doc.getElementById('code-cancel').click(); session = 'second'; doc.getElementById('open-custom').click(); await tick();
+  chooseClass(doc, 'Main'); await tick(); doc.querySelector('.code-line').click(); await tick(); doc.getElementById('insert-variable').click();
+  assert.match(doc.querySelector('.code-line').textContent, /second/);
+  assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['second']);
+  assert.equal(classCalls, 2); assert.equal(variableCalls, 2);
+});
+test('lazy class and variable failures can be retried without blocking custom text', async t => {
+  let classCalls = 0, variableCalls = 0;
+  const { dom, window, doc } = createUi({
+    inspectCode: async () => lazyCatalog(),
+    inspectClass: async name => { if (++classCalls === 1) throw Error('Read failed'); return lazyClass(name); },
+    inspectVariables: async signature => { if (++variableCalls === 1) throw Error('Read failed'); return lazyVariables(signature); }
+  }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); chooseClass(doc, 'Main'); await tick();
+  assert.match(doc.getElementById('code-lines').textContent, /Read failed/);
+  [...doc.querySelectorAll('#code-lines button')].find(button => button.textContent === 'Try again').click(); await tick();
+  doc.querySelector('.code-line').click(); await tick();
+  assert.match(doc.getElementById('variable-hint').textContent, /Read failed/);
+  assert.match(doc.getElementById('variable-hint').textContent, /Select this statement again to retry/);
+  enterMessage(window, doc, 'still usable'); doc.querySelector('.code-line').click(); await tick();
+  assert.equal(doc.getElementById('point-message').value, 'still usable'); assert.equal(doc.getElementById('insert-variable').disabled, false);
+  assert.equal(classCalls, 2); assert.equal(variableCalls, 2);
+});
+test('closing lazy browsing suppresses late UI updates and changing APK invalidates cached code', async t => {
+  const oldClass = pendingResult(); let hash = 'a', classCalls = 0;
+  const { dom, window, doc } = createUi({
+    inspectCode: async () => lazyCatalog(hash),
+    inspectClass: async name => { if (++classCalls === 1) return oldClass.promise; return lazyClass(name, 'new APK'); },
+    inspectVariables: async signature => lazyVariables(signature)
+  }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); chooseClass(doc, 'Main'); await tick();
+  const cancel = new window.Event('cancel', { cancelable: true }); doc.getElementById('code-dialog').dispatchEvent(cancel);
+  assert.equal(cancel.defaultPrevented, true); assert.equal(doc.getElementById('code-dialog').open, false);
+  hash = 'b'; doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('open-custom').click(); await tick();
+  chooseClass(doc, 'Main'); await tick(); oldClass.resolve(lazyClass('org.example.Main', 'old APK')); await tick();
+  assert.match(doc.querySelector('.code-line').textContent, /new APK/);
+  assert.equal(classCalls, 2);
+});
 test('variable insertion replaces the selected text at the cursor and sends typed bindings', async t => {
   const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
   await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();

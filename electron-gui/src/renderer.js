@@ -10,6 +10,7 @@
   const basename = value => value ? value.split(/[\\/]/).pop() : '';
   const localTypes = new Set(['byte', 'short', 'int', 'long', 'float', 'double', 'boolean', 'java.lang.String']);
   let variableSelection = null;
+  const codeBrowser = { view: 0, classRequest: 0, classLoads: new Map(), variableLoads: new Map() };
   let toastTimer;
   const deviceTest = { active: false, loading: false, phase: '', started: null, timer: null, request: 0, cancelled: false };
   function toast(text, error = false) { const el = $('toast'); el.textContent = text; el.classList.toggle('error', error); el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 6000); }
@@ -78,6 +79,7 @@
     try {
       const selected = await api.chooseApk(); if (!selected) return;
       state.apk = selected; state.catalog = null; state.points.clear(); state.result = false; state.instrumentTag = null; state.instrumentProbes = []; $('next-steps').hidden = true;
+      codeBrowser.view++; codeBrowser.classLoads.clear(); codeBrowser.variableLoads.clear();
       window.andrologAnimation?.setStage(0, true);
       $('apk-name').textContent = basename(selected); $('apk-path').textContent = selected; $('apk-path').title = selected;
       $('choose-apk').textContent = 'Change APK ↗';
@@ -337,10 +339,16 @@
       state.points.clear(); $('custom-count').textContent = 'Place a log in the code';
       toast('The APK changed. Choose the log points again.');
     }
-    state.catalog = catalog;
+    if (!(catalog.lazy && state.catalog?.lazy && catalog.apkSha256 === state.catalog.apkSha256 && catalog.sessionId === state.catalog.sessionId)) {
+      state.catalog = catalog; codeBrowser.classLoads.clear(); codeBrowser.variableLoads.clear();
+    }
+    codeBrowser.view++;
     state.draft = new Map([...state.points].map(([key, point]) => [key, { ...point, ...(point.variables ? { variables: point.variables.map(variable => ({ ...variable })) } : {}) }])); state.selected = null; state.selectedClass = null;
     $('class-search').value = ''; $('point-message').value = ''; $('point-message').disabled = true; $('point-label').textContent = 'Select a statement'; $('remove-point').disabled = true;
-    const first = [...new Set(state.catalog.methods.map(m => m.className))].sort()[0]; if (first) { revealPackage(first); state.openClasses.add(first); renderClass(first); } else renderClasses(); updateVariables(); $('code-dialog').showModal(); updateDraftCount();
+    const first = [...new Set(state.catalog.methods.map(m => m.className))].sort()[0];
+    if (first && !state.catalog.lazy) { revealPackage(first); state.openClasses.add(first); renderClass(first); }
+    else { $('code-class').textContent = 'Choose a class'; showCodeNotice('Select a class or method in the package tree to read its code.'); renderClasses(); }
+    updateVariables(); $('code-dialog').showModal(); updateDraftCount();
   }
   $('open-custom').addEventListener('click', browseCode);
   function renderClasses() {
@@ -373,12 +381,17 @@
         const item = document.createElement('button'); item.className = 'class-item'; item.type = 'button'; item.textContent = name.slice(name.lastIndexOf('.') + 1); item.classList.toggle('active', name === state.selectedClass);
         item.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); revealPackage(name); state.openClasses.add(name); renderClass(name); });
         heading.appendChild(item); branch.appendChild(heading);
-        branch.addEventListener('toggle', () => { if (!query && branch.isConnected) branch.open ? state.openClasses.add(name) : state.openClasses.delete(name); });
-        for (const method of methods.sort((a, b) => a.signature.localeCompare(b.signature))) {
-          const button = document.createElement('button'); button.type = 'button'; button.className = 'tree-method';
-          button.textContent = method.signature.replace(/^<[^:]+:\s*/, '').replace(/>$/, ''); button.title = method.signature;
-          button.addEventListener('click', () => { revealPackage(name); state.openClasses.add(name); renderClass(name, method.signature); }); branch.appendChild(button);
+        let populated = false;
+        function appendMethods() {
+          if (populated) return; populated = true;
+          for (const method of methods.sort((a, b) => a.signature.localeCompare(b.signature))) {
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'tree-method';
+            button.textContent = method.signature.replace(/^<[^:]+:\s*/, '').replace(/>$/, ''); button.title = method.signature;
+            button.addEventListener('click', () => { revealPackage(name); state.openClasses.add(name); renderClass(name, method.signature); }); branch.appendChild(button);
+          }
         }
+        branch.addEventListener('toggle', () => { if (!branch.isConnected) return; if (!query) branch.open ? state.openClasses.add(name) : state.openClasses.delete(name); if (branch.open) appendMethods(); });
+        if (branch.open || !state.catalog.lazy) appendMethods();
         parent.appendChild(branch);
       }
     }
@@ -390,10 +403,58 @@
     let path = ''; for (const part of parts) { path = path ? `${path}.${part}` : part; state.openPackages.add(path); }
   }
   $('class-search').addEventListener('input', renderClasses);
+  function showCodeNotice(message, retry) {
+    const notice = document.createElement('p'); notice.className = 'tree-empty'; notice.textContent = message;
+    $('code-lines').replaceChildren(notice);
+    if (retry) { const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Try again'; button.addEventListener('click', retry); $('code-lines').appendChild(button); }
+  }
+  function loadClass(name, methods) {
+    const catalog = state.catalog;
+    if (!codeBrowser.classLoads.has(name)) {
+      const request = Promise.resolve().then(() => api.inspectClass(name)).then(result => {
+        if (state.catalog !== catalog) return;
+        if (result?.className !== name || !Array.isArray(result.methods)) throw new Error('The class code could not be read.');
+        const loaded = new Map(result.methods.map(method => [method.signature, method]));
+        for (const method of methods) if (!Array.isArray(loaded.get(method.signature)?.statements)) throw new Error('The class code is incomplete.');
+        for (const method of methods) method.statements = loaded.get(method.signature).statements;
+      }).finally(() => { if (codeBrowser.classLoads.get(name) === request) codeBrowser.classLoads.delete(name); });
+      codeBrowser.classLoads.set(name, request);
+    }
+    return codeBrowser.classLoads.get(name);
+  }
+  function loadVariables(method) {
+    const catalog = state.catalog;
+    if (!codeBrowser.variableLoads.has(method.signature)) {
+      const request = Promise.resolve().then(() => api.inspectVariables(method.signature)).then(result => {
+        if (state.catalog !== catalog) return;
+        if (result?.signature !== method.signature || !Array.isArray(result.locals) || !Array.isArray(result.statements)) throw new Error('The available variables could not be read.');
+        const masks = new Map(result.statements.map(statement => [statement.index, statement.localMask]));
+        for (const statement of method.statements) if (statement.selectable && typeof masks.get(statement.index) !== 'string') throw new Error('The available variables are incomplete.');
+        method.locals = result.locals;
+        for (const statement of method.statements) statement.localMask = masks.get(statement.index) || '';
+        method.variablesLoaded = true;
+      }).finally(() => { if (codeBrowser.variableLoads.get(method.signature) === request) codeBrowser.variableLoads.delete(method.signature); });
+      codeBrowser.variableLoads.set(method.signature, request);
+    }
+    return codeBrowser.variableLoads.get(method.signature);
+  }
   function renderClass(name, selectedMethod = null) {
+    const view = codeBrowser.view, request = ++codeBrowser.classRequest;
     state.selectedClass = name; state.selected = null; $('point-message').value = ''; $('point-message').disabled = true; $('remove-point').disabled = true; $('point-label').textContent = 'Select a statement'; $('code-class').textContent = name; updateVariables();
+    renderClasses();
+    const methods = state.catalog.methods.filter(method => method.className === name);
+    if (state.catalog.lazy && methods.some(method => !Array.isArray(method.statements))) {
+      showCodeNotice('Reading this class…');
+      loadClass(name, methods).then(() => {
+        if (view === codeBrowser.view && request === codeBrowser.classRequest) renderClassStatements(methods, selectedMethod);
+      }).catch(error => {
+        if (view === codeBrowser.view && request === codeBrowser.classRequest) showCodeNotice(error.message || 'Could not read this class.', () => renderClass(name, selectedMethod));
+      });
+    } else renderClassStatements(methods, selectedMethod);
+  }
+  function renderClassStatements(methods, selectedMethod) {
     const lines = $('code-lines'); lines.replaceChildren(); let target = null;
-    for (const method of state.catalog.methods.filter(m => m.className === name)) {
+    for (const method of methods) {
       const heading = document.createElement('div'); heading.className = 'code-method'; heading.textContent = method.signature; lines.appendChild(heading); if (method.signature === selectedMethod) target = heading;
       for (const statement of method.statements) {
         const key = identity(method.signature, statement.index); const row = document.createElement('button'); row.type = 'button'; row.className = 'code-line'; row.disabled = !statement.selectable;
@@ -402,17 +463,41 @@
         row.addEventListener('click', () => selectPoint(method, statement, row, num)); lines.appendChild(row);
       }
     }
-    renderClasses(); lines.scrollTop = target ? target.offsetTop - lines.offsetTop : 0;
+    lines.scrollTop = target ? target.offsetTop - lines.offsetTop : 0;
   }
   function selectPoint(method, statement, row, number) {
     $('code-lines').querySelectorAll('.code-line.active').forEach(el => el.classList.remove('active')); row.classList.add('active');
     const key = identity(method.signature, statement.index); state.selected = { key, method, statement, number, variables: (state.draft.get(key)?.variables || []).map(variable => ({ ...variable })) };
+    const selection = state.selected, view = codeBrowser.view;
+    if (state.catalog.lazy && !method.variablesLoaded) {
+      selection.variablesPending = true;
+      loadVariables(method).then(() => {
+        if (state.selected === selection && view === codeBrowser.view) { selection.variablesPending = false; updateVariables(); }
+      }).catch(error => {
+        if (state.selected === selection && view === codeBrowser.view) { selection.variablesPending = false; selection.variablesError = error.message || 'Could not read variables.'; updateVariables(); }
+      });
+    }
     $('point-label').textContent = `Before statement ${statement.index}`; $('point-label').title = method.signature;
     $('point-message').disabled = false; $('point-message').value = state.draft.get(key)?.message || ''; $('remove-point').disabled = !state.draft.has(key); updateVariables(); $('point-message').focus();
   }
   function availableVariables() {
     const unique = new Map();
-    for (const local of state.selected?.statement.locals || []) {
+    const selected = state.selected;
+    let locals = selected?.statement.locals || [];
+    if (typeof selected?.statement.localMask === 'string') {
+      // The catalog stores each method's variable descriptions once. Expand only
+      // this statement's little-endian availability bits when its picker is used.
+      locals = [];
+      const dictionary = selected.method.locals || [];
+      try {
+        const mask = atob(selected.statement.localMask);
+        for (let byte = 0; byte < mask.length && byte * 8 < dictionary.length; byte++) {
+          const bits = mask.charCodeAt(byte);
+          for (let bit = 0; bit < 8; bit++) if (bits & (1 << bit)) locals.push(dictionary[byte * 8 + bit]);
+        }
+      } catch { /* An invalid mask must not offer potentially uninitialized values. */ }
+    }
+    for (const local of locals) {
       if (local && typeof local.name === 'string' && /^[^\s{}\u0000-\u001f\u007f]{1,200}$/u.test(local.name) && localTypes.has(local.type)) unique.set(local.name, { name: local.name, type: local.type });
     }
     return [...unique.values()];
@@ -423,8 +508,8 @@
   }
   function updateVariables() {
     closeVariables();
-    const available = availableVariables(); $('insert-variable').disabled = !available.length;
-    $('variable-hint').textContent = !state.selected ? 'Select a statement to insert a local variable.' : available.length ? 'Insert variables to log their values before this statement.' : 'No initialized number, boolean, or string is available here.';
+    const available = state.selected?.variablesPending || state.selected?.variablesError ? [] : availableVariables(); $('insert-variable').disabled = !available.length;
+    $('variable-hint').textContent = !state.selected ? 'Select a statement to insert a local variable.' : state.selected.variablesPending ? 'Reading available variables…' : state.selected.variablesError ? `${state.selected.variablesError} Select this statement again to retry.` : available.length ? 'Insert variables to log their values before this statement.' : 'No initialized number, boolean, or string is available here.';
     $('insert-variable').title = $('variable-hint').textContent;
   }
   $('insert-variable').addEventListener('click', () => {
@@ -464,8 +549,9 @@
     const marked = state.draft.has(key); number.textContent = `${marked ? '● ' : ''}${statement.index}`; number.classList.toggle('marked', marked); $('remove-point').disabled = !marked; updateDraftCount();
   });
   $('remove-point').addEventListener('click', () => { $('point-message').value = ''; $('point-message').dispatchEvent(new Event('input')); });
-  function closeCode() { closeVariables(); $('code-dialog').close(); }
+  function closeCode() { codeBrowser.view++; closeVariables(); $('code-dialog').close(); }
   $('code-close').addEventListener('click', closeCode); $('code-cancel').addEventListener('click', closeCode);
+  $('code-dialog').addEventListener('cancel', event => { event.preventDefault(); closeCode(); });
   $('code-apply').addEventListener('click', () => {
     for (const point of state.draft.values()) if (/[\n\r\0]/.test(point.message) || new TextEncoder().encode(point.message).length > 1000) { toast('Each message must fit on one line and within 1,000 UTF-8 bytes.', true); return; }
     state.points = new Map(state.draft); $('custom-count').textContent = state.points.size ? `${state.points.size} log ${state.points.size === 1 ? 'point' : 'points'} selected` : 'Place a log in the code'; closeCode();

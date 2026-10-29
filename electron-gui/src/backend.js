@@ -6,6 +6,7 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
+const { CodeBrowserSession } = require('./code-browser');
 
 const FLAGS = ['-c', '-m', '-s', '-cp', '-mc'];
 const TAG = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
@@ -125,12 +126,13 @@ function createOperation(interactive = false) {
 }
 
 class Backend {
-  constructor({ jar, tempRoot, defaultJava, emit = () => {} }) { this.jar = jar; this.tempRoot = tempRoot; this.defaultJava = defaultJava; this.emit = emit; this.child = null; this.active = null; this.workspaces = new Set(); }
+  constructor({ jar, tempRoot, defaultJava, emit = () => {} }) { this.jar = jar; this.tempRoot = tempRoot; this.defaultJava = defaultJava; this.emit = emit; this.child = null; this.active = null; this.workspaces = new Set(); this.codeBrowser = null; this.codeBrowserQueue = Promise.resolve(); this.codeBrowserGeneration = 0; }
   async run(settings, args, { config = false, workDir, label = 'Working', mainClass = 'com.jordansamhi.androlog.Main', interactive = false, onLine, timeoutMs = 0, reservation } = {}) {
     if (this.active && this.active !== reservation) throw new Error('Another operation is already running.');
     const operation = reservation || createOperation(interactive);
     this.active = operation;
     try {
+      await this.closeCodeBrowser();
       await regularFile(this.jar, 'the AndroLog backend JAR');
       const java = settings.java || this.defaultJava || (process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, 'bin', process.platform === 'win32' ? 'java.exe' : 'java') : 'java');
       let classpath = this.jar;
@@ -201,6 +203,7 @@ class Backend {
     });
   }
   cancel() {
+    if (!this.active) { void this.closeCodeBrowser(); return; }
     if (this.active) this.active.cancelled = true;
     if (!this.child) return;
     const active = this.child;
@@ -223,6 +226,7 @@ class Backend {
   }
   async workspace() { const dir = await fsp.mkdtemp(path.join(this.tempRoot || os.tmpdir(), 'androlog-electron-')); this.workspaces.add(dir); return dir; }
   async shutdown() {
+    await this.closeCodeBrowser();
     const active = this.child; this.cancel();
     if (active) await new Promise(resolve => {
       const timer = setTimeout(resolve, 2500); timer.unref();
@@ -296,11 +300,68 @@ class Backend {
       if (this.active === operation) { this.child = null; this.active = null; }
     }
   }
-  async inspect(apk, settings) {
-    apk = await regularFile(apk, 'the original APK'); await validateSettings(settings, false);
-    const dir = await this.workspace(), output = path.join(dir, 'catalog.json');
-    try { await this.run(settings, ['-a', apk, '-p', settings.platforms, '-o', dir, '--inspect-code', output], { workDir: dir, label: 'Reading APK code' }); return JSON.parse(await fsp.readFile(output, 'utf8')); }
-    finally { await this.discard(dir); }
+  async closeCodeBrowser() {
+    this.codeBrowserGeneration++;
+    const browser = this.codeBrowser; this.codeBrowser = null;
+    if (browser) { await browser.session.close(); await this.discard(browser.directory); }
+  }
+  browse(apk, settings, reset, action) {
+    const generation = this.codeBrowserGeneration;
+    const task = this.codeBrowserQueue.then(async () => {
+      const cancelled = () => { if (generation !== this.codeBrowserGeneration) throw new Error('Operation cancelled.'); };
+      cancelled();
+      if (this.active) throw new Error('Another operation is already running.');
+      apk = await regularFile(apk, 'the original APK'); await validateSettings(settings, false);
+      await regularFile(this.jar, 'the AndroLog backend JAR');
+      const apkSha256 = await hashFile(apk), jarStat = await fsp.stat(this.jar);
+      const java = settings.java || this.defaultJava || (process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, 'bin', process.platform === 'win32' ? 'java.exe' : 'java') : 'java');
+      const key = JSON.stringify([apk, apkSha256, settings.platforms, java, this.jar, jarStat.size, jarStat.mtimeMs]);
+      cancelled();
+      if (this.codeBrowser && (this.codeBrowser.key !== key || this.codeBrowser.session.closed)) {
+        const previous = this.codeBrowser; this.codeBrowser = null;
+        await previous.session.close(); await this.discard(previous.directory);
+        if (!reset) throw new Error('The APK or code browser changed. Close Your own messages and open it again.');
+      }
+      cancelled();
+      if (!this.codeBrowser) {
+        if (!reset) throw new Error('The code browser is closed. Open Your own messages again.');
+        const directory = await this.workspace();
+        try {
+          cancelled();
+          this.emit({ type: 'start', label: 'Reading APK packages' });
+          const session = new CodeBrowserSession({ java, jar: this.jar, apk, platforms: settings.platforms, directory, emit: this.emit });
+          this.codeBrowser = { key, directory, session, id: crypto.randomUUID(), outline: null };
+        } catch (error) { await this.discard(directory); throw error; }
+      }
+      const browser = this.codeBrowser;
+      try {
+        const outline = await browser.session.ready;
+        cancelled();
+        if (!outline || outline.apkSha256 !== apkSha256 || !outline.lazy || !Array.isArray(outline.methods)) {
+          await browser.session.close();
+          throw new Error('The APK changed or its code index is incomplete. Open Your own messages again.');
+        }
+        if (!browser.outline) browser.outline = { ...outline, sessionId: browser.id };
+        return await action(browser.session, browser.outline);
+      } catch (error) {
+        // Java permanently invalidates a session once it observes changed APK bytes,
+        // even if the original file is restored before our next hash check.
+        const staleApk = error.message?.startsWith('The APK changed while browsing its code.');
+        if (this.codeBrowser === browser && (!browser.outline || browser.session.closed || staleApk)) { this.codeBrowser = null; await browser.session.close(); await this.discard(browser.directory); }
+        throw error;
+      }
+    });
+    this.codeBrowserQueue = task.catch(() => {});
+    return task;
+  }
+  inspect(apk, settings) { return this.browse(apk, settings, true, (_session, outline) => outline); }
+  inspectClass(apk, settings, className) {
+    if (typeof className !== 'string' || !className || className.length > 4096) return Promise.reject(new Error('Choose a class from the package tree.'));
+    return this.browse(apk, settings, false, session => session.request('class', { className }));
+  }
+  inspectVariables(apk, settings, method) {
+    if (typeof method !== 'string' || !method || method.length > 16384) return Promise.reject(new Error('Choose a method from the code browser.'));
+    return this.browse(apk, settings, false, session => session.request('variables', { method }));
   }
   async instrument(apk, settings, opts, plan) {
     apk = await regularFile(apk, 'an APK'); await validateSettings(settings, true); validateOptions(opts);
