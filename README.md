@@ -41,9 +41,13 @@ Open the **original APK** in **Instrument**. Select classes, methods, statements
 
 Open **Custom logging**, browse the package → class → method tree, and select a statement:
 
-- **Statement reached** records whether execution reaches that point. Nothing to type.
-- **Custom message** logs a string you choose, such as `starting checkout`.
-- **Variable value** records a local number, boolean, string, or object. Objects use their `toString()` representation.
+| Option | What you choose | What the report shows |
+| --- | --- | --- |
+| **Statement reached** | Just the statement; nothing to type. AndroLog adds an internal marker. | Its location and **Reached / Not reached** status. |
+| **Custom message** | A string, such as `starting checkout`. | Your message, its location, and whether it was reached. |
+| **Variable value** | Click **Choose variable** and select a local number, boolean, string, or object. | Its location, whether it was reached, and the **Latest value** captured. |
+
+Click **Use log points**, then **Instrument APK**. Choose **Custom only** if you want these points without automatic coverage probes. Values are recorded **before** the selected statement; to inspect an assignment's result, select the following statement. Objects use their `toString()` representation.
 
 <details>
 <summary>See custom log selection</summary>
@@ -73,7 +77,7 @@ Each test keeps the exact APK and its logs together. You can also use the comman
 
 [![Coverage dashboard with observed totals, percentages, and custom log results](data/screenshots/gui-coverage.png)](data/screenshots/gui-coverage.png)
 
-Custom logs show their location and a green **Reached** or red **Not reached** status. Variable logs also show the **Latest value** printed during the run. Click a row to jump to its statement in Explore. Red means not observed in this capture, not necessarily unreachable.
+Custom logs are grouped into **Statement reached**, **Custom messages**, and **Variable values**, with green **Reached** or red **Not reached** feedback. Variable logs also show the **Latest value** printed during the run. Click a row to jump to its statement in Explore. Red means not observed in this capture, not necessarily unreachable.
 
 **The instrumented APK and its logs are enough to analyze a run on another computer.** No original APK or local instrumentation history is required. AndroLog's added code is excluded from the statistics.
 
