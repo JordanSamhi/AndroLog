@@ -90,7 +90,9 @@ test('hostile message text remains inert in the panel and inline annotations', t
   const message = '</script><img src=x onerror="window.__executed=true"> $&';
   const { dom, doc, errors } = fixture({ points: [{ id: 'hostile', method: first, index: 1, statement: text, message, count: 1 }], hash: '#custom=hostile' });
   t.after(() => dom.window.close());
-  assert.equal(doc.querySelector('.custom-inline-log').textContent, message);
+  assert.equal(doc.querySelector('.custom-inline-message').textContent, message);
+  assert.equal(doc.querySelector('.custom-inline-kind').textContent, 'Statement marker');
+  assert.equal(doc.querySelector('.custom-inline-status').textContent, 'Reached');
   assert.equal(doc.querySelector('.custom-point strong').textContent, message);
   assert.equal(doc.querySelector('.custom-inline-log img'), null);
   assert.equal(dom.window.__executed, undefined);
@@ -103,10 +105,46 @@ test('variable templates show the latest sample safely in the panel and beside t
   const { dom, doc, errors } = fixture({ points: [{ id: 'variable', method: first, index: 1, statement: text,
     message: 'value={i3}', count: 3, samples: ['value=1', 'value=2', sample] }], hash: '#custom=variable' });
   t.after(() => dom.window.close());
-  assert.equal(doc.querySelector('.custom-point strong').textContent, 'value={i3}');
-  assert.equal(doc.querySelector('.custom-value').textContent, 'Latest: ' + sample);
-  assert.equal(doc.querySelector('.custom-inline-value').textContent, 'Latest: ' + sample);
+  assert.equal(doc.querySelector('.custom-value-label').textContent, 'value={i3}');
+  assert.equal(doc.querySelector('.custom-point strong').textContent, sample);
+  assert.equal(doc.querySelector('.custom-value-caption').textContent, 'Latest value');
+  assert.equal(doc.querySelector('.custom-value').textContent, sample);
+  assert.equal(doc.querySelector('.custom-inline-value').textContent, 'Latest value: ' + sample);
   assert.match(doc.querySelector('.custom-inline-log').title, /value=1\nvalue=2/);
   assert.equal(doc.querySelector('.custom-inline-log img'), null); assert.equal(doc.querySelector('.custom-value img'), null);
   assert.equal(dom.window.__executed, undefined); assert.deepEqual(errors.map(e => e.message), []);
+});
+
+test('marker and value logs have distinct sections and honest missing-value states', t => {
+  const { dom, doc, errors } = fixture({ points: [
+    { id: 'marker', kind: 'marker', method: first, index: 1, statement: text, message: 'reached {r1}', count: 1, samples: ['must be ignored'] },
+    { id: 'never', kind: 'value', method: first, index: 2, statement: text, message: '{i0}', count: 0, samples: ['must not show'] },
+    { id: 'missing', kind: 'value', method: second, index: 1, statement: text, message: '{r1}', count: 2, samples: [] }
+  ] }); t.after(() => dom.window.close());
+  assert.deepEqual([...doc.querySelectorAll('.custom-group-heading')].map(el => el.textContent), ['Statement markers', 'Variable values']);
+  const marker = doc.querySelector('[data-custom-point="marker"]');
+  assert.equal(marker.querySelector('strong').textContent, 'reached {r1}'); assert.equal(marker.querySelector('.custom-status').textContent, 'Reached');
+  assert.equal(marker.querySelector('.custom-value'), null);
+  const never = doc.querySelector('[data-custom-point="never"]');
+  assert.equal(never.querySelector('.custom-status').textContent, 'Not reached'); assert.equal(never.querySelector('.custom-value'), null);
+  const missing = doc.querySelector('[data-custom-point="missing"]');
+  assert.equal(missing.querySelector('.custom-status').firstChild.textContent, 'Reached · value not captured'); assert.equal(missing.querySelector('.custom-value'), null);
+  assert.equal(doc.querySelector('[data-custom-point-id="missing"] .custom-inline-status').textContent, 'Reached · value not captured');
+  assert.equal(doc.querySelector('[data-custom-point-id="never"] .custom-inline-status').textContent, 'Not reached');
+  assert.equal(doc.querySelectorAll('.custom-inline-value').length, 0);
+  assert.deepEqual(errors.map(e => e.message), []);
+});
+
+test('latest values preserve null and empty strings and honor legacy dynamic metadata', t => {
+  const { dom, doc, errors } = fixture({ points: [
+    { id: 'null', kind: 'value', method: first, index: 1, statement: text, message: '{r0}', status: 'covered', count: 2, samples: ['old', 'null'], latestValue: 'null' },
+    { id: 'empty', dynamic: true, method: first, index: 2, statement: text, message: '{r1}', count: 1, samples: ['old'], latestValue: '' },
+    { id: 'legacy-missing', dynamic: true, method: second, index: 1, statement: text, message: '{i0}', count: 1 }
+  ] }); t.after(() => dom.window.close());
+  assert.equal(doc.querySelector('[data-custom-point="null"] .custom-value').textContent, 'null');
+  assert.equal(doc.querySelector('[data-custom-point="empty"] .custom-value').textContent, '(empty string)');
+  assert.equal(doc.querySelector('[data-custom-point-id="empty"] .custom-inline-value').textContent, 'Latest value: (empty string)');
+  assert.equal(doc.querySelector('[data-custom-point="legacy-missing"]').dataset.kind, 'value');
+  assert.equal(doc.querySelector('[data-custom-point-id="legacy-missing"] .custom-inline-status').textContent, 'Reached · value not captured');
+  assert.deepEqual(errors.map(e => e.message), []);
 });

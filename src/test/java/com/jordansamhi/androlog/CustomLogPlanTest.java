@@ -62,6 +62,39 @@ public class CustomLogPlanTest {
         point.message = "{$i0}"; point.variables.add(new CustomLogPlan.Variable("$i0", "int")); expectFailure(plan::validate, "only be listed once");
     }
 
+    @Test public void explicitKindsRoundTripAndKeepLiteralBracesAsStatementMarkers() throws Exception {
+        CustomLogPlan.Point marker = new CustomLogPlan.Point("<example.App: void run()>", 1, "nop", "reached {literal}");
+        marker.kind = "marker";
+        CustomLogPlan.Point value = new CustomLogPlan.Point("<example.App: void run()>", 2, "return", "{$r2}");
+        value.kind = "value"; value.variables.add(new CustomLogPlan.Variable("$r2", "example.Object"));
+        CustomLogPlan plan = new CustomLogPlan(repeat("a", 64), Arrays.asList(marker, value));
+        Path file = temporary.newFile("kinds.json").toPath(); plan.write(file);
+        CustomLogPlan restored = CustomLogPlan.read(file);
+        assertEquals("marker", restored.points.get(0).kind);
+        assertEquals("reached {literal}", restored.points.get(0).message);
+        assertTrue(restored.points.get(0).variables.isEmpty());
+        assertEquals("value", restored.points.get(1).kind);
+        assertEquals("{$r2}", restored.points.get(1).message);
+        assertEquals("example.Object", restored.points.get(1).variables.get(0).type);
+    }
+
+    @Test public void explicitKindsRejectContradictoryBindingsButLegacyMixedMessagesStillWork() throws Exception {
+        CustomLogPlan.Point point = new CustomLogPlan.Point("<example.App: void run()>", 2, "return", "{first}");
+        CustomLogPlan plan = new CustomLogPlan(repeat("a", 64), Collections.singletonList(point));
+        point.kind = "invalid"; expectFailure(plan::validate, "statement marker or a variable value");
+        point.kind = "value"; expectFailure(plan::validate, "exactly one variable");
+        point.variables.add(new CustomLogPlan.Variable("first", "int")); plan.validate();
+        point.kind = "marker"; expectFailure(plan::validate, "cannot bind variables");
+        point.kind = "value"; point.message = "value={first}"; expectFailure(plan::validate, "additional message text");
+        point.variables.add(new CustomLogPlan.Variable("second", "java.lang.String")); point.message = "{first} {second}";
+        expectFailure(plan::validate, "exactly one variable");
+        point.kind = null; plan.validate();
+        Path file = temporary.newFile("legacy-values.json").toPath(); plan.write(file);
+        CustomLogPlan restored = CustomLogPlan.read(file);
+        assertNull(restored.points.get(0).kind); assertEquals(2, restored.points.get(0).variables.size());
+        assertEquals("{first} {second}", restored.points.get(0).message);
+    }
+
     private static String repeat(String value, int count) { return String.join("", Collections.nCopies(count, value)); }
     private interface Action { void run() throws IOException; }
     private static void expectFailure(Action action, String message) throws Exception {

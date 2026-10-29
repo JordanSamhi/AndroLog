@@ -39,7 +39,7 @@ Open the **original APK** in **Instrument**. Select classes, methods, statements
 
 [![Instrument view: choose an APK, logging options, and a Logcat tag](data/screenshots/gui-instrument.png)](data/screenshots/gui-instrument.png)
 
-Want a message at one specific point? Open **Your own messages**, browse the package → class → method tree, select a statement, and type a message such as `reached this point`. Use **Insert variable** to include an available local number, boolean, string, or object, for example `score = {i3}`. Objects use their `toString()` representation.
+Open **Custom logging**, browse the package → class → method tree, and select a statement. Choose **Statement reached** to attach a message such as `reached this point`, or **Variable value** to record a local number, boolean, string, or object. Objects use their `toString()` representation.
 
 <details>
 <summary>See custom log selection</summary>
@@ -69,7 +69,7 @@ Each test keeps the exact APK and its logs together. You can also use the comman
 
 [![Coverage dashboard with observed totals, percentages, and custom log results](data/screenshots/gui-coverage.png)](data/screenshots/gui-coverage.png)
 
-Custom logs show their location, latest recorded value when available, and a green **Covered** or red **Not covered** marker. Click one to jump to its statement. Red means not observed in this capture, not necessarily unreachable.
+Custom logs show their location and a green **Reached** or red **Not reached** status. Variable logs also show the **Latest value** printed during the run. Click a row to jump to its statement in Explore. Red means not observed in this capture, not necessarily unreachable.
 
 **The instrumented APK and its logs are enough to analyze a run on another computer.** No original APK or local instrumentation history is required. AndroLog's added code is excluded from the statistics.
 

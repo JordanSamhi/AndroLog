@@ -209,6 +209,7 @@ public final class InstrumentedCode {
                 Map<String, Object> point = new LinkedHashMap<>();
                 point.put("id", custom.id); point.put("method", method);
                 point.put("index", row == null ? 0 : row); point.put("statement", textByUnit.get(target)); point.put("message", custom.message);
+                point.put("kind", custom.dynamic ? "value" : "marker");
                 if (custom.dynamic) point.put("dynamic", true);
                 result.customPoints.add(point);
             }

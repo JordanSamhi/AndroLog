@@ -26,6 +26,7 @@ public final class CustomLogPlan {
         public int index;
         public String statement;
         public String message;
+        public String kind; // Optional for legacy plans; new points use marker or value.
         public String id; // Optional unique marker for GUI execution feedback.
         public List<Variable> variables = new ArrayList<>();
         public Point() { }
@@ -51,12 +52,22 @@ public final class CustomLogPlan {
                 throw new IOException("A custom log point is incomplete. Browse the APK and select its statement again.");
             }
             validateMessage(point.message);
+            if (point.kind != null && !"marker".equals(point.kind) && !"value".equals(point.kind)) {
+                throw new IOException("Choose a statement marker or a variable value log.");
+            }
             Set<String> variables = new HashSet<>();
             if (point.variables != null) for (Variable variable : point.variables) {
                 if (variable == null || variable.name == null || !variable.name.matches("[^\\s{}\\p{Cntrl}]{1,200}")
                         || !LocalVariableAvailability.supported(variable.type)) throw new IOException("Choose a supported local variable from the selected statement.");
                 if (!variables.add(variable.name)) throw new IOException("A local variable may only be listed once in a custom log.");
                 if (!point.message.contains("{" + variable.name + "}")) throw new IOException("A custom log variable is missing its placeholder.");
+            }
+            if ("marker".equals(point.kind) && !variables.isEmpty()) {
+                throw new IOException("Statement markers use a literal message and cannot bind variables.");
+            }
+            if ("value".equals(point.kind) && (variables.size() != 1
+                    || !point.message.equals("{" + point.variables.get(0).name + "}"))) {
+                throw new IOException("A variable value log must select exactly one variable without additional message text.");
             }
             if (point.id != null && !point.id.matches("[a-f0-9]{32}")) throw new IOException("Invalid custom log point identifier.");
             if (!identities.add(point.method + "\n" + point.index)) throw new IOException("Only one custom message may be attached to each statement. Edit the existing message instead.");

@@ -104,6 +104,21 @@ test('variable plans accept only explicit supported template bindings and leave 
   assert.throws(() => validatePlan(plan({ ...point, variables: [{ name: 'other', type: 'int' }] })), /missing/);
 });
 
+test('custom log modes keep literal markers separate from a single selected value', () => {
+  const point = { method: '<A: void x()>', index: 1, statement: 'return', message: '{i0}', variables: [{ name: 'i0', type: 'int' }] };
+  const plan = value => ({ apkSha256: 'a'.repeat(64), points: [value] });
+  assert.doesNotThrow(() => validatePlan(plan({ ...point, kind: 'value' })));
+  assert.doesNotThrow(() => validatePlan(plan({ ...point, kind: 'marker', variables: [] })));
+  assert.doesNotThrow(() => validatePlan(plan({ ...point, kind: 'marker', variables: undefined })));
+  assert.throws(() => validatePlan(plan({ ...point, kind: 'marker' })), /literal message/);
+  for (const variables of [undefined, null, [], [...point.variables, { name: 'i1', type: 'int' }]]) {
+    assert.throws(() => validatePlan(plan({ ...point, kind: 'value', message: '{i0}{i1}', variables })), /exactly one/);
+  }
+  assert.throws(() => validatePlan(plan({ ...point, kind: 'value', message: 'score={i0}' })), /without additional/);
+  for (const kind of ['', 'unknown', 1, true]) assert.throws(() => validatePlan(plan({ ...point, kind })), /statement marker or a variable/);
+  assert.doesNotThrow(() => validatePlan(plan({ ...point, message: 'legacy score={i0}' })));
+});
+
 test('custom message summaries include tagged variable values without counting their marker twice', async t => {
   const { readCustomMessages } = require('../src/backend');
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'androlog-variable-messages-')); t.after(() => fs.rm(dir, { recursive: true, force: true }));

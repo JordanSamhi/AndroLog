@@ -113,6 +113,8 @@ public class InstrumentedCodeTest {
         InstrumentedCode.Result scan = InstrumentedCode.inspect(body, "TEST", null);
         assertTrue(scan.foundProbes); assertTrue(scan.expected.isEmpty());
         assertEquals(2, scan.code.getStatements().size()); assertEquals(2, scan.customPoints.size());
+        assertEquals("marker", scan.customPoints.get(0).get("kind"));
+        assertEquals("marker", scan.customPoints.get(1).get("kind"));
         assertNull(scan.customPoints.get(0).get("id")); assertEquals(1, scan.customPoints.get(0).get("index"));
         assertEquals("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", scan.customPoints.get(1).get("id"));
         assertEquals(2, scan.customPoints.get(1).get("index"));
@@ -144,6 +146,7 @@ public class InstrumentedCodeTest {
         assertEquals("return", scan.code.getStatements().get(2).getText());
         Map<String, Object> point = scan.customPoints.get(0);
         assertEquals("score={i3}", point.get("message")); assertEquals(Boolean.TRUE, point.get("dynamic"));
+        assertEquals("value", point.get("kind"));
         assertEquals("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", point.get("id")); assertEquals(3, point.get("index"));
         assertTrue(InstrumentedCode.isHelper(helper.getName()));
         assertFalse(InstrumentedCode.inspect(body, "OTHER", null).foundProbes);
@@ -190,6 +193,7 @@ public class InstrumentedCodeTest {
         assertEquals("alias = original", scan.code.getStatements().get(1).getText());
         Map<String, Object> point = scan.customPoints.get(0);
         assertEquals("{alias}", point.get("message")); assertEquals(Boolean.TRUE, point.get("dynamic"));
+        assertEquals("value", point.get("kind"));
         assertEquals("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", point.get("id"));
         assertEquals(3, point.get("index")); assertEquals("return", point.get("statement"));
         assertFalse(InstrumentedCode.inspect(body, "OTHER", null).foundProbes);

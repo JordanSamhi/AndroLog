@@ -32,6 +32,8 @@ public class InstrumentedReportTest {
         Map<String, Object> custom = CustomPointReport.build(apk, log);
         List<Map<String, Object>> points = points(custom);
         assertEquals("covered", points.get(0).get("status")); assertEquals(2, points.get(0).get("count"));
+        assertEquals("marker", points.get(0).get("kind")); assertFalse(points.get(0).containsKey("samples"));
+        assertFalse(points.get(0).containsKey("latestValue"));
         assertEquals("uncovered", points.get(1).get("status")); assertEquals(0, points.get(1).get("count"));
         assertTrue(log.getSummary().isEmpty());
     }
@@ -72,6 +74,7 @@ public class InstrumentedReportTest {
         new LogParser("TEST", apk).parseLogs(input.toString());
         List<Map<String, Object>> points = points(CustomPointReport.build(apk, log));
         assertEquals(Arrays.asList("score=3", "score=4", "score=2"), points.get(0).get("samples"));
+        assertEquals("value", points.get(0).get("kind")); assertEquals("score=2", points.get(0).get("latestValue"));
         assertEquals(Collections.singletonList("score=99"), points.get(1).get("samples"));
         assertEquals(5, points.get(0).get("count")); assertEquals("covered", points.get(0).get("status"));
         assertEquals("covered", points.get(1).get("status")); assertEquals(1, points.get(1).get("count"));
@@ -102,7 +105,34 @@ public class InstrumentedReportTest {
         List<Map<String, Object>> points = points(CustomPointReport.build(apk, log));
         for (Map<String, Object> point : points) { assertEquals("covered", point.get("status")); assertEquals(1, point.get("count")); }
         assertEquals(Collections.singletonList(unicode), points.get(0).get("samples"));
+        assertEquals("value", points.get(0).get("kind")); assertEquals(unicode, points.get(0).get("latestValue"));
         assertEquals(0, log.getCustomValueCount(foreign)); assertTrue(log.getCustomValues(foreign).isEmpty());
+    }
+
+    @Test public void markerFeedbackNeverIncludesValuesAndReachedValueWithoutPayloadRemainsExplicit() throws Exception {
+        addPoint(FIRST, 1, "reached {literal}"); addPoint(SECOND, 2, "{value}");
+        Map<String, Object> marker = apk.getCustomPoints().get(0), value = apk.getCustomPoints().get(1);
+        marker.put("kind", "marker"); marker.put("dynamic", true);
+        marker.put("samples", Collections.singletonList("stale metadata")); marker.put("latestValue", "stale metadata");
+        value.put("kind", "value"); value.put("dynamic", true);
+        log.recordCustomValue(FIRST, "wrong-kind value"); log.recordCustomMarker(SECOND);
+        List<Map<String, Object>> points = points(CustomPointReport.build(apk, log));
+        assertEquals("marker", points.get(0).get("kind")); assertEquals("uncovered", points.get(0).get("status"));
+        assertFalse(points.get(0).containsKey("samples")); assertFalse(points.get(0).containsKey("latestValue"));
+        assertFalse(points.get(0).containsKey("dynamic"));
+        assertEquals("value", points.get(1).get("kind")); assertEquals("covered", points.get(1).get("status"));
+        assertEquals(Collections.emptyList(), points.get(1).get("samples")); assertFalse(points.get(1).containsKey("latestValue"));
+    }
+
+    @Test public void anEmptyPrintedStringIsAValueWhileAnUnreachedValueHasNoLatestValue() throws Exception {
+        addPoint(FIRST, 1, "{text}"); addPoint(SECOND, 2, "{text}");
+        for (Map<String, Object> point : apk.getCustomPoints()) point.put("kind", "value");
+        log.recordCustomValue(FIRST, "");
+        List<Map<String, Object>> points = points(CustomPointReport.build(apk, log));
+        assertEquals("covered", points.get(0).get("status")); assertEquals("", points.get(0).get("latestValue"));
+        assertEquals(Collections.singletonList(""), points.get(0).get("samples"));
+        assertEquals("uncovered", points.get(1).get("status")); assertEquals(Collections.emptyList(), points.get(1).get("samples"));
+        assertFalse(points.get(1).containsKey("latestValue"));
     }
 
     @Test public void cappedVariableSummariesDoNotLoseLegacyLiteralCoverage() throws Exception {

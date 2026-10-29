@@ -51,15 +51,20 @@ SDK preferences are stored in the application's user-data directory, outside the
 
 Save the output before choosing another APK or closing the app. The GUI warns if you have an unsaved instrumented APK. Use a test device or emulator: an existing installation signed by the original publisher may conflict with the test-signed copy.
 
-### Place your own messages
+### Add custom logs
 
-Open **Your own messages** to inspect the APK. Expand the nested **package → class → method** tree, choose a method, and scroll through its class's Jimple listing. Select a statement, type a message such as `reached this point`, and click **Use log points**. You can edit or remove a point before applying the selection; **Cancel** discards changes in the code browser.
+Open **Custom logging** to inspect the APK. Expand the nested **package → class → method** tree, choose a method, and select a statement in its class's Jimple listing. Choose one of two modes:
 
-The tree loads first. Class code is read when you open it, and variable availability is analyzed only for the method you select. Results are reused while browsing the same APK, so reopening a class does not repeat the analysis.
+- **Statement reached**: type a literal message such as `reached this point`. The report shows whether this point was reached.
+- **Variable value**: click **Choose variable** and select a local by name and type. The report shows whether the point was reached and its latest printed value.
 
-To record a value, click **Insert variable** and choose a local from the list. The picker shows its name and type and inserts a placeholder at the cursor: `score = {i3}` might produce `score = 42`. You can combine several variables with text, or log a variable on its own. Only locals initialized on every incoming path are offered, using their value **before** the selected statement. To observe the result of an assignment, select the following statement.
+Click **Use log points** to apply your selection. Each statement can have one custom log; you can edit, change its mode, or remove it. **Cancel** discards changes in the code browser.
 
-Supported types are `byte`, `short`, `int`, `long`, `float`, `double`, `boolean`, strings, and object or array references. APKs may expose names such as `i3` or `r2` instead of the original source names. Use the picker to bind placeholders; ordinary braces in existing text messages stay literal. Direct field selection, primitive characters, and expressions are not supported.
+The tree loads first. Class code is read when you open it, and variable availability is analyzed only when you choose **Variable value**. Results are reused while browsing the same APK, so reopening a class does not repeat the analysis.
+
+Only locals initialized on every incoming path are offered, using their value **before** the selected statement. To observe the result of an assignment, select the following statement. For example, choosing `i3` captures `42` if that is its value when execution reaches the point. Existing plans that combine text and variables remain supported.
+
+Supported types are `byte`, `short`, `int`, `long`, `float`, `double`, `boolean`, strings, and object or array references. APKs may expose names such as `i3` or `r2` instead of the original source names. Braces in statement-marker messages stay literal. Direct field selection, primitive characters, and expressions are not supported.
 
 Object choices show **uses toString()**. The injected `CustomLogRuntime` helper handles conversion, escaping, and truncation. Null references produce `null`; nonfatal conversion failures produce `<toString failed>`, and nested object conversion produces `<recursive toString>`. Arrays use their ordinary object representation, without expanding their elements. Custom `toString()` methods execute application code and may have side effects or be slow; fatal VM errors are not suppressed. Newly allocated objects, including strings, become available only after their constructor completes successfully on every incoming path.
 
@@ -100,7 +105,7 @@ AndroLog reads the expected probes and custom points directly from the APK. Cove
 
 The dashboard shows observed counts, totals, and percentages for statements, methods, classes, activities, services, broadcast receivers, and content providers. Elements without probes are **not measured**. AndroLog's logging instructions and helper classes are excluded from statistics and the code display. A category with no eligible elements is unavailable, rather than reported as 0% coverage. Select a statistics card to explore its category in the report.
 
-After analysis, **Custom logs** shows every point found in the instrumented APK, its message template and method/statement location, and a green **Covered** or red **Not covered** marker. Variable logs also show their latest recorded message. Points are listed even when none of them appear in the log. Click a row to jump to that statement in **Explore report**. Custom-only instrumentations work the same way; templates and locations are recovered from the APK without the original plan.
+After analysis, **Custom logs** separates **Statement markers** from **Variable values**. Each row shows its method/statement location and a green **Reached** or red **Not reached** status. Variable rows also show the **Latest value** printed during the run. If a point marker was captured but its value is missing from the log, the report says **Reached · value not captured**. Points are listed even when none appear in the log. Click a row to jump to its inline annotation in **Explore report**. Custom-only instrumentations work the same way; point kinds, templates, and locations are recovered from the APK without the original plan.
 
 Current GUI instrumentations include a distinct point marker, allowing identical messages at different locations to be distinguished. Older instrumentations may emit only message text: if the same message appears at several points and was observed, the individual points are **Unconfirmed** rather than guessed to be covered or missed.
 

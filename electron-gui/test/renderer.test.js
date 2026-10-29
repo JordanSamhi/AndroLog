@@ -205,8 +205,8 @@ test('portable custom coverage comes from the APK report without any local point
   assert.equal(doc.getElementById('messages-panel').hidden, true);
   assert.equal(doc.getElementById('custom-build-picker'), null);
   doc.getElementById('analyze').click(); await tick();
-  assert.match(doc.querySelector('.point-row.observed').textContent, /Covered/);
-  assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not covered/);
+  assert.match(doc.querySelector('.point-row.observed').textContent, /Reached/);
+  assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not reached/);
   assert.deepEqual(JSON.parse(JSON.stringify(analysisArguments)), [{ tag: 'ANDROLOG' }]);
   assert.match(doc.getElementById('coverage-meta').textContent, /instrumented\.apk/);
   assert.equal(doc.getElementById('instrument').disabled, true, 'No original APK is needed for coverage');
@@ -428,21 +428,23 @@ function enterMessage(window, doc, message) {
   const input = doc.getElementById('point-message'); input.value = message; input.dispatchEvent(new window.Event('input', { bubbles: true })); return input;
 }
 function insertVariable(doc, name) {
+  doc.getElementById('log-kind-value').click();
   doc.getElementById('insert-variable').click();
   [...doc.querySelectorAll('.variable-choice')].find(button => button.dataset.variable === name).click();
 }
-test('Insert variable offers only initialized supported locals at the selected point', async t => {
+test('value mode offers only initialized supported locals at the selected point', async t => {
   const { dom, doc } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
   await openVariableEditor(doc);
   assert.equal(doc.getElementById('insert-variable').disabled, true);
-  doc.querySelectorAll('.code-line')[0].click();
+  doc.querySelectorAll('.code-line')[0].click(); doc.getElementById('log-kind-value').click();
   assert.equal(doc.getElementById('insert-variable').disabled, true); assert.match(doc.getElementById('variable-hint').textContent, /No initialized/);
-  doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('insert-variable').click();
+  doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('log-kind-value').click(); doc.getElementById('insert-variable').click();
   assert.equal(doc.getElementById('variable-picker').hidden, false);
   assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['i0', 'z0', '$r1', 'object']);
   assert.match(doc.querySelectorAll('.variable-choice')[1].textContent, /boolean/); assert.match(doc.querySelectorAll('.variable-choice')[2].textContent, /String/);
   assert.match(doc.querySelectorAll('.variable-choice')[3].textContent, /java\.lang\.Object · uses toString\(\)/);
   doc.querySelectorAll('.code-line')[2].click(); assert.equal(doc.getElementById('variable-picker').hidden, true);
+  doc.getElementById('log-kind-value').click();
   doc.getElementById('insert-variable').click();
   assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['i1']);
 });
@@ -455,23 +457,26 @@ test('object and array variables keep their exact types and expose toString beha
   ] }] };
   const { dom, doc, calls } = createUi({ inspectCode: async () => catalog }); t.after(() => dom.window.close());
   await openVariableEditor(doc);
-  doc.querySelectorAll('.code-line')[0].click();
+  doc.querySelectorAll('.code-line')[0].click(); doc.getElementById('log-kind-value').click();
   assert.equal(doc.getElementById('insert-variable').disabled, true);
   assert.equal(doc.getElementById('variable-hint').textContent, 'No initialized supported local is available here.');
-  doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('insert-variable').click();
+  doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('log-kind-value').click(); doc.getElementById('insert-variable').click();
   assert.deepEqual([...doc.querySelectorAll('.variable-choice small')].map(label => label.textContent), types.map(type => `${type} · uses toString()`));
   doc.querySelector('.variable-choice[data-variable="$r0"]').click();
   doc.getElementById('code-apply').click(); doc.getElementById('open-custom').click(); await tick();
-  doc.querySelectorAll('.code-line')[1].click(); assert.equal(doc.getElementById('point-message').value, '{$r0}');
+  doc.querySelectorAll('.code-line')[1].click(); assert.equal(doc.getElementById('variable-name').textContent, '$r0');
+  assert.equal(doc.getElementById('log-kind-value').getAttribute('aria-checked'), 'true');
   insertVariable(doc, '$r3');
   doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
-  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[0].variables)), [{ name: '$r0', type: 'e.a.h' }, { name: '$r3', type: 'int[]' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[0].variables)), [{ name: '$r3', type: 'int[]' }]);
+  assert.equal(calls[0].plan.points[0].message, '{$r3}');
+  assert.equal(calls[0].plan.points[0].kind, 'value');
 });
 test('invalid reference metadata is excluded from the variable picker', async t => {
   const catalog = variableCatalog();
   catalog.methods[0].statements[1].locals = ['char', 'void', 'void[]', 'null_type', '[]', 'pkg..Type', 'pkg/Type', 'pkg\nType', 'pkg\x7fType', 'pkg.<Type>', 'a' + '[]'.repeat(256), 'a'.repeat(1025)].map((type, index) => ({ name: `value${index}`, type }));
   const { dom, doc } = createUi({ inspectCode: async () => catalog }); t.after(() => dom.window.close());
-  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('log-kind-value').click();
   assert.equal(doc.getElementById('insert-variable').disabled, true);
 });
 test('compact variable masks use the selected method dictionary across byte boundaries', async t => {
@@ -488,11 +493,11 @@ test('compact variable masks use the selected method dictionary across byte boun
   ] };
   const { dom, doc, calls } = createUi({ inspectCode: async () => catalog }); t.after(() => dom.window.close());
   await openVariableEditor(doc);
-  doc.querySelectorAll('.code-line')[0].click(); assert.equal(doc.getElementById('insert-variable').disabled, true);
-  doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('insert-variable').click();
+  doc.querySelectorAll('.code-line')[0].click(); doc.getElementById('log-kind-value').click(); assert.equal(doc.getElementById('insert-variable').disabled, true);
+  doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('log-kind-value').click(); doc.getElementById('insert-variable').click();
   assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['i0', 'enabled', 'title']);
   doc.querySelector('.variable-choice[data-variable="title"]').click();
-  doc.querySelectorAll('.code-line')[2].click(); doc.getElementById('insert-variable').click();
+  doc.querySelectorAll('.code-line')[2].click(); doc.getElementById('log-kind-value').click(); doc.getElementById('insert-variable').click();
   assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['other']);
   doc.querySelector('.variable-choice').click();
   doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
@@ -504,7 +509,7 @@ test('compact variable masks use the selected method dictionary across byte boun
 test('invalid compact variable masks do not fall back to stale variable lists', async t => {
   const catalog = variableCatalog(); catalog.methods[0].statements[1].localMask = 'invalid%';
   const { dom, doc } = createUi({ inspectCode: async () => catalog }); t.after(() => dom.window.close());
-  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('log-kind-value').click();
   assert.equal(doc.getElementById('insert-variable').disabled, true);
 });
 function pendingResult() {
@@ -526,7 +531,7 @@ function lazyVariables(signature, name = 'value') {
   return { signature, locals: [{ name, type: 'int' }], statements: [{ index: 1, localMask: 'AQ==' }, { index: 2, localMask: 'AQ==' }] };
 }
 function chooseClass(doc, name) { [...doc.querySelectorAll('.class-item')].find(button => button.textContent === name).click(); }
-test('lazy browsing loads only opened classes and selected methods and caches them across reopening', async t => {
+test('lazy browsing analyzes variables only in value mode and caches them across reopening', async t => {
   const variables = pendingResult(), classCalls = [], variableCalls = [];
   const { dom, window, doc, calls } = createUi({
     inspectCode: async () => lazyCatalog(),
@@ -542,16 +547,18 @@ test('lazy browsing loads only opened classes and selected methods and caches th
   assert.equal(doc.querySelectorAll('.tree-method').length, 2); assert.deepEqual(variableCalls, []);
   doc.querySelectorAll('.code-line')[0].click(); await tick();
   assert.equal(doc.getElementById('point-message').disabled, false);
+  assert.equal(variableCalls.length, 0, 'Statement markers do not analyze variable availability');
+  enterMessage(window, doc, 'first'); doc.getElementById('log-kind-value').click(); await tick();
   assert.match(doc.getElementById('variable-hint').textContent, /Reading available variables/);
-  enterMessage(window, doc, 'first'); doc.querySelectorAll('.code-line')[1].click(); await tick();
-  const input = enterMessage(window, doc, 'selected: ');
+  doc.getElementById('log-kind-marker').click(); doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('log-kind-value').click(); await tick();
   assert.equal(variableCalls.length, 1, 'Two points in the same method share one pending analysis');
   variables.resolve(lazyVariables(variableCalls[0])); await tick();
-  assert.equal(input.value, 'selected: '); insertVariable(doc, 'value');
+  insertVariable(doc, 'value');
   doc.getElementById('code-apply').click(); doc.getElementById('open-custom').click(); await tick();
   chooseClass(doc, 'Main'); await tick(); doc.querySelectorAll('.code-line')[1].click(); await tick();
   assert.equal(classCalls.length, 1); assert.equal(variableCalls.length, 1);
-  assert.equal(doc.getElementById('point-message').value, 'selected: {value}');
+  assert.equal(doc.getElementById('variable-name').textContent, 'value');
+  assert.equal(doc.getElementById('marker-editor').hidden, true);
   doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
   assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[1].variables)), [{ name: 'value', type: 'int' }]);
 });
@@ -566,7 +573,7 @@ test('late lazy class and variable responses cannot replace a newer selection', 
   main.resolve(lazyClass('org.example.Main', 'main')); await tick();
   assert.equal(doc.getElementById('code-class').textContent, 'org.other.Other'); assert.match(doc.querySelector('.code-line').textContent, /other/);
   chooseClass(doc, 'Main'); await tick();
-  doc.querySelectorAll('.code-line')[0].click(); await tick(); doc.querySelectorAll('.code-line')[2].click(); await tick();
+  doc.querySelectorAll('.code-line')[0].click(); doc.getElementById('log-kind-value').click(); await tick(); doc.querySelectorAll('.code-line')[2].click(); doc.getElementById('log-kind-value').click(); await tick();
   second.resolve(lazyVariables('<org.example.Main: void second()>', 'secondValue')); await tick();
   first.resolve(lazyVariables('<org.example.Main: void first()>', 'firstValue')); await tick();
   doc.getElementById('insert-variable').click();
@@ -579,9 +586,9 @@ test('a new inspection session invalidates class and variable caches even for th
     inspectClass: async name => { classCalls++; return lazyClass(name, session); },
     inspectVariables: async signature => { variableCalls++; return lazyVariables(signature, session); }
   }); t.after(() => dom.window.close());
-  await openVariableEditor(doc); chooseClass(doc, 'Main'); await tick(); doc.querySelector('.code-line').click(); await tick();
+  await openVariableEditor(doc); chooseClass(doc, 'Main'); await tick(); doc.querySelector('.code-line').click(); doc.getElementById('log-kind-value').click(); await tick();
   doc.getElementById('code-cancel').click(); session = 'second'; doc.getElementById('open-custom').click(); await tick();
-  chooseClass(doc, 'Main'); await tick(); doc.querySelector('.code-line').click(); await tick(); doc.getElementById('insert-variable').click();
+  chooseClass(doc, 'Main'); await tick(); doc.querySelector('.code-line').click(); doc.getElementById('log-kind-value').click(); await tick(); doc.getElementById('insert-variable').click();
   assert.match(doc.querySelector('.code-line').textContent, /second/);
   assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['second']);
   assert.equal(classCalls, 2); assert.equal(variableCalls, 2);
@@ -596,11 +603,13 @@ test('lazy class and variable failures can be retried without blocking custom te
   await openVariableEditor(doc); chooseClass(doc, 'Main'); await tick();
   assert.match(doc.getElementById('code-lines').textContent, /Read failed/);
   [...doc.querySelectorAll('#code-lines button')].find(button => button.textContent === 'Try again').click(); await tick();
-  doc.querySelector('.code-line').click(); await tick();
+  doc.querySelector('.code-line').click(); doc.getElementById('log-kind-value').click(); await tick();
   assert.match(doc.getElementById('variable-hint').textContent, /Read failed/);
   assert.match(doc.getElementById('variable-hint').textContent, /Select this statement again to retry/);
-  enterMessage(window, doc, 'still usable'); doc.querySelector('.code-line').click(); await tick();
-  assert.equal(doc.getElementById('point-message').value, 'still usable'); assert.equal(doc.getElementById('insert-variable').disabled, false);
+  doc.getElementById('log-kind-marker').click(); enterMessage(window, doc, 'still usable');
+  doc.getElementById('log-kind-value').click(); await tick();
+  assert.equal(doc.getElementById('insert-variable').disabled, false);
+  doc.getElementById('log-kind-marker').click(); assert.equal(doc.getElementById('point-message').value, 'still usable');
   assert.equal(classCalls, 2); assert.equal(variableCalls, 2);
 });
 test('closing lazy browsing suppresses late UI updates and changing APK invalidates cached code', async t => {
@@ -618,52 +627,134 @@ test('closing lazy browsing suppresses late UI updates and changing APK invalida
   assert.match(doc.querySelector('.code-line').textContent, /new APK/);
   assert.equal(classCalls, 2);
 });
-test('variable insertion replaces the selected text at the cursor and sends typed bindings', async t => {
-  const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
+test('choosing a variable records exactly one typed value without a message template', async t => {
+  const { dom, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
   await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();
-  const input = enterMessage(window, doc, 'score = xx end'); input.setSelectionRange(8, 10); insertVariable(doc, 'i0');
-  assert.equal(input.value, 'score = {i0} end'); assert.equal(input.selectionStart, 12); assert.equal(doc.activeElement, input);
-  input.setSelectionRange(input.value.length, input.value.length); insertVariable(doc, 'z0'); insertVariable(doc, '$r1');
-  assert.equal(input.value, 'score = {i0} end{z0}{$r1}');
+  insertVariable(doc, 'i0');
+  assert.equal(doc.getElementById('marker-editor').hidden, true);
+  assert.equal(doc.getElementById('variable-name').textContent, 'i0'); assert.equal(doc.getElementById('variable-type').textContent, 'int');
+  assert.equal(doc.activeElement, doc.getElementById('insert-variable'));
+  insertVariable(doc, 'z0'); insertVariable(doc, '$r1');
+  assert.equal(doc.getElementById('variable-name').textContent, '$r1'); assert.equal(doc.getElementById('variable-type').textContent, 'String');
   doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
-  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[0].variables)), [{ name: 'i0', type: 'int' }, { name: 'z0', type: 'boolean' }, { name: '$r1', type: 'java.lang.String' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[0].variables)), [{ name: '$r1', type: 'java.lang.String' }]);
+  assert.equal(calls[0].plan.points[0].kind, 'value'); assert.equal(calls[0].plan.points[0].message, '{$r1}');
 });
 test('typed variable bindings survive point changes and reopening while Cancel preserves applied points', async t => {
   const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
   await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); insertVariable(doc, 'i0');
   doc.querySelectorAll('.code-line')[2].click(); enterMessage(window, doc, 'last');
-  doc.querySelectorAll('.code-line')[1].click(); assert.equal(doc.getElementById('point-message').value, '{i0}');
+  doc.querySelectorAll('.code-line')[1].click(); assert.equal(doc.getElementById('variable-name').textContent, 'i0');
   doc.getElementById('code-apply').click(); doc.getElementById('open-custom').click(); await tick();
-  doc.querySelectorAll('.code-line')[1].click(); assert.equal(doc.getElementById('point-message').value, '{i0}');
+  doc.querySelectorAll('.code-line')[1].click(); assert.equal(doc.getElementById('variable-name').textContent, 'i0');
   doc.getElementById('remove-point').click(); doc.getElementById('code-cancel').click();
   doc.getElementById('instrument').click(); await tick();
   assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[0].variables)), [{ name: 'i0', type: 'int' }]);
   assert.equal(calls[0].plan.points[0].message, '{i0}');
 });
-test('removing the last variable token prunes its binding and manually typed braces stay literal', async t => {
+test('switching modes restores separate drafts and marker braces stay literal', async t => {
   const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
-  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); insertVariable(doc, 'i0'); insertVariable(doc, 'i0');
-  enterMessage(window, doc, 'one {i0}'); doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
-  assert.equal(calls[0].plan.points[0].variables.length, 1);
-  doc.getElementById('open-custom').click(); await tick(); doc.querySelectorAll('.code-line')[1].click();
-  enterMessage(window, doc, 'no token'); enterMessage(window, doc, 'literal {i0}');
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();
+  enterMessage(window, doc, 'literal {i0}');
+  assert.equal(doc.getElementById('value-editor').hidden, true);
+  doc.getElementById('log-kind-value').click(); assert.equal(doc.getElementById('dialog-count').textContent, 'No log points selected');
+  insertVariable(doc, 'i0'); doc.getElementById('log-kind-marker').click();
+  assert.equal(doc.getElementById('point-message').value, 'literal {i0}');
+  assert.equal(doc.getElementById('marker-editor').hidden, false);
+  doc.querySelectorAll('.code-line')[2].click(); doc.querySelectorAll('.code-line')[1].click();
+  assert.equal(doc.getElementById('log-kind-marker').getAttribute('aria-checked'), 'true');
+  doc.getElementById('log-kind-value').click(); assert.equal(doc.getElementById('variable-name').textContent, 'i0');
+  doc.getElementById('log-kind-marker').click();
   doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
-  assert.equal(calls[1].plan.points[0].message, 'literal {i0}'); assert.equal(calls[1].plan.points[0].variables, undefined);
+  assert.equal(calls[0].plan.points.length, 1); assert.equal(calls[0].plan.points[0].kind, 'marker');
+  assert.equal(calls[0].plan.points[0].message, 'literal {i0}'); assert.equal(calls[0].plan.points[0].variables, undefined);
+  doc.getElementById('open-custom').click(); await tick(); doc.querySelectorAll('.code-line')[1].click();
+  assert.equal(doc.getElementById('point-message').value, 'literal {i0}');
 });
 test('Escape closes the variable picker without dismissing the code editor', async t => {
   const { dom, window, doc } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
-  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('insert-variable').click();
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('log-kind-value').click(); doc.getElementById('insert-variable').click();
   const event = new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
   doc.querySelector('.variable-choice').dispatchEvent(event);
   assert.equal(event.defaultPrevented, true); assert.equal(doc.getElementById('variable-picker').hidden, true); assert.equal(doc.getElementById('code-dialog').open, true);
   assert.equal(doc.activeElement, doc.getElementById('insert-variable'));
 });
+test('legacy mixed templates remain unchanged until a replacement value is explicitly chosen', async t => {
+  const { dom, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); insertVariable(doc, 'i0');
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  // Simulate a previously applied legacy plan without adding a production test hook.
+  const legacy = calls[0].plan.points[0]; delete legacy.kind; legacy.message = 'score={i0}, enabled={z0}'; legacy.variables.push({ name: 'z0', type: 'boolean' });
+  doc.getElementById('open-custom').click(); await tick(); doc.querySelectorAll('.code-line')[1].click();
+  assert.equal(doc.getElementById('log-kind-value').getAttribute('aria-checked'), 'true');
+  assert.equal(doc.getElementById('variable-name').textContent, '2 saved variables');
+  assert.equal(doc.getElementById('legacy-template').hidden, false);
+  assert.match(doc.getElementById('legacy-template').textContent, /score=\{i0\}, enabled=\{z0\}/);
+  doc.getElementById('log-kind-marker').click(); doc.getElementById('log-kind-value').click();
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[1].plan.points[0])), JSON.parse(JSON.stringify(legacy)));
+  doc.getElementById('open-custom').click(); await tick(); doc.querySelectorAll('.code-line')[1].click(); insertVariable(doc, '$r1');
+  assert.equal(doc.getElementById('legacy-template').hidden, true);
+  doc.getElementById('code-cancel').click(); doc.getElementById('open-custom').click(); await tick(); doc.querySelectorAll('.code-line')[1].click();
+  assert.match(doc.getElementById('legacy-template').textContent, /score=\{i0\}, enabled=\{z0\}/);
+  insertVariable(doc, '$r1'); doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  assert.equal(calls[2].plan.points[0].kind, 'value'); assert.equal(calls[2].plan.points[0].message, '{$r1}');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[2].plan.points[0].variables)), [{ name: '$r1', type: 'java.lang.String' }]);
+});
+test('cancelled mode changes preserve the applied marker and Remove clears both mode drafts', async t => {
+  const { dom, window, doc, calls } = createUi({ inspectCode: async () => variableCatalog() }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click(); enterMessage(window, doc, 'reached');
+  doc.getElementById('code-apply').click(); doc.getElementById('open-custom').click(); await tick();
+  doc.querySelectorAll('.code-line')[1].click(); insertVariable(doc, 'z0'); doc.getElementById('code-cancel').click();
+  doc.getElementById('instrument').click(); await tick();
+  assert.equal(calls[0].plan.points[0].kind, 'marker'); assert.equal(calls[0].plan.points[0].message, 'reached');
+  doc.getElementById('open-custom').click(); await tick(); doc.querySelectorAll('.code-line')[1].click();
+  assert.equal(doc.getElementById('log-kind-marker').getAttribute('aria-checked'), 'true');
+  insertVariable(doc, 'i0'); doc.getElementById('remove-point').click(); doc.getElementById('log-kind-marker').click();
+  assert.equal(doc.getElementById('point-message').value, ''); assert.equal(doc.getElementById('dialog-count').textContent, 'No log points selected');
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick(); assert.equal(calls[1].plan, null);
+});
+test('class navigation resets editor controls and late availability cannot change marker mode', async t => {
+  const variables = pendingResult();
+  const { dom, window, doc } = createUi({ inspectCode: async () => lazyCatalog(), inspectClass: async name => lazyClass(name), inspectVariables: () => variables.promise }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); chooseClass(doc, 'Main'); await tick(); doc.querySelector('.code-line').click();
+  enterMessage(window, doc, 'still reached'); doc.getElementById('log-kind-value').click(); await tick();
+  doc.getElementById('log-kind-marker').click(); variables.resolve(lazyVariables('<org.example.Main: void first()>')); await tick();
+  assert.equal(doc.getElementById('marker-editor').hidden, false); assert.equal(doc.getElementById('point-message').value, 'still reached');
+  assert.match(doc.getElementById('variable-hint').textContent, /whether this statement was reached/);
+  chooseClass(doc, 'Other'); await tick();
+  assert.equal(doc.getElementById('log-kind-marker').disabled, true); assert.equal(doc.getElementById('log-kind-value').disabled, true);
+  assert.equal(doc.getElementById('value-editor').hidden, true); assert.equal(doc.getElementById('point-message').disabled, true);
+  assert.equal(doc.getElementById('point-message').value, ''); assert.equal(doc.getElementById('variable-name').textContent, 'No variable selected');
+});
 test('coverage shows the latest actual variable message as inert text and preserves the code link', async t => {
   const samples = ['score=1', '<img src=x onerror="window.bad=true"> score=2'];
   const { dom, window, doc } = createUi({ analyze: async () => ({ coverageSummary: {}, custom: { summary: { points: [{ id: 'variables', message: 'score={i0}', method: '<A: void run()>', index: 2, status: 'covered', count: 2, samples }] } } }) });
   t.after(() => dom.window.close()); await selectRun(doc); doc.getElementById('analyze').click(); await tick();
-  const sample = doc.querySelector('.point-sample'); assert.equal(sample.textContent, 'Latest: ' + samples.at(-1));
+  const sample = doc.querySelector('.point-sample'); assert.equal(sample.textContent, samples.at(-1));
+  assert.equal(doc.querySelector('.point-value-caption').textContent, 'Latest value');
   assert.equal(sample.querySelector('img'), null); assert.equal(window.bad, undefined);
-  assert.match(doc.querySelector('.point-status').textContent, /Covered/); doc.querySelector('.custom-point-link').click();
+  assert.match(doc.querySelector('.point-status').textContent, /Reached/); doc.querySelector('.custom-point-link').click();
   assert.equal(doc.getElementById('page-explore').hidden, false);
+});
+
+test('coverage separates statement markers from value logs and never fabricates a missing value', async t => {
+  const points = [
+    { id: 'marker', kind: 'marker', message: 'reached {i0}', method: '<A: void run()>', index: 1, status: 'covered', count: 1, samples: ['ignore me'] },
+    { id: 'never', kind: 'value', message: '{i0}', method: '<A: void run()>', index: 2, status: 'uncovered', count: 0, samples: ['stale sample'] },
+    { id: 'missing', kind: 'value', message: '{i1}', method: '<A: void run()>', index: 3, status: 'covered', count: 2, samples: [] },
+    { id: 'empty', kind: 'value', message: '{r0}', method: '<A: void run()>', index: 4, status: 'covered', count: 1, samples: ['old'], latestValue: '' },
+    { id: 'null-value', dynamic: true, message: '{r1}', method: '<A: void run()>', index: 5, status: 'covered', count: 1, samples: ['null'] }
+  ];
+  const { dom, doc } = createUi({ analyze: async () => ({ coverageSummary: {}, custom: { summary: { points } } }) });
+  t.after(() => dom.window.close()); await selectRun(doc); doc.getElementById('analyze').click(); await tick();
+  assert.deepEqual([...doc.querySelectorAll('.custom-log-group h4')].map(el => el.textContent), ['Statement markers', 'Variable values']);
+  const row = id => doc.querySelector(`[data-point-id="${id}"]`);
+  assert.equal(row('marker').querySelector('strong').textContent, 'reached {i0}');
+  assert.equal(row('marker').querySelector('.point-status').textContent, 'Reached'); assert.equal(row('marker').querySelector('.point-value'), null);
+  assert.equal(row('never').querySelector('.point-status').textContent, 'Not reached'); assert.equal(row('never').querySelector('.point-value'), null);
+  assert.equal(row('missing').querySelector('.point-status').firstChild.textContent, 'Reached · value not captured'); assert.equal(row('missing').querySelector('.point-value'), null);
+  assert.equal(row('empty').querySelector('.point-value').textContent, '(empty string)');
+  assert.equal(row('null-value').querySelector('.point-value').textContent, 'null');
+  assert.equal(row('null-value').dataset.kind, 'value');
 });

@@ -19,13 +19,19 @@ public final class CustomPointReport {
         for (Map<String, Object> source : expected) {
             Map<String, Object> point = new LinkedHashMap<>(source);
             String id = (String) point.get("id"), message = (String) point.get("message");
+            boolean valuePoint = "value".equals(point.get("kind"))
+                    || (!"marker".equals(point.get("kind")) && Boolean.TRUE.equals(point.get("dynamic")));
+            point.put("kind", valuePoint ? "value" : "marker");
+            // Samples come from this run, never from cached/source metadata or a literal marker.
+            point.remove("samples"); point.remove("latestValue");
+            if (valuePoint) point.put("dynamic", true); else point.remove("dynamic");
             Integer count;
             if (id != null) {
                 knownMarkers.add(id);
                 count = log.getCustomMarkers().getOrDefault(id, 0);
                 // A value event already proves arrival, even if capture ends before its companion marker.
                 // Paired events describe the same visit and must not be added together.
-                if (Boolean.TRUE.equals(point.get("dynamic"))) count = Math.max(count, log.getCustomValueCount(id));
+                if (valuePoint) count = Math.max(count, log.getCustomValueCount(id));
             } else {
                 // Old probes recorded only their message. A shared message cannot identify a location.
                 int hits = log.getCustomMessages().getOrDefault(message, 0);
@@ -36,7 +42,11 @@ public final class CustomPointReport {
             if ("covered".equals(status)) observed++;
             if ("unknown".equals(status)) unknown++;
             point.put("count", count); point.put("status", status); points.add(point);
-            if (id != null && Boolean.TRUE.equals(point.get("dynamic"))) point.put("samples", log.getCustomValues(id));
+            if (valuePoint) {
+                List<String> samples = id == null ? Collections.emptyList() : log.getCustomValues(id);
+                point.put("samples", samples);
+                if (!samples.isEmpty()) point.put("latestValue", samples.get(samples.size() - 1));
+            }
         }
         List<Map<String, Object>> messages = new ArrayList<>();
         for (Map.Entry<String, Integer> message : log.getCustomMessages().entrySet()) {

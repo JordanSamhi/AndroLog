@@ -152,20 +152,27 @@
     .code-table tr.declaration.uncovered > .line-code { background: #fde5e1; }
     .code-table tr.declaration.covered.navigation-target > .line-code { background: #c6ead4; }
     .code-table tr.declaration.uncovered.navigation-target > .line-code { background: #f9d5ce; }
-    .custom-inline-log { display: inline-flex; align-items: baseline; gap: 7px; max-width: 460px; padding: 1px 8px; margin: 0 0 0 18px; border-radius: 5px; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; font: 11px/20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .custom-inline-log { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 7px; width: fit-content; max-width: 460px; padding: 2px 8px; margin: 3px 0 6px; border-radius: 5px; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .custom-inline-log.covered { background: #dcf3e5; color: #12623f; }
     .custom-inline-log.uncovered { background: #fde7e3; color: #933c37; }
     .custom-inline-log.unknown { background: #edf0f3; color: #526476; }
-    .custom-inline-value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; opacity: .9; }
+    .custom-inline-value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+    .custom-inline-kind { font-size: 10px; font-weight: 700; opacity: .8; white-space: nowrap; }
+    .custom-inline-status { font-size: 10px; }
     .custom-points { margin: 0 0 20px; padding: 17px 20px; background: white; border: 1px solid #dce4e9; border-radius: 12px; }
     .custom-points h2 { font-size: 16px; margin: 0 0 12px; }
+    .custom-group-heading { font-size: 12px; color: #536879; margin: 16px 0 8px; }
     .custom-points ul { padding: 0; margin: 0; list-style: none; }
     .custom-point { color: inherit; text-decoration: none; display: flex; justify-content: space-between; gap: 14px; padding: 12px; border-radius: 8px; margin-top: 7px; overflow-wrap: anywhere; }
     .custom-point:focus-visible { outline: 3px solid #087c70; outline-offset: 2px; }
     .custom-point:hover { box-shadow: inset 0 0 0 1px #a4b8ae; }
     .custom-point.covered { background: #e2f5e9; }.custom-point.uncovered { background: #fff0ee; }.custom-point.unknown { background: #edf0f3; }
     .custom-point small { display: block; color: #536879; font-size: 11px; margin-top: 4px; }
-    .custom-point .custom-status { white-space: nowrap; font-size: 12px; font-weight: 700; color: #087c70; }
+    .custom-point > div { min-width: 0; }
+    .custom-point .custom-status { flex-shrink: 0; max-width: 180px; text-align: right; font-size: 12px; font-weight: 700; color: #087c70; }
+    .custom-point .custom-value { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font: 600 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .custom-point .custom-value-caption { margin-top: 8px; font-size: 10px; }
+    .custom-point .custom-observations { font-weight: 400; font-size: 10px; }
     .custom-point.uncovered .custom-status { color: #a53e40; }.custom-point.unknown .custom-status { color: #526476; }
     .custom-log-marker { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: currentColor; align-self: center; }
     .custom-navigation-note { margin: 0 0 12px; color: #536879; font-size: 12px; }
@@ -447,6 +454,11 @@
       // Resolve selected points against the displayed Jimple coordinates and text. A custom
       // marker never changes the independent automatic statement-coverage status.
       var customById = Object.create(null), customByRow = Object.create(null), statementsByMethod = Object.create(null);
+      function customKind(point) {
+        if (point.kind === 'marker' || point.kind === 'value') return point.kind;
+        return point.dynamic === true || typeof point.latestValue === 'string' || list(point.samples).length ? 'value' : 'marker';
+      }
+      function displayCustomValue(value) { return value === '' ? '(empty string)' : value; }
       classes.forEach(function (clazz) { list(clazz.methods).forEach(function (method) {
         var rows = Object.create(null); list(method.statements).forEach(function (row) { rows[String(row.line)] = row; });
         statementsByMethod[String(method.signature)] = rows;
@@ -456,7 +468,9 @@
         if (Object.prototype.hasOwnProperty.call(customById, point.id)) { customById[point.id].valid = false; return; }
         var rows = statementsByMethod[point.method], row = rows && rows[String(point.index)];
         var valid = Number.isSafeInteger(point.index) && point.index > 0 && typeof point.statement === 'string' && row && String(row.text) === point.statement;
-        var resolved = { id: point.id, method: point.method, index: point.index, message: String(point.message || ''), samples: list(point.samples).filter(function (value) { return typeof value === 'string'; }).slice(-3), covered: Number(point.count) > 0, status: point.status === 'unknown' ? 'unknown' : Number(point.count) > 0 ? 'covered' : 'uncovered', className: codeIndex.methods.get(point.method), valid: Boolean(valid) };
+        var samples = list(point.samples).filter(function (value) { return typeof value === 'string'; }).slice(-3);
+        var status = point.status === 'unknown' || point.status === 'covered' || point.status === 'uncovered' ? point.status : point.count == null ? 'unknown' : Number(point.count) > 0 ? 'covered' : 'uncovered';
+        var resolved = { id: point.id, method: point.method, index: point.index, message: String(point.message || ''), kind: customKind(point), samples: samples, latestValue: typeof point.latestValue === 'string' ? point.latestValue : samples[samples.length - 1], count: Number(point.count) || 0, covered: status === 'covered', status: status, className: codeIndex.methods.get(point.method), valid: Boolean(valid) };
         customById[point.id] = resolved;
       });
       Object.keys(customById).forEach(function (id) {
@@ -465,19 +479,30 @@
         if (!customByRow[key]) customByRow[key] = [];
         customByRow[key].push(point);
       });
-      function customStatusText(point) { return point.status === 'unknown' ? 'Unconfirmed' : point.covered ? 'Covered' : 'Not covered'; }
-      Object.keys(customById).forEach(function (id) {
+      function customValueCaptured(point) { return point.kind === 'value' && point.covered && typeof point.latestValue === 'string'; }
+      function customStatusText(point) { return point.status === 'unknown' ? 'Unconfirmed' : point.covered ? point.kind === 'value' && !customValueCaptured(point) ? 'Reached · value not captured' : 'Reached' : 'Not reached'; }
+      ['marker', 'value'].forEach(function (kind) {
+        var ids = Object.keys(customById).filter(function (id) { return customById[id].kind === kind; });
+        if (!ids.length) return;
+        var heading = make('li', ''); heading.appendChild(make('h3', 'custom-group-heading', kind === 'marker' ? 'Statement markers' : 'Variable values')); $('custom-log-list').appendChild(heading);
+        ids.forEach(function (id) {
         var point = customById[id], li = make('li', ''), link = make('a', 'custom-point ' + point.status);
-        link.href = '#custom=' + encodeURIComponent(id); link.setAttribute('data-custom-point', id);
-        var location = make('div', ''); location.appendChild(make('strong', '', point.message));
+        link.href = '#custom=' + encodeURIComponent(id); link.setAttribute('data-custom-point', id); link.setAttribute('data-kind', kind);
+        var location = make('div', '');
+        if (customValueCaptured(point)) {
+          location.appendChild(make('small', 'custom-value-label', point.message));
+          location.appendChild(make('small', 'custom-value-caption', 'Latest value'));
+          var sample = make('strong', 'custom-value', displayCustomValue(point.latestValue));
+          if (point.samples.length) sample.title = 'Recent distinct values:\n' + point.samples.map(displayCustomValue).join('\n');
+          location.appendChild(sample);
+        } else location.appendChild(make('strong', kind === 'value' ? 'custom-value-label' : 'custom-message', point.message));
         location.appendChild(make('small', '', point.method + ' · statement ' + point.index));
-        if (point.samples.length) {
-          var sample = make('small', 'custom-value', 'Latest: ' + point.samples[point.samples.length - 1]);
-          sample.title = 'Recent distinct values:\n' + point.samples.join('\n'); location.appendChild(sample);
-        }
-        link.appendChild(location); link.appendChild(make('span', 'custom-status', customStatusText(point)));
+        var status = make('span', 'custom-status', customStatusText(point));
+        if (kind === 'value' && point.covered && point.count > 0) status.appendChild(make('small', 'custom-observations', point.count + (point.count === 1 ? ' observation' : ' observations')));
+        link.appendChild(location); link.appendChild(status);
         if (point.status === 'unknown') link.title = 'This older APK shares the message between several points; the log does not identify which one ran.';
         li.appendChild(link); $('custom-log-list').appendChild(li);
+        });
       });
       $('custom-log-panel').hidden = Object.keys(customById).length === 0 && !(data.custom && data.custom.notice);
       if (data.custom && data.custom.notice) { $('custom-log-notice').textContent = data.custom.notice; $('custom-log-notice').hidden = false; }
@@ -757,14 +782,17 @@
               var status = point.status;
               var annotation = make('span', 'custom-inline-log ' + status);
               annotation.setAttribute('data-custom-point-id', point.id);
-              annotation.setAttribute('aria-label', 'Custom log: ' + point.message + ' · ' + customStatusText(point));
-              annotation.title = point.status === 'unknown' ? 'The log cannot identify which point emitted this shared message.' : point.covered ? 'Custom log covered in the supplied runtime log.' : 'Custom log not covered in the supplied runtime log.';
+              annotation.setAttribute('data-kind', point.kind);
+              var kindLabel = point.kind === 'value' ? 'Variable value' : 'Statement marker';
+              annotation.setAttribute('aria-label', kindLabel + ': ' + point.message + ' · ' + customStatusText(point) + (customValueCaptured(point) ? ' · Latest value: ' + displayCustomValue(point.latestValue) : ''));
+              annotation.title = point.status === 'unknown' ? 'The log cannot identify which point emitted this shared message.' : point.covered ? 'Custom log reached in the supplied runtime log.' : 'Custom log not reached in the supplied runtime log.';
               var marker = make('span', 'custom-log-marker'); marker.setAttribute('aria-hidden', 'true');
-              annotation.appendChild(marker); annotation.appendChild(make('span', '', point.message));
-              if (point.samples.length) {
-                annotation.appendChild(make('span', 'custom-inline-value', 'Latest: ' + point.samples[point.samples.length - 1]));
-                annotation.title += '\nRecent distinct values:\n' + point.samples.join('\n');
+              annotation.appendChild(marker); annotation.appendChild(make('span', 'custom-inline-kind', kindLabel)); annotation.appendChild(make('span', 'custom-inline-message', point.message));
+              if (customValueCaptured(point)) {
+                annotation.appendChild(make('span', 'custom-inline-value', 'Latest value: ' + displayCustomValue(point.latestValue)));
+                if (point.samples.length) annotation.title += '\nRecent distinct values:\n' + point.samples.map(displayCustomValue).join('\n');
               }
+              annotation.appendChild(make('span', 'custom-inline-status', customStatusText(point)));
               cell.appendChild(annotation);
               customTargets[point.id] = tr; tr.tabIndex = -1;
             });

@@ -77,6 +77,7 @@ function validatePlan(plan) {
   for (const point of plan.points) {
     if (!point || typeof point.method !== 'string' || !point.method.trim() || !Number.isSafeInteger(point.index) || point.index < 1 || typeof point.statement !== 'string' || !point.statement.trim()) throw new Error('A custom log point is incomplete.');
     if (typeof point.message !== 'string' || !point.message.trim() || /[\n\r\0]/.test(point.message) || Buffer.byteLength(point.message, 'utf8') > 1000) throw new Error('Use a nonempty single-line message of at most 1,000 UTF-8 bytes.');
+    if (point.kind != null && !['marker', 'value'].includes(point.kind)) throw new Error('Choose a statement marker or a variable value log.');
     if (point.variables != null) {
       if (!Array.isArray(point.variables)) throw new Error('The custom log variables are invalid. Browse the statement again.');
       const variables = new Set();
@@ -87,6 +88,8 @@ function validatePlan(plan) {
         variables.add(variable.name);
       }
     }
+    if (point.kind === 'marker' && point.variables?.length) throw new Error('Statement markers use a literal message and cannot bind variables.');
+    if (point.kind === 'value' && (point.variables?.length !== 1 || point.message !== `{${point.variables[0].name}}`)) throw new Error('A variable value log must select exactly one variable without additional message text.');
     const key = `${point.method}\n${point.index}`; if (seen.has(key)) throw new Error('Only one message can be attached to a statement.'); seen.add(key);
   }
 }
