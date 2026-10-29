@@ -174,3 +174,15 @@ test('custom points show observed and not observed separately and select the bui
   assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not observed/);
   doc.getElementById('analyze').click(); await tick(); assert.equal(analyzedPlan, 'a');
 });
+
+test('analysis progress appears while working and follows the reported stages', async t => {
+  let update, finish;
+  const { dom, window, doc } = createUi({ onUpdate: handler => { update = handler; }, analyze: () => new Promise(resolve => { finish = resolve; }) });
+  t.after(() => dom.window.close()); const calls = []; window.andrologAnimation = { setAnalysis: (...args) => calls.push(args) };
+  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick(); doc.getElementById('analyze').click(); await tick();
+  assert.equal(doc.getElementById('analysis-progress').hidden, false);
+  update({ type: 'stage', stage: 3 }); assert.match(doc.getElementById('analysis-title').textContent, /Matching/);
+  assert.ok(calls.some(([stage, active]) => stage === 3 && active));
+  finish({ coverageSummary: {} }); await tick();
+  assert.equal(doc.getElementById('analysis-progress').hidden, true); assert.deepEqual(calls.at(-1), [0, false]);
+});

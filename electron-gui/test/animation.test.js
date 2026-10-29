@@ -25,9 +25,12 @@ test('package animation follows actual read, insertion, rebuild and signing stag
   assert.equal(calls.find(c => c.action === 'animate' && c.id === 'apk-probe').options.opacity, 1);
   assert.ok(calls.some(c => c.action === 'cancel' && c.id === 'apk-scan'));
   assert.equal(calls.find(c => c.action === 'animate' && c.id === 'apk-probe-halo').options.loop, true);
+  assert.equal(calls.find(c => c.action === 'animate' && c.id === 'apk-packets').options.loop, true);
   calls.length = 0; animation.setStage(3);
   assert.equal(calls.find(c => c.action === 'animate' && c.id === 'apk-lid').options.translateY, 0);
   assert.equal(calls.find(c => c.action === 'animate' && c.id === 'apk-rebuild-shine').options.loop, true);
+  assert.ok(calls.some(c => c.action === 'cancel' && c.id === 'apk-packets'));
+  assert.equal(calls.find(c => c.action === 'animate' && c.id === 'apk-tape').options.loop, true);
   calls.length = 0; animation.setStage(4);
   assert.equal(calls.find(c => c.action === 'animate' && c.id === 'apk-seal').options.opacity, 1);
   assert.equal(calls.find(c => c.action === 'animate' && c.id === 'apk-sign-halo').options.loop, true);
@@ -54,4 +57,21 @@ test('the locally installed Anime.js bundle drives the SVG to its selected state
   assert.match(dom.window.document.getElementById('apk-lid').style.transform, /-42px/);
   assert.equal(dom.window.document.getElementById('apk-animation').dataset.stage, '2');
   dom.window.andrologAnimation.setStage(5, true);
+});
+
+test('analysis animates the real stage and cancels its loops on finish', t => {
+  const { dom, calls, animation } = setup(); t.after(() => dom.window.close());
+  animation.setAnalysis(1, true);
+  assert.ok(calls.some(c => c.id === 'analysis-stream' && c.options?.loop));
+  assert.ok(calls.some(c => c.id === 'analysis-apk' && c.options?.loop));
+  calls.length = 0; animation.setAnalysis(3, true);
+  assert.ok(calls.some(c => c.action === 'cancel' && c.id === 'analysis-apk'));
+  assert.ok(calls.some(c => c.id === 'analysis-match' && c.options?.loop));
+  calls.length = 0; animation.setAnalysis(0, false);
+  assert.ok(calls.some(c => c.action === 'cancel' && c.id === 'analysis-stream'));
+  assert.ok(!calls.some(c => c.action === 'animate'));
+});
+test('analysis respects reduced motion', t => {
+  const { dom, calls, animation } = setup(true); t.after(() => dom.window.close());
+  animation.setAnalysis(3, true); assert.ok(!calls.some(c => c.action === 'animate'));
 });

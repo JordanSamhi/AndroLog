@@ -33,6 +33,9 @@
   function setBusy(busy, kind = '') {
     state.busy = busy; state.stageKind = kind; document.body.classList.toggle('busy', busy); $('operation-panel').hidden = !busy;
     if (busy && kind === 'instrument') window.andrologAnimation?.setStage(0, true);
+    $('analysis-progress').hidden = !(busy && kind === 'coverage');
+    window.andrologAnimation?.setAnalysis?.(0, busy && kind === 'coverage');
+    if (busy && kind === 'coverage') { $('analysis-title').textContent = 'Preparing analysis'; $('analysis-description').textContent = 'Reading the APK and runtime log…'; document.querySelectorAll('.analysis-stage i').forEach(el => el.classList.remove('done')); }
     $('cancel-coverage').hidden = !(busy && kind === 'coverage');
     $('analyze').textContent = busy && kind === 'coverage' ? 'Analyzing…' : 'Analyze run →';
     for (const id of ['choose-apk','coverage-choose-apk','choose-log','custom-build','open-custom','instrument','save-apk','analyze','settings-save','save-report','report-export','preset-essentials','preset-all','preset-custom']) $(id).disabled = busy;
@@ -54,6 +57,7 @@
     if (update.type === 'log') { state.logText = (state.logText + update.text).slice(-180000); $('operation-log').textContent = state.logText; $('operation-log').scrollTop = $('operation-log').scrollHeight; }
     if (update.type === 'stage') {
       if (state.stageKind === 'instrument') window.andrologAnimation?.setStage(update.stage);
+      if (state.stageKind === 'coverage') { window.andrologAnimation?.setAnalysis?.(update.stage, true); const labels = ['Reading your APK', 'Building the baseline', 'Matching runtime logs', 'Creating the report', 'Finishing']; $('analysis-title').textContent = labels[Math.min(Math.max(update.stage - 1, 0), labels.length - 1)]; $('analysis-description').textContent = 'Comparing the selected APK with your runtime log.'; document.querySelectorAll('.analysis-stage i').forEach((el, i) => el.classList.toggle('done', i < update.stage)); }
       document.querySelectorAll('.stage-rail span').forEach((el, i) => el.classList.toggle('done', i < update.stage));
       const stages = state.stageKind === 'instrument' ? ['Reading your APK', 'Adding your log points', 'Rebuilding the APK', 'Aligning and signing'] : state.stageKind === 'inspect' ? ['Reading your APK', 'Preparing the code browser'] : ['Reading your APK', 'Building the baseline', 'Matching runtime logs', 'Creating the report', 'Finishing'];
       $('operation-title').textContent = stages[Math.min(Math.max(update.stage - 1, 0), stages.length - 1)];
