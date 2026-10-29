@@ -137,6 +137,14 @@
   function quoteShell(value) {
     return api.platform === 'win32' ? `'${value.replace(/'/g, "''")}'` : `'${value.replace(/'/g, "'\\''")}'`;
   }
+  document.querySelectorAll('[data-copy-command]').forEach(button => button.addEventListener('click', async () => {
+    const command = $(button.dataset.copyCommand).textContent;
+    if (!command) return;
+    button.disabled = true;
+    try { await api.copyText(command); toast('Command copied.'); }
+    catch { toast('Could not copy the command. Select and copy the text manually.', true); }
+    finally { button.disabled = false; }
+  }));
   function showNextSteps(file, tag) {
     $('terminal-instructions').textContent = api.platform === 'win32'
       ? 'Connect an Android device or emulator, then run these commands in PowerShell.'

@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, dialog, ipcMain, protocol, net } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, protocol, net, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
@@ -48,6 +48,10 @@ async function chooseFile(title, extensions) {
   return picked.canceled ? null : picked.filePaths[0];
 }
 function registerHandlers() {
+  handle('clipboard:write', text => {
+    if (typeof text !== 'string' || !text || text.length > 32768) throw new Error('Cannot copy this command.');
+    clipboard.writeText(text);
+  });
   handle('settings:get', () => ({ ...settings, andrologVersion }));
   handle('settings:choose', async kind => {
     if (!['platforms', 'buildTools', 'java'].includes(kind)) throw new Error('Unknown setting.');

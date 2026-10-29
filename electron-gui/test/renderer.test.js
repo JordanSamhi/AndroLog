@@ -117,7 +117,8 @@ test('navigation lives in the left pane and remains keyboard accessible', t => {
   assert.equal(doc.getElementById('tab-coverage').getAttribute('aria-selected'), 'true');
 });
 test('saved APK instructions use the saved path and the original instrumentation tag', async t => {
-  const { dom, window, doc } = createUi({ platform: 'darwin', saveApk: async () => "/tmp/Jordan's app/app.apk" }); t.after(() => dom.window.close());
+  const copied = [];
+  const { dom, window, doc } = createUi({ platform: 'darwin', saveApk: async () => "/tmp/Jordan's app/app.apk", copyText: async text => copied.push(text) }); t.after(() => dom.window.close());
   doc.getElementById('choose-apk').click(); await tick();
   const tag = doc.getElementById('log-tag'); tag.value = 'MY_TAG'; tag.dispatchEvent(new window.Event('input', { bubbles: true }));
   doc.getElementById('instrument').click(); await tick();
@@ -129,14 +130,20 @@ test('saved APK instructions use the saved path and the original instrumentation
   assert.equal(revealed, true);
   assert.equal(doc.getElementById('install-command').textContent, "adb install -r '/tmp/Jordan'\\''s app/app.apk'");
   assert.equal(doc.getElementById('logcat-command').textContent, "adb logcat -v threadtime -s 'MY_TAG:V' > androlog-runtime.log");
+  for (const button of doc.querySelectorAll('[data-copy-command]')) { button.click(); await tick(); assert.equal(button.disabled, false); }
+  assert.deepEqual(copied, [doc.getElementById('install-command').textContent, doc.getElementById('logcat-command').textContent]);
+  assert.match(doc.getElementById('toast').textContent, /Command copied/);
 });
 test('Windows instructions quote the APK for PowerShell and save UTF-8 logcat bytes', async t => {
-  const { dom, doc } = createUi({ platform: 'win32', saveApk: async () => "C:\\Users\\O'Brien\\app.apk" }); t.after(() => dom.window.close());
+  const copied = [];
+  const { dom, doc } = createUi({ platform: 'win32', saveApk: async () => "C:\\Users\\O'Brien\\app.apk", copyText: async text => copied.push(text) }); t.after(() => dom.window.close());
   doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('instrument').click(); await tick();
   doc.getElementById('save-apk').click(); await tick();
   assert.match(doc.getElementById('terminal-instructions').textContent, /PowerShell/);
   assert.equal(doc.getElementById('install-command').textContent, "adb install -r 'C:\\Users\\O''Brien\\app.apk'");
   assert.equal(doc.getElementById('logcat-command').textContent, 'cmd /c "adb logcat -v threadtime -s ANDROLOG:V > androlog-runtime.log"');
+  for (const button of doc.querySelectorAll('[data-copy-command]')) { button.click(); await tick(); }
+  assert.deepEqual(copied, [doc.getElementById('install-command').textContent, doc.getElementById('logcat-command').textContent]);
 });
 
 test('custom-only APK instructions do not claim coverage probes were enabled', async t => {
