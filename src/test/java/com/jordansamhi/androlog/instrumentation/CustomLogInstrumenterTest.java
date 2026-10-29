@@ -68,6 +68,17 @@ public class CustomLogInstrumenterTest {
         assertEquals(Collections.singletonList("CUSTOM=reached this point"), messages);
     }
 
+    @Test public void trackedPointEmitsUniqueMarkerOnEachVisit() throws Exception {
+        JimpleBody body = body(method(app, "tracked", Collections.emptyList(), VoidType.v()));
+        Unit target = Jimple.v().newReturnVoidStmt(); body.getUnits().add(target);
+        CustomLogPlan.Point point = new CustomLogPlan.Point(body.getMethod().getSignature(), 1, target.toString(), "same message");
+        point.id = String.join("", Collections.nCopies(32, "a"));
+        CustomLogInstrumenter custom = new CustomLogInstrumenter("TEST", new CustomLogPlan(String.join("", Collections.nCopies(64, "b")), Collections.singletonList(point)));
+        custom.capture(body); custom.instrument(body); custom.verifyComplete();
+        load().getMethod("tracked").invoke(null);
+        assertEquals(Arrays.asList("CUSTOM=same message", "CUSTOM_POINT=" + point.id), messages);
+    }
+
     @Test public void staleOrUnsafePointsAndMissingMethodsNeverSilentlySucceed() throws Exception {
         JimpleBody body = body(method(app, "unchanged", Collections.singletonList(IntType.v()), VoidType.v()));
         parameter(body, "value", IntType.v(), 0); body.getUnits().add(Jimple.v().newReturnVoidStmt());

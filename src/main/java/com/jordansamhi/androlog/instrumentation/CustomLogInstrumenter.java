@@ -60,6 +60,11 @@ public final class CustomLogInstrumenter {
             Unit probe = Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(log,
                     StringConstant.v(tag), StringConstant.v("CUSTOM=" + selected.point.message)));
             body.getUnits().insertBefore(probe, selected.unit);
+            if (selected.point.id != null) {
+                Unit marker = Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(log,
+                        StringConstant.v(tag), StringConstant.v("CUSTOM_POINT=" + selected.point.id)));
+                body.getUnits().insertBefore(marker, selected.unit);
+            }
             inserted.add(key(selected.point));
         }
         body.validate();

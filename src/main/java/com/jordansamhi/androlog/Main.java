@@ -224,7 +224,8 @@ public class Main {
         if ((command.hasOption("html") || command.hasOption("j")) && !parsing && !capture) {
             throw new UsageException("--html and --json require --parse, --parse-per-minute or --capture.");
         }
-        if ((command.hasOption("html") || capture) && !command.hasOption("c") && !command.hasOption("m")
+        if (command.hasOption("custom-report-only") && (!parsing || !command.hasOption("html"))) throw new UsageException("--custom-report-only requires --parse and --html.");
+        if ((command.hasOption("html") || capture) && !command.hasOption("custom-report-only") && !command.hasOption("c") && !command.hasOption("m")
                 && !command.hasOption("s") && !command.hasOption("cp") && !command.hasOption("mc")) {
             throw new UsageException("Select probes with -c, -m, -s, -cp or -mc, matching instrumentation.");
         }
@@ -326,6 +327,7 @@ public class Main {
                 new CommandLineOption("html", "html", "Write a standalone HTML report (requires -pa, -pam or --capture)", true, false),
                 new CommandLineOption("log-identifier", "l", "Logcat tag (default: ANDROLOG)", true, false),
                 new CommandLineOption("inspect-code", "inspect-code", "Write original Jimple statements to a JSON catalog without modifying the APK", true, false),
+                new CommandLineOption("custom-report-only", "custom-report-only", "Allow a code report without automatic coverage probes", false, false),
                 new CommandLineOption("custom-logs", "custom-logs", "Insert literal messages at points selected in a JSON plan (instrumentation only)", true, false),
                 new CommandLineOption("classes", "c", "Instrument or measure classes", false, false),
                 new CommandLineOption("methods", "m", "Instrument or measure methods", false, false),

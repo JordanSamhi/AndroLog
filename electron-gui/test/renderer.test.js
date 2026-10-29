@@ -144,8 +144,8 @@ test('custom-only APK instructions do not claim coverage probes were enabled', a
   const field = doc.getElementById('point-message'); field.value = 'here'; field.dispatchEvent(new window.Event('input', { bubbles: true }));
   doc.getElementById('code-apply').click(); doc.querySelectorAll('[data-probe]').forEach(input => { input.checked = false; });
   doc.getElementById('instrument').click(); await tick(); doc.getElementById('save-apk').click(); await tick();
-  assert.match(doc.getElementById('next-coverage').textContent, /custom messages/);
-  assert.match(doc.getElementById('next-coverage').textContent, /requires automatic probes/);
+  assert.match(doc.getElementById('next-coverage').textContent, /custom points/);
+  assert.match(doc.getElementById('next-coverage').textContent, /analyze the run/);
 });
 
 test('custom code explorer groups methods under classes and searches method names', async t => {
@@ -161,4 +161,16 @@ test('custom code explorer groups methods under classes and searches method name
   assert.match(doc.getElementById('code-class').textContent, /Main/);
   const search = doc.getElementById('class-search'); search.value = 'third'; search.dispatchEvent(new window.Event('input'));
   assert.equal(doc.querySelectorAll('.tree-method').length, 1); assert.match(doc.querySelector('.tree-method').textContent, /third/);
+});
+
+test('custom points show observed and not observed separately and select the build for analysis', async t => {
+  const builds = [{ id: 'a', createdAt: '2026-10-29T08:00:00Z', count: 2 }]; let analyzedPlan;
+  const summary = { observed: 1, points: [{ message: 'same', method: '<A: void a()>', index: 1, statement: 'return', count: 3 }, { message: 'same', method: '<A: void b()>', index: 2, statement: 'return', count: 0 }] };
+  const { dom, doc } = createUi({ customPlans: async () => builds, readCustom: async (_tag, id) => ({ total: 3, messages: [], summary: id ? summary : null }), analyze: async (_options, id) => { analyzedPlan = id; return { coverageSummary: {} }; } });
+  t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('choose-log').click(); await tick();
+  assert.match(doc.getElementById('messages-summary').textContent, /1 of 2/);
+  assert.match(doc.querySelector('.point-row.observed').textContent, /Observed · 3×/);
+  assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not observed/);
+  doc.getElementById('analyze').click(); await tick(); assert.equal(analyzedPlan, 'a');
 });

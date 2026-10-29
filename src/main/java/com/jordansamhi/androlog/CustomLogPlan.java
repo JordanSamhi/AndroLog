@@ -26,6 +26,7 @@ public final class CustomLogPlan {
         public int index;
         public String statement;
         public String message;
+        public String id; // Optional unique marker for GUI execution feedback.
         public Point() { }
         public Point(String method, int index, String statement, String message) {
             this.method = method; this.index = index; this.statement = statement; this.message = message;
@@ -42,6 +43,7 @@ public final class CustomLogPlan {
                 throw new IOException("A custom log point is incomplete. Browse the APK and select its statement again.");
             }
             validateMessage(point.message);
+            if (point.id != null && !point.id.matches("[a-f0-9]{32}")) throw new IOException("Invalid custom log point identifier.");
             if (!identities.add(point.method + "\n" + point.index)) throw new IOException("Only one custom message may be attached to each statement. Edit the existing message instead.");
         }
     }

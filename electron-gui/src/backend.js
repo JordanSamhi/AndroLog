@@ -71,16 +71,18 @@ async function readCustomMessages(file, tag, limit = 1000) {
   const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const timestamp = '(?:\\d{4}-)?\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?';
   const tagged = new RegExp(`^(?:(?:${timestamp}\\s+\\d+\\s+\\d+\\s+[VDIWEFA]\\s+)?${escaped}\\s*:\\s*|(?:${timestamp}\\s+)?[VDIWEFA]/${escaped}(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)CUSTOM=(.*)$`);
-  const messages = new Map(); let total = 0, omitted = 0;
+  const markerPattern = new RegExp(`^(?:(?:${timestamp}\\s+\\d+\\s+\\d+\\s+[VDIWEFA]\\s+)?${escaped}\\s*:\\s*|(?:${timestamp}\\s+)?[VDIWEFA]/${escaped}(?:\\s*\\(\\s*\\d+\\))?\\s*:\\s*)CUSTOM_POINT=([a-f0-9]{32})$`);
+  const markers = {}; const messages = new Map(); let total = 0, omitted = 0;
   const lines = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
   for await (const line of lines) {
+    const marker = markerPattern.exec(line); if (marker) { markers[marker[1]] = (markers[marker[1]] || 0) + 1; continue; }
     const match = tagged.exec(line); if (!match) continue;
     total++; const message = match[1];
     if (messages.has(message)) messages.set(message, messages.get(message) + 1);
     else if (messages.size < limit) messages.set(message, 1);
     else omitted++;
   }
-  return { total, omitted, messages: [...messages].map(([message, count]) => ({ message, count })) };
+  return { total, omitted, markers, messages: [...messages].map(([message, count]) => ({ message, count })) };
 }
 async function copySafely(source, destination, protectedFiles = []) {
   const target = path.resolve(destination); const parent = await fsp.realpath(path.dirname(target));
@@ -193,21 +195,22 @@ class Backend {
       return { dir, output, input: apk, apkHash: before };
     } catch (e) { await this.discard(dir); throw e; }
   }
-  async analyze(apk, log, settings, opts) {
+  async analyze(apk, log, settings, opts, customOnly = false) {
     apk = await regularFile(apk, 'the original APK'); log = await regularFile(log, 'the runtime log');
     await validateSettings(settings, false); validateOptions(opts);
-    if (!opts.probes.some(Boolean)) throw new Error('Select the probes used when instrumenting the APK.');
+    if (!opts.probes.some(Boolean) && !customOnly) throw new Error('Select the probes used when instrumenting the APK or choose a custom log build.');
     const [apkHash, logHash] = await Promise.all([hashFile(apk), hashFile(log)]);
     const dir = await this.workspace(), json = path.join(dir, 'coverage.json'), html = path.join(dir, 'coverage.html');
     try {
       const args = ['-a', apk, '-p', settings.platforms, '-o', dir, '-pam', log, '-l', opts.tag, '-j', json, '-html', html];
       opts.probes.forEach((v, i) => { if (v) args.push(FLAGS[i]); });
+      if (!opts.probes.some(Boolean) && customOnly) args.push('--custom-report-only');
       if (opts.excludeLibraries) args.push('-n'); if (opts.packagePrefix) args.push('-pkg', opts.packagePrefix);
       await this.run(settings, args, { workDir: dir, label: 'Analyzing coverage' });
       if (apkHash !== await hashFile(apk) || logHash !== await hashFile(log)) throw new Error('The APK or runtime log changed during analysis. Run it again.');
       const report = JSON.parse(await fsp.readFile(json, 'utf8'));
       if (!report.coverageSummary) throw new Error('The backend did not produce a coverage summary.');
-      return { dir, json, html, report, apk, log };
+      return { dir, json, html, report, apk, log, apkHash, logHash };
     } catch (e) { await this.discard(dir); throw e; }
   }
 }
