@@ -92,6 +92,13 @@
     .class-choice[aria-current="true"] { background: var(--teal-soft); border-color: #afdad0; }
     .class-choice-name { display: flex; align-items: center; gap: 7px; }
     .class-choice-name strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .class-methods { list-style: none; margin: 1px 0 9px 13px; padding: 0 0 0 9px; border-left: 1px solid #d7e5df; }
+    .method-choice { display: flex; align-items: baseline; gap: 6px; padding: 6px 7px; margin: 2px 0; border: 1px solid transparent; border-radius: 6px; text-decoration: none; color: var(--muted); font: 10px/1.5 var(--mono); overflow-wrap: anywhere; }
+    .method-choice:hover { background: #f3f7f9; }
+    .method-choice.covered { background: #e2f5e9; color: #246143; }
+    .method-choice.uncovered { background: #fff0ee; color: #8c4b49; }
+    .method-choice[aria-current="location"] { border-color: var(--teal); box-shadow: inset 2px 0 var(--teal); }
+    .method-choice .method-symbol { flex: 0 0 auto; color: #729786; font: 600 11px/1.5 var(--mono); }
     .dot { flex: 0 0 7px; height: 7px; border-radius: 50%; background: #96a8b3; }
     .dot.covered { background: var(--teal); }.dot.uncovered { background: var(--red); }
     .sidebar-foot { padding: 10px 14px; border-top: 1px solid var(--line); text-align: center; }
@@ -486,6 +493,7 @@
         link.setAttribute('data-code-class', String(item.name));
         link.setAttribute('aria-current', item === selected ? 'true' : 'false');
         link.setAttribute('aria-controls', 'class-detail');
+        link.setAttribute('aria-expanded', item === selected ? 'true' : 'false');
         var component = componentTypes[activeCategory];
         var status = statusFor(component ? item.componentCovered : item.classCovered);
         link.classList.add(status);
@@ -496,6 +504,33 @@
         name.appendChild(make('strong', '', String(item.name || 'Unnamed class').split('.').pop())); link.appendChild(name);
         if (item === selected) selectedAnchor = link;
         return link;
+      }
+      function methodLabel(item, method) {
+        var signature = String(method.signature || 'Unnamed method'), prefix = '<' + String(item.name) + ': ';
+        return signature.indexOf(prefix) === 0 && signature.charAt(signature.length - 1) === '>' ? signature.slice(prefix.length, -1) : signature;
+      }
+      function classRow(item, rowClass) {
+        var row = make('li', rowClass);
+        if (rowClass === 'selected-beyond-page') row.appendChild(make('p', '', 'Selected class'));
+        row.appendChild(classLink(item));
+        if (item !== selected) return row;
+        var methods = list(item.methods), activeMethod = parseRoute().methodSignature;
+        if (!methods.length) return row;
+        var children = make('ul', 'class-methods'); children.setAttribute('aria-label', 'Methods of ' + String(item.name));
+        methods.forEach(function (method) {
+          var signature = String(method.signature), status = statusFor(method.covered);
+          var entry = make('li'), link = make('a', 'method-choice ' + status);
+          link.href = codeLinks.href(String(item.name), signature);
+          link.setAttribute('data-code-class', String(item.name)); link.setAttribute('data-code-method', signature);
+          link.setAttribute('aria-controls', 'code-viewport');
+          link.setAttribute('aria-label', methodLabel(item, method) + ', ' + labels[status]);
+          if (signature === activeMethod) link.setAttribute('aria-current', 'location');
+          link.title = signature + ' · ' + labels[status];
+          var symbol = make('span', 'method-symbol', 'ƒ'); symbol.setAttribute('aria-hidden', 'true');
+          link.appendChild(symbol); link.appendChild(make('span', '', methodLabel(item, method)));
+          entry.appendChild(link); children.appendChild(entry);
+        });
+        row.appendChild(children); return row;
       }
       function renderPackage(node) {
         var li = make('li'), button = make('button', 'package-toggle'); button.type = 'button';
@@ -516,9 +551,9 @@
           });
           var limits = expandFilteredTree() ? searchLimits : packageLimits;
           var limit = limits[node.id] || 100, shown = node.matches.slice(0, limit);
-          shown.forEach(function (item) { var row = make('li'); row.appendChild(classLink(item)); children.appendChild(row); });
+          shown.forEach(function (item) { children.appendChild(classRow(item)); });
           if (selected && classPackages[String(selected.name)] === node && matchesFilters(selected) && shown.indexOf(selected) === -1) {
-            var pinned = make('li', 'selected-beyond-page'); pinned.appendChild(make('p', '', 'Selected class')); pinned.appendChild(classLink(selected)); children.appendChild(pinned);
+            children.appendChild(classRow(selected, 'selected-beyond-page'));
           }
           if (shown.length < node.matches.length) {
             var moreRow = make('li', 'package-more');
