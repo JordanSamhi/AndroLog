@@ -126,6 +126,8 @@
       ? 'Next, open Coverage, choose the original APK and androlog-runtime.log, and analyze using the same logging options. ADB is included in Android SDK Platform Tools.'
       : 'Next, open Coverage and choose androlog-runtime.log to see your custom messages. Coverage analysis also requires automatic probes. ADB is included in Android SDK Platform Tools.';
     $('next-steps').hidden = false;
+    const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    $('next-steps').scrollIntoView?.({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
   }
   $('save-apk').addEventListener('click', async () => {
     try { const file = await api.saveApk(); if (file) {

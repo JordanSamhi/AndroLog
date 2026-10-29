@@ -121,8 +121,10 @@ test('saved APK instructions use the saved path and the original instrumentation
   doc.getElementById('instrument').click(); await tick();
   assert.equal(doc.getElementById('next-steps').hidden, true);
   tag.value = 'DIFFERENT'; tag.dispatchEvent(new window.Event('input', { bubbles: true }));
+  let revealed = false; doc.getElementById('next-steps').scrollIntoView = () => { revealed = true; };
   doc.getElementById('save-apk').click(); await tick();
   assert.equal(doc.getElementById('next-steps').hidden, false);
+  assert.equal(revealed, true);
   assert.equal(doc.getElementById('install-command').textContent, "adb install -r '/tmp/Jordan'\\''s app/app.apk'");
   assert.equal(doc.getElementById('logcat-command').textContent, "adb logcat -v threadtime -s 'MY_TAG:V' > androlog-runtime.log");
 });
