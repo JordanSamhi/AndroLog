@@ -26,7 +26,7 @@ The development app uses `JAVA_HOME`, or Java on `PATH`; you can choose a Java e
 - **Coverage:** select the original APK and a captured runtime log. Select the same probes, Logcat tag, package scope, and library settings used for instrumentation, then choose **Analyze run**. The coverage cards show matched observations and totals. Zero total is shown as unavailable, not 0% coverage. Custom messages in the selected log are listed separately and can be refreshed without running coverage analysis.
 - **Explore report:** browse the complete interactive AndroLog report inside the app, including covered/uncovered class code, package navigation, a cumulative coverage timeline when log timestamps are available, and the dynamic call graph. Instrument with **Dynamic call graph** enabled to collect call records. Export a standalone HTML copy when needed.
 
-The app does not currently capture logs from a device; collect a Logcat file with the existing CLI or `adb` and open it in Coverage. Clicking **Analyze run** again re-reads the log. Logs, the original APK, and matching instrumentation settings are required for meaningful coverage.
+The app does not currently capture logs from a device. After saving an instrumented APK, it shows example `adb install` and Logcat capture commands using the actual saved path and instrumentation tag. Run capture before starting the app in a fresh process, then open the resulting log in Coverage. Clicking **Analyze run** again re-reads the log. Logs, the original APK, and matching instrumentation settings are required for meaningful coverage.
 
 ## Package for your platform
 

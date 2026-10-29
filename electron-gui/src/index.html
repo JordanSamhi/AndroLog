@@ -10,12 +10,13 @@
 <div class="app-shell">
   <aside class="sidebar">
     <div class="brand"><img src="icon.png" alt=""><div><strong>AndroLog</strong><span>Android insights</span></div></div>
+    <nav class="workspace-tabs" role="tablist" aria-label="Workspace views" aria-orientation="vertical"><button class="workspace-tab active" id="tab-instrument" data-page="instrument" role="tab" aria-selected="true" aria-controls="page-instrument"><span class="menu-icon" aria-hidden="true">◇</span>Instrument</button><button class="workspace-tab" id="tab-coverage" data-page="coverage" role="tab" aria-selected="false" aria-controls="page-coverage" tabindex="-1"><span class="menu-icon" aria-hidden="true">◫</span>Coverage</button><button class="workspace-tab" id="tab-explore" data-page="explore" role="tab" aria-selected="false" aria-controls="page-explore" tabindex="-1"><span class="menu-icon" aria-hidden="true">⌘</span>Explore report</button></nav>
     <div class="side-spacer"></div>
     <div class="sdk-status"><span class="status-dot" id="sdk-dot"></span><span id="sdk-summary">Android SDK</span></div>
     <button class="nav settings-nav" data-page="settings"><span class="nav-icon">⚙</span> Settings</button>
   </aside>
   <main class="main-content">
-    <div class="topline"><nav class="workspace-tabs" role="tablist" aria-label="Workspace views"><button class="workspace-tab active" id="tab-instrument" data-page="instrument" role="tab" aria-selected="true" aria-controls="page-instrument">Instrument</button><button class="workspace-tab" id="tab-coverage" data-page="coverage" role="tab" aria-selected="false" aria-controls="page-coverage" tabindex="-1">Coverage</button><button class="workspace-tab" id="tab-explore" data-page="explore" role="tab" aria-selected="false" aria-controls="page-explore" tabindex="-1">Explore report</button></nav><button class="subtle-button" id="details-open">Run details <span>↗</span></button></div>
+    <div class="topline"><button class="subtle-button" id="details-open">Run details <span>↗</span></button></div>
     <section class="page active" id="page-instrument" role="tabpanel" aria-labelledby="tab-instrument">
       <header class="page-heading"><div><h1 id="instrument-heading">Instrument APK</h1><p class="lead">Choose an app and what you want to log.</p></div></header>
       <div class="workspace-grid">
@@ -47,6 +48,12 @@
           </svg>
         </div><h2 id="action-title">Ready to instrument</h2><p id="action-description">Your original APK stays unchanged.</p><button class="button primary wide" id="instrument">Instrument APK <span>→</span></button><button class="button light wide" id="save-apk" hidden>Save instrumented APK <span>↓</span></button><p class="fine-print">Signed with AndroLog’s test key.<br>For test devices and emulators.</p><div class="operation-panel" id="operation-panel" hidden><div class="operation-top"><span class="spinner"></span><strong id="operation-title">Preparing your APK</strong></div><p id="operation-description">Starting the analysis…</p><div class="stage-rail"><span></span><span></span><span></span><span></span></div><button class="text-link" id="cancel-operation">Cancel operation</button></div></aside>
       </div>
+      <section class="next-steps" id="next-steps" hidden aria-labelledby="next-steps-heading">
+        <div><h2 id="next-steps-heading">Next: run your app</h2><p id="terminal-instructions">Connect an Android device or emulator, then run these commands in a terminal.</p></div>
+        <div class="command-step"><span>1</span><div><strong>Install the instrumented APK</strong><pre><code id="install-command"></code></pre><small>If installation reports a signing conflict, the installed app has a different signing key.</small></div></div>
+        <div class="command-step"><span>2</span><div><strong>Start capturing logs</strong><pre><code id="logcat-command"></code></pre><small>Start capture before launching the app in a fresh process. Exercise it, then press Ctrl+C to stop. The file may include earlier matching device logs.</small></div></div>
+        <p class="next-coverage" id="next-coverage"></p>
+      </section>
     </section>
     <section class="page" id="page-coverage" role="tabpanel" aria-labelledby="tab-coverage" hidden>
       <header class="page-heading"><div><h1 id="coverage-heading">Coverage</h1><p class="lead">Compare the original APK with your runtime log.</p></div><button class="button secondary" id="save-report" disabled>Export HTML <span>↓</span></button></header>

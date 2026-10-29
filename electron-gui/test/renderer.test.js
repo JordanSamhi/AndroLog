@@ -104,3 +104,44 @@ test('instrumentation stages and completion drive the package illustration', asy
   finish({ name: 'original.apk' }); await tick();
   assert.equal(stages.at(-1)[0], 5);
 });
+
+test('navigation lives in the left pane and remains keyboard accessible', t => {
+  const { dom, doc } = createUi(); t.after(() => dom.window.close());
+  const menu = doc.querySelector('.sidebar [role="tablist"]'); assert.ok(menu);
+  assert.equal(menu.querySelectorAll('[role="tab"]').length, 3);
+  assert.equal(doc.querySelector('.topline [role="tablist"]'), null);
+  doc.getElementById('tab-instrument').focus();
+  doc.getElementById('tab-instrument').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  assert.equal(doc.getElementById('tab-coverage').getAttribute('aria-selected'), 'true');
+});
+test('saved APK instructions use the saved path and the original instrumentation tag', async t => {
+  const { dom, window, doc } = createUi({ platform: 'darwin', saveApk: async () => "/tmp/Jordan's app/app.apk" }); t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick();
+  const tag = doc.getElementById('log-tag'); tag.value = 'MY_TAG'; tag.dispatchEvent(new window.Event('input', { bubbles: true }));
+  doc.getElementById('instrument').click(); await tick();
+  assert.equal(doc.getElementById('next-steps').hidden, true);
+  tag.value = 'DIFFERENT'; tag.dispatchEvent(new window.Event('input', { bubbles: true }));
+  doc.getElementById('save-apk').click(); await tick();
+  assert.equal(doc.getElementById('next-steps').hidden, false);
+  assert.equal(doc.getElementById('install-command').textContent, "adb install -r '/tmp/Jordan'\\''s app/app.apk'");
+  assert.equal(doc.getElementById('logcat-command').textContent, "adb logcat -v threadtime -s 'MY_TAG:V' > androlog-runtime.log");
+});
+test('Windows instructions quote the APK for PowerShell and save UTF-8 logcat bytes', async t => {
+  const { dom, doc } = createUi({ platform: 'win32', saveApk: async () => "C:\\Users\\O'Brien\\app.apk" }); t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('instrument').click(); await tick();
+  doc.getElementById('save-apk').click(); await tick();
+  assert.match(doc.getElementById('terminal-instructions').textContent, /PowerShell/);
+  assert.equal(doc.getElementById('install-command').textContent, "adb install -r 'C:\\Users\\O''Brien\\app.apk'");
+  assert.equal(doc.getElementById('logcat-command').textContent, 'cmd /c "adb logcat -v threadtime -s ANDROLOG:V > androlog-runtime.log"');
+});
+
+test('custom-only APK instructions do not claim coverage probes were enabled', async t => {
+  const { dom, window, doc } = createUi(); t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick();
+  doc.getElementById('open-custom').click(); await tick(); doc.querySelector('.code-line').click();
+  const field = doc.getElementById('point-message'); field.value = 'here'; field.dispatchEvent(new window.Event('input', { bubbles: true }));
+  doc.getElementById('code-apply').click(); doc.querySelectorAll('[data-probe]').forEach(input => { input.checked = false; });
+  doc.getElementById('instrument').click(); await tick(); doc.getElementById('save-apk').click(); await tick();
+  assert.match(doc.getElementById('next-coverage').textContent, /custom messages/);
+  assert.match(doc.getElementById('next-coverage').textContent, /requires automatic probes/);
+});

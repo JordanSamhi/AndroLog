@@ -2,7 +2,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const api = window.androlog;
-  const state = { apk: null, log: null, catalog: null, points: new Map(), draft: new Map(), selected: null, selectedClass: null, result: false, report: null, busy: false, stageKind: '', logText: '', pendingCategory: null, reportGeneration: 0, logRead: 0 };
+  const state = { apk: null, log: null, catalog: null, points: new Map(), draft: new Map(), selected: null, selectedClass: null, result: false, report: null, busy: false, stageKind: '', logText: '', pendingCategory: null, reportGeneration: 0, logRead: 0, instrumentTag: null, instrumentProbes: [] };
   const metricInfo = [
     ['statements', 'Statements', '#528ee5'], ['methods', 'Methods', '#f08262'], ['classes', 'Classes', '#31b38b'], ['activities', 'Activities', '#e7bc42'],
     ['services', 'Services', '#4fb4a8'], ['broadcast-receivers', 'Broadcast receivers', '#e4956a'], ['content-providers', 'Content providers', '#9a83e9']
@@ -18,10 +18,10 @@
   }
   for (const nav of document.querySelectorAll('[data-page]')) nav.addEventListener('click', () => navigate(nav.dataset.page));
   document.querySelector('.workspace-tabs').addEventListener('keydown', event => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
     const tabs = [...document.querySelectorAll('.workspace-tab')]; let index = tabs.indexOf(document.activeElement);
     if (index < 0) return; event.preventDefault();
-    index = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    index = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1) + tabs.length) % tabs.length;
     navigate(tabs[index].dataset.page); tabs[index].focus();
   });
   function options() { return { probes: [...document.querySelectorAll('[data-probe]')].map(el => el.checked), tag: $('log-tag').value.trim(), packagePrefix: $('package-prefix').value.trim(), excludeLibraries: $('exclude-libraries').checked }; }
@@ -66,7 +66,7 @@
   async function chooseApk() {
     try {
       const selected = await api.chooseApk(); if (!selected) return;
-      state.apk = selected; state.catalog = null; state.points.clear(); state.result = false; clearReport();
+      state.apk = selected; state.catalog = null; state.points.clear(); state.result = false; state.instrumentTag = null; state.instrumentProbes = []; $('next-steps').hidden = true; clearReport();
       window.andrologAnimation?.setStage(0, true);
       $('apk-name').textContent = basename(selected); $('apk-path').textContent = selected; $('apk-path').title = selected;
       $('choose-apk').textContent = 'Change APK ↗'; $('coverage-apk').textContent = basename(selected); $('coverage-apk').title = selected;
@@ -104,12 +104,35 @@
   }
   $('instrument').addEventListener('click', async () => {
     const plan = state.points.size ? { apkSha256: state.catalog.apkSha256, points: [...state.points.values()] } : null;
-    const output = await run('instrument', () => api.instrument(options(), plan));
+    const selectedOptions = options();
+    const output = await run('instrument', () => api.instrument(selectedOptions, plan));
     if (!output) { window.andrologAnimation?.setStage(0); return; }
     window.andrologAnimation?.setStage(5);
+    state.instrumentTag = selectedOptions.tag; state.instrumentProbes = selectedOptions.probes.slice(); $('next-steps').hidden = true;
     state.result = true; $('save-apk').hidden = false; $('action-title').textContent = 'Your APK is ready.'; $('action-description').textContent = 'Instrumented, aligned, and signed. Choose where to save your new APK.'; updateAvailability(); toast('Your instrumented APK is ready to save.');
   });
-  $('save-apk').addEventListener('click', async () => { try { const file = await api.saveApk(); if (file) { $('action-title').textContent = 'Saved. Ready to run.'; $('action-description').textContent = file; toast(`Saved ${basename(file)}`); } } catch (e) { toast(e.message, true); } });
+  function quoteShell(value) {
+    return api.platform === 'win32' ? `'${value.replace(/'/g, "''")}'` : `'${value.replace(/'/g, "'\\''")}'`;
+  }
+  function showNextSteps(file, tag) {
+    $('terminal-instructions').textContent = api.platform === 'win32'
+      ? 'Connect an Android device or emulator, then run these commands in PowerShell.'
+      : 'Connect an Android device or emulator, then run these commands in a terminal.';
+    $('install-command').textContent = `adb install -r ${quoteShell(file)}`;
+    $('logcat-command').textContent = api.platform === 'win32'
+      ? `cmd /c "adb logcat -v threadtime -s ${tag}:V > androlog-runtime.log"`
+      : `adb logcat -v threadtime -s ${quoteShell(`${tag}:V`)} > androlog-runtime.log`;
+    $('next-coverage').textContent = state.instrumentProbes.some(Boolean)
+      ? 'Next, open Coverage, choose the original APK and androlog-runtime.log, and analyze using the same logging options. ADB is included in Android SDK Platform Tools.'
+      : 'Next, open Coverage and choose androlog-runtime.log to see your custom messages. Coverage analysis also requires automatic probes. ADB is included in Android SDK Platform Tools.';
+    $('next-steps').hidden = false;
+  }
+  $('save-apk').addEventListener('click', async () => {
+    try { const file = await api.saveApk(); if (file) {
+      $('action-title').textContent = 'Saved. Ready to run.'; $('action-description').textContent = file;
+      showNextSteps(file, state.instrumentTag); toast(`Saved ${basename(file)}`);
+    } } catch (e) { toast(e.message, true); }
+  });
   $('analyze').addEventListener('click', async () => {
     const result = await run('coverage', () => api.analyze(options())); if (!result) return;
     state.report = result; state.reportGeneration++; $('coverage-meta').textContent = `${basename(state.apk)} · ${basename(state.log)}`;

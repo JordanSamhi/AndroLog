@@ -25,3 +25,13 @@ dialog{border:1px solid #dfeae4;border-radius:18px;padding:0;box-shadow:0 30px 1
 .package-art{height:190px;overflow:visible}.package-art svg{width:min(100%,260px);height:190px;overflow:visible}
 #apk-sheet,#apk-probe,#apk-seal,#apk-lid{transform-box:fill-box;transform-origin:center}
 body.busy .package-box,body.busy .box-top{animation:none}
+
+/* Navigation belongs in the sidebar; the workspace keeps its full width. */
+.sidebar .workspace-tabs{display:flex;flex-direction:column;align-items:stretch;gap:4px;margin-top:20px}
+.sidebar .workspace-tab{display:flex;align-items:center;gap:11px;min-height:46px;text-align:left;border-radius:11px;padding:0 12px;color:#70877e}
+.sidebar .workspace-tab.active{color:#087b63;background:#e8f5ef}
+.sidebar .workspace-tab.active::after{display:none}
+.menu-icon{font-size:19px;width:22px;text-align:center;font-weight:400}
+.topline{justify-content:flex-end}
+.next-steps{margin-top:24px;padding:22px 24px;background:#fff;border:1px solid #e0ebe5;border-radius:16px;box-shadow:var(--shadow)}
+.next-steps h2{font-size:17px}.next-steps p,.command-step small{font-size:12px;color:#718a7f;line-height:1.6}.next-steps>div:first-child p{margin-top:5px}.command-step{display:flex;gap:12px;margin-top:18px}.command-step>span{flex:none;width:24px;height:24px;border-radius:8px;background:#e5f5ec;color:#128563;font-size:11px;font-weight:800;display:grid;place-items:center}.command-step>div{flex:1;min-width:0}.command-step strong{font-size:12px}.command-step pre{margin:8px 0 5px;padding:12px 14px;border-radius:9px;background:#f1f6f3;color:#244e40;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;white-space:pre}.next-coverage{margin-top:18px;border-top:1px solid #edf2ef;padding-top:13px}.next-coverage code{color:#146f58}
