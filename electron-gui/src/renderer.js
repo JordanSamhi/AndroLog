@@ -2,7 +2,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const api = window.androlog;
-  const state = { apk: null, log: null, catalog: null, points: new Map(), draft: new Map(), selected: null, selectedClass: null, result: false, report: null, busy: false, stageKind: '', logText: '', pendingCategory: null, reportGeneration: 0, logRead: 0, instrumentTag: null, instrumentProbes: [] };
+  const state = { apk: null, log: null, catalog: null, points: new Map(), draft: new Map(), selected: null, selectedClass: null, result: false, report: null, busy: false, stageKind: '', logText: '', pendingCategory: null, reportGeneration: 0, logRead: 0, instrumentTag: null, instrumentProbes: [], openPackages: new Set(), openClasses: new Set() };
   const metricInfo = [
     ['statements', 'Statements', '#528ee5'], ['methods', 'Methods', '#f08262'], ['classes', 'Classes', '#31b38b'], ['activities', 'Activities', '#e7bc42'],
     ['services', 'Services', '#4fb4a8'], ['broadcast-receivers', 'Broadcast receivers', '#e4956a'], ['content-providers', 'Content providers', '#9a83e9']
@@ -178,22 +178,48 @@
     state.catalog = catalog;
     state.draft = new Map([...state.points].map(([key, point]) => [key, { ...point }])); state.selected = null; state.selectedClass = null;
     $('class-search').value = ''; $('point-message').value = ''; $('point-message').disabled = true; $('point-label').textContent = 'Select a statement'; $('remove-point').disabled = true;
-    renderClasses(); $('code-dialog').showModal(); const first = [...new Set(state.catalog.methods.map(m => m.className))][0]; if (first) renderClass(first); updateDraftCount();
+    const first = [...new Set(state.catalog.methods.map(m => m.className))].sort()[0]; if (first) { state.openPackages.add(first.includes('.') ? first.slice(0, first.lastIndexOf('.')) : '(default package)'); state.openClasses.add(first); renderClass(first); } else renderClasses(); $('code-dialog').showModal(); updateDraftCount();
   }
   $('open-custom').addEventListener('click', browseCode);
   function renderClasses() {
-    const classes = [...new Set(state.catalog.methods.map(m => m.className))].sort(); const query = $('class-search').value.toLowerCase().trim();
-    const list = $('classes'); list.replaceChildren();
-    for (const name of classes.filter(name => name.toLowerCase().includes(query))) {
-      const item = document.createElement('button'); item.className = 'class-item'; item.type = 'button'; item.textContent = name; item.classList.toggle('active', name === state.selectedClass); item.addEventListener('click', () => renderClass(name)); list.appendChild(item);
+    const query = $('class-search').value.toLowerCase().trim();
+    const groups = new Map();
+    for (const method of state.catalog.methods) {
+      const name = method.className, pkg = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : '(default package)';
+      if (!name.toLowerCase().includes(query) && !method.signature.toLowerCase().includes(query)) continue;
+      if (!groups.has(pkg)) groups.set(pkg, new Map());
+      if (!groups.get(pkg).has(name)) groups.get(pkg).set(name, []);
+      groups.get(pkg).get(name).push(method);
     }
+    const list = $('classes'); list.replaceChildren();
+    for (const [pkg, classes] of [...groups].sort(([a], [b]) => a.localeCompare(b))) {
+      const folder = document.createElement('details'); folder.className = 'tree-package'; folder.open = Boolean(query) || state.openPackages.has(pkg);
+      const label = document.createElement('summary'); label.textContent = pkg; label.title = pkg; folder.appendChild(label);
+      folder.addEventListener('toggle', () => { if (!query) folder.open ? state.openPackages.add(pkg) : state.openPackages.delete(pkg); });
+      for (const [name, methods] of [...classes].sort(([a], [b]) => a.localeCompare(b))) {
+        const branch = document.createElement('details'); branch.className = 'tree-class'; branch.open = Boolean(query) || state.openClasses.has(name);
+        const heading = document.createElement('summary'); heading.title = name;
+        const item = document.createElement('button'); item.className = 'class-item'; item.type = 'button'; item.textContent = name.slice(name.lastIndexOf('.') + 1); item.classList.toggle('active', name === state.selectedClass);
+        item.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); state.openPackages.add(pkg); state.openClasses.add(name); renderClass(name); });
+        heading.appendChild(item); branch.appendChild(heading);
+        branch.addEventListener('toggle', () => { if (!query) branch.open ? state.openClasses.add(name) : state.openClasses.delete(name); });
+        for (const method of methods.sort((a, b) => a.signature.localeCompare(b.signature))) {
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'tree-method';
+          button.textContent = method.signature.replace(/^<[^:]+:\s*/, '').replace(/>$/, ''); button.title = method.signature;
+          button.addEventListener('click', () => { state.openPackages.add(pkg); state.openClasses.add(name); renderClass(name, method.signature); }); branch.appendChild(button);
+        }
+        folder.appendChild(branch);
+      }
+      list.appendChild(folder);
+    }
+    if (!groups.size) { const empty = document.createElement('p'); empty.className = 'tree-empty'; empty.textContent = 'No matching code'; list.appendChild(empty); }
   }
   $('class-search').addEventListener('input', renderClasses);
-  function renderClass(name) {
+  function renderClass(name, selectedMethod = null) {
     state.selectedClass = name; state.selected = null; $('point-message').value = ''; $('point-message').disabled = true; $('remove-point').disabled = true; $('point-label').textContent = 'Select a statement'; $('code-class').textContent = name;
-    const lines = $('code-lines'); lines.replaceChildren();
+    const lines = $('code-lines'); lines.replaceChildren(); let target = null;
     for (const method of state.catalog.methods.filter(m => m.className === name)) {
-      const heading = document.createElement('div'); heading.className = 'code-method'; heading.textContent = method.signature; lines.appendChild(heading);
+      const heading = document.createElement('div'); heading.className = 'code-method'; heading.textContent = method.signature; lines.appendChild(heading); if (method.signature === selectedMethod) target = heading;
       for (const statement of method.statements) {
         const key = identity(method.signature, statement.index); const row = document.createElement('button'); row.type = 'button'; row.className = 'code-line'; row.disabled = !statement.selectable;
         const num = document.createElement('span'); num.className = 'num'; num.textContent = `${state.draft.has(key) ? '● ' : ''}${statement.index}`; num.classList.toggle('marked', state.draft.has(key));
@@ -201,7 +227,7 @@
         row.addEventListener('click', () => selectPoint(method, statement, row, num)); lines.appendChild(row);
       }
     }
-    renderClasses(); lines.scrollTop = 0;
+    renderClasses(); lines.scrollTop = target ? target.offsetTop - lines.offsetTop : 0;
   }
   function selectPoint(method, statement, row, number) {
     $('code-lines').querySelectorAll('.code-line.active').forEach(el => el.classList.remove('active')); row.classList.add('active');

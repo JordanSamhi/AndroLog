@@ -147,3 +147,18 @@ test('custom-only APK instructions do not claim coverage probes were enabled', a
   assert.match(doc.getElementById('next-coverage').textContent, /custom messages/);
   assert.match(doc.getElementById('next-coverage').textContent, /requires automatic probes/);
 });
+
+test('custom code explorer groups methods under classes and searches method names', async t => {
+  const { dom, window, doc } = createUi({ inspectCode: async () => ({ apkSha256: 'a'.repeat(64), methods: [
+    { className: 'org.example.Main', signature: '<org.example.Main: void first()>', statements: [{ index: 1, text: 'return', selectable: true }] },
+    { className: 'org.example.Main', signature: '<org.example.Main: void second()>', statements: [{ index: 1, text: 'return', selectable: true }] },
+    { className: 'org.other.Other', signature: '<org.other.Other: void third()>', statements: [] }
+  ] }) }); t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('open-custom').click(); await tick();
+  assert.equal(doc.querySelectorAll('.tree-package').length, 2);
+  assert.equal(doc.querySelectorAll('.tree-class')[0].querySelectorAll('.tree-method').length, 2);
+  doc.querySelectorAll('.tree-method')[1].click();
+  assert.match(doc.getElementById('code-class').textContent, /Main/);
+  const search = doc.getElementById('class-search'); search.value = 'third'; search.dispatchEvent(new window.Event('input'));
+  assert.equal(doc.querySelectorAll('.tree-method').length, 1); assert.match(doc.querySelector('.tree-method').textContent, /third/);
+});
