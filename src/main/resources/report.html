@@ -87,6 +87,8 @@
     .selected-beyond-page > p { font-size: 10px; color: var(--muted); padding-left: 7px; }
     .class-choice { width: 100%; background: transparent; border: 1px solid transparent; text-align: left; text-decoration: none; border-radius: 6px; color: var(--ink); padding: 7px 6px; display: block; margin: 2px 0; font-size: 11px; }
     .class-choice:hover { background: #f3f7f9; }
+    .class-choice.covered, .class-choice.covered:hover { background: #e2f5e9; }
+    .class-choice.uncovered, .class-choice.uncovered:hover { background: #fff0ee; }
     .class-choice[aria-current="true"] { background: var(--teal-soft); border-color: #afdad0; }
     .class-choice-name { display: flex; align-items: center; gap: 7px; }
     .class-choice-name strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -139,6 +141,10 @@
     .code-table .source-comment .line-code { color: #7a8791; font-style: italic; }
     .code-table .navigation-target > td { background: #e5f1fa; }
     .code-table .navigation-target > .line-number { background: #dcebf7; color: #174e78; }
+    .code-table tr.declaration.covered > .line-code { background: #d7f1e0; }
+    .code-table tr.declaration.uncovered > .line-code { background: #fde5e1; }
+    .code-table tr.declaration.covered.navigation-target > .line-code { background: #c6ead4; }
+    .code-table tr.declaration.uncovered.navigation-target > .line-code { background: #f9d5ce; }
     .code-table tr:focus-visible { outline: 2px solid #438ab7; outline-offset: -2px; }
     .graph-header { padding: 20px 23px 15px; border-bottom: 1px solid var(--line); }
     .graph-header h2 { margin-bottom: 5px; }
@@ -482,6 +488,7 @@
         link.setAttribute('aria-controls', 'class-detail');
         var component = componentTypes[activeCategory];
         var status = statusFor(component ? item.componentCovered : item.classCovered);
+        link.classList.add(status);
         link.setAttribute('aria-label', String(item.name) + ', ' + (component || 'class') + ' probe: ' + labels[status]);
         link.title = String(item.name);
         var name = make('span', 'class-choice-name'), dot = make('span', 'dot ' + status);
@@ -611,6 +618,10 @@
           var lineNumber = ++sourceLine;
           if (options.visible === false) return null;
           var tr = make('tr', 'source-row ' + kind);
+          if ((options.method || options.classDeclaration) && options.status) {
+            tr.classList.add(options.status);
+            tr.setAttribute('data-status', options.status);
+          }
           tr.setAttribute('data-source-line', String(lineNumber));
           var description = 'Listing line ' + lineNumber;
           if (options.statement) {
@@ -624,14 +635,15 @@
           } else {
             description += ' · Display formatting for reconstructed Jimple';
           }
-          if (options.status) description += ' · ' + (options.method ? 'Method probe: ' : '') + labels[options.status];
+          var probeLabel = options.method ? 'Method probe: ' : options.classDeclaration ? 'Class probe: ' : '';
+          if (options.status) description += ' · ' + probeLabel + labels[options.status];
           tr.title = description;
           var line = make('th', 'line-number', lineNumber); line.scope = 'row'; line.title = description; tr.appendChild(line);
           var gutter = make('td', 'coverage-gutter' + (options.status ? ' ' + options.status : ''));
           if (options.status) {
             var marker = make('span', '', markers[options.status]); marker.setAttribute('aria-hidden', 'true'); gutter.appendChild(marker);
-            gutter.appendChild(make('span', 'sr-only', (options.method ? 'Method probe: ' : '') + labels[options.status]));
-            gutter.title = (options.method ? 'Method probe: ' : '') + labels[options.status];
+            gutter.appendChild(make('span', 'sr-only', probeLabel + labels[options.status]));
+            gutter.title = probeLabel + labels[options.status];
           }
           tr.appendChild(gutter);
           var cell = make('td', 'line-code'), code = make('code');
@@ -650,7 +662,7 @@
           cell.appendChild(code); tr.appendChild(cell); fragment.appendChild(tr);
           return tr;
         }
-        classTarget = appendLine(String(selected.name || 'Class'), 'class-declaration declaration', { classDeclaration: true });
+        classTarget = appendLine(String(selected.name || 'Class'), 'class-declaration declaration', { classDeclaration: true, status: statusFor(selected.classCovered) });
         classTarget.id = 'class-declaration'; classTarget.tabIndex = -1;
         if (methods.length) appendLine('', 'source-blank');
         else appendLine('    // No method bodies are available for this class.', 'source-comment');
