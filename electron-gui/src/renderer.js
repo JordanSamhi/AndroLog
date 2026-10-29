@@ -4,8 +4,8 @@
   const api = window.androlog;
   const state = { apk: null, coverageApk: null, log: null, catalog: null, points: new Map(), draft: new Map(), selected: null, selectedClass: null, result: false, report: null, busy: false, stageKind: '', logText: '', pendingCategory: null, pendingCustomPoint: null, reportGeneration: 0, instrumentTag: null, instrumentProbes: [], openPackages: new Set(), openClasses: new Set() };
   const metricInfo = [
-    ['statements', 'Statements', '#528ee5'], ['methods', 'Methods', '#f08262'], ['classes', 'Classes', '#31b38b'], ['activities', 'Activities', '#e7bc42'],
-    ['services', 'Services', '#4fb4a8'], ['broadcast-receivers', 'Broadcast receivers', '#e4956a'], ['content-providers', 'Content providers', '#9a83e9']
+    ['statements', 'Statements'], ['methods', 'Methods'], ['classes', 'Classes'], ['activities', 'Activities'],
+    ['services', 'Services'], ['broadcast-receivers', 'Broadcast receivers'], ['content-providers', 'Content providers']
   ];
   const basename = value => value ? value.split(/[\\/]/).pop() : '';
   let toastTimer;
@@ -168,7 +168,7 @@
   for (const id of ['save-report','report-export']) $(id).addEventListener('click', async () => { try { const file = await api.saveReport(); if (file) toast(`Saved ${basename(file)}`); } catch (e) { toast(e.message, true); } });
   function drawMetrics(summary) {
     const grid = $('stats-grid'); grid.replaceChildren();
-    for (const [key, name, color] of metricInfo) {
+    for (const [key, name] of metricInfo) {
       const metric = summary?.[key]; const total = metric && Number(metric.total); const observed = metric && Number(metric.covered);
       const valid = Number.isFinite(total) && Number.isFinite(observed) && total > 0;
       const card = document.createElement('button'); card.className = 'stat'; card.type = 'button'; card.disabled = !metric;
@@ -176,7 +176,7 @@
       const value = document.createElement('strong'); value.textContent = valid ? `${(100 * observed / total).toFixed(1)}%` : '—';
       const detail = document.createElement('small'); detail.textContent = !metric ? (summary ? 'No probes found' : 'Awaiting analysis') : total === 0 ? 'Nothing to cover' : `${observed.toLocaleString()} of ${total.toLocaleString()} observed`;
       const meter = document.createElement('span'); meter.className = 'meter'; const fill = document.createElement('i');
-      fill.style.setProperty('--value', `${valid ? Math.max(0, Math.min(100, 100 * observed / total)) : 0}%`); fill.style.setProperty('--color', color); meter.appendChild(fill);
+      fill.style.setProperty('--value', `${valid ? Math.max(0, Math.min(100, 100 * observed / total)) : 0}%`); meter.appendChild(fill);
       card.append(label, value, detail, meter); if (metric) card.addEventListener('click', () => openCategory(key)); grid.appendChild(card);
     }
   }
