@@ -67,6 +67,10 @@ Check the available options:
 java -jar target/androlog-0.1-jar-with-dependencies.jar --help
 ```
 
+## Electron desktop GUI
+
+The `electron-gui` folder contains a JavaScript/Electron desktop interface backed by the existing AndroLog Java engine. It includes APK instrumentation, custom log points, coverage statistics, and the interactive code and dynamic call graph report. See the [Electron desktop guide](electron-gui/README.md) for setup, usage, and cross-platform packaging. The Java desktop GUI below remains available.
+
 ## Desktop GUI
 
 [![AndroLog desktop GUI with an APK drop area, setup steps, and SDK settings](data/screenshots/androlog-gui.png)](data/screenshots/androlog-gui.png)

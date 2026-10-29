@@ -4,3 +4,6 @@ out/
 .idea/
 MainExperiments.java
 src/main/resources/config.properties
+
+# Electron dependencies are installed locally, never committed.
+electron-gui/node_modules/

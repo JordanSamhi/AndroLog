@@ -1,0 +1,60 @@
+{
+  "name": "androlog-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AndroLog desktop interface",
+  "author": "Jordan Samhi",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "dist": "node scripts/package.js",
+    "dist:dir": "node scripts/package.js --dir"
+  },
+  "devDependencies": {
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0",
+    "jsdom": "26.1.0"
+  },
+  "build": {
+    "appId": "com.jordansamhi.androlog.electron",
+    "productName": "AndroLog",
+    "directories": {
+      "output": "../target/electron"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../target/androlog-0.1-jar-with-dependencies.jar",
+        "to": "androlog.jar"
+      }
+    ],
+    "mac": {
+      "icon": "../data/icons/androlog.icns",
+      "target": [
+        "zip"
+      ],
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist"
+    },
+    "win": {
+      "icon": "../data/icons/androlog.ico",
+      "target": [
+        "zip"
+      ]
+    },
+    "linux": {
+      "icon": "../src/main/resources/gui/androlog-icon.png",
+      "target": [
+        "tar.gz"
+      ],
+      "category": "Development"
+    }
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

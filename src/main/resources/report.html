@@ -454,6 +454,14 @@
         if (activeCategory === 'methods' && selected) $('method-select').focus({ preventScroll: true });
         else if (selectedAnchor) selectedAnchor.focus({ preventScroll: true });
       }
+      // The desktop shell may open a selected coverage category in this report.
+      // No code or data is accepted from the parent window.
+      window.addEventListener('message', function (event) {
+        if (window.parent === window || event.source !== window.parent || !event.data ||
+            event.data.type !== 'androlog.selectCategory' || typeof event.data.category !== 'string' ||
+            !Object.prototype.hasOwnProperty.call(categoryLabels, event.data.category)) return;
+        selectCategory(event.data.category);
+      });
       function updateMatches(node) {
         node.matches = node.classes.filter(matchesFilters);
         node.matchedTotal = node.matches.length;
