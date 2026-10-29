@@ -205,41 +205,54 @@
     state.catalog = catalog;
     state.draft = new Map([...state.points].map(([key, point]) => [key, { ...point }])); state.selected = null; state.selectedClass = null;
     $('class-search').value = ''; $('point-message').value = ''; $('point-message').disabled = true; $('point-label').textContent = 'Select a statement'; $('remove-point').disabled = true;
-    const first = [...new Set(state.catalog.methods.map(m => m.className))].sort()[0]; if (first) { state.openPackages.add(first.includes('.') ? first.slice(0, first.lastIndexOf('.')) : '(default package)'); state.openClasses.add(first); renderClass(first); } else renderClasses(); $('code-dialog').showModal(); updateDraftCount();
+    const first = [...new Set(state.catalog.methods.map(m => m.className))].sort()[0]; if (first) { revealPackage(first); state.openClasses.add(first); renderClass(first); } else renderClasses(); $('code-dialog').showModal(); updateDraftCount();
   }
   $('open-custom').addEventListener('click', browseCode);
   function renderClasses() {
     const query = $('class-search').value.toLowerCase().trim();
-    const groups = new Map();
+    const root = { packages: new Map(), classes: new Map() };
     for (const method of state.catalog.methods) {
-      const name = method.className, pkg = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : '(default package)';
+      const name = method.className;
       if (!name.toLowerCase().includes(query) && !method.signature.toLowerCase().includes(query)) continue;
-      if (!groups.has(pkg)) groups.set(pkg, new Map());
-      if (!groups.get(pkg).has(name)) groups.get(pkg).set(name, []);
-      groups.get(pkg).get(name).push(method);
+      const parts = name.includes('.') ? name.slice(0, name.lastIndexOf('.')).split('.') : ['(default package)'];
+      let node = root, path = '';
+      for (const part of parts) {
+        path = path ? `${path}.${part}` : part;
+        if (!node.packages.has(part)) node.packages.set(part, { path, packages: new Map(), classes: new Map() });
+        node = node.packages.get(part);
+      }
+      if (!node.classes.has(name)) node.classes.set(name, []);
+      node.classes.get(name).push(method);
     }
-    const list = $('classes'); list.replaceChildren();
-    for (const [pkg, classes] of [...groups].sort(([a], [b]) => a.localeCompare(b))) {
-      const folder = document.createElement('details'); folder.className = 'tree-package'; folder.open = Boolean(query) || state.openPackages.has(pkg);
-      const label = document.createElement('summary'); label.textContent = pkg; label.title = pkg; folder.appendChild(label);
-      folder.addEventListener('toggle', () => { if (!query) folder.open ? state.openPackages.add(pkg) : state.openPackages.delete(pkg); });
-      for (const [name, methods] of [...classes].sort(([a], [b]) => a.localeCompare(b))) {
+    const list = $('classes'); const scroll = list.scrollTop; list.replaceChildren();
+    function appendNode(node, parent) {
+      for (const [part, child] of [...node.packages].sort(([a], [b]) => a.localeCompare(b))) {
+        const folder = document.createElement('details'); folder.className = 'tree-package'; folder.dataset.package = child.path; folder.open = Boolean(query) || state.openPackages.has(child.path);
+        const label = document.createElement('summary'); label.textContent = part; label.title = child.path; folder.appendChild(label);
+        folder.addEventListener('toggle', () => { if (!query && folder.isConnected) folder.open ? state.openPackages.add(child.path) : state.openPackages.delete(child.path); });
+        const children = document.createElement('div'); children.className = 'tree-children'; appendNode(child, children); folder.appendChild(children); parent.appendChild(folder);
+      }
+      for (const [name, methods] of [...node.classes].sort(([a], [b]) => a.localeCompare(b))) {
         const branch = document.createElement('details'); branch.className = 'tree-class'; branch.open = Boolean(query) || state.openClasses.has(name);
         const heading = document.createElement('summary'); heading.title = name;
         const item = document.createElement('button'); item.className = 'class-item'; item.type = 'button'; item.textContent = name.slice(name.lastIndexOf('.') + 1); item.classList.toggle('active', name === state.selectedClass);
-        item.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); state.openPackages.add(pkg); state.openClasses.add(name); renderClass(name); });
+        item.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); revealPackage(name); state.openClasses.add(name); renderClass(name); });
         heading.appendChild(item); branch.appendChild(heading);
-        branch.addEventListener('toggle', () => { if (!query) branch.open ? state.openClasses.add(name) : state.openClasses.delete(name); });
+        branch.addEventListener('toggle', () => { if (!query && branch.isConnected) branch.open ? state.openClasses.add(name) : state.openClasses.delete(name); });
         for (const method of methods.sort((a, b) => a.signature.localeCompare(b.signature))) {
           const button = document.createElement('button'); button.type = 'button'; button.className = 'tree-method';
           button.textContent = method.signature.replace(/^<[^:]+:\s*/, '').replace(/>$/, ''); button.title = method.signature;
-          button.addEventListener('click', () => { state.openPackages.add(pkg); state.openClasses.add(name); renderClass(name, method.signature); }); branch.appendChild(button);
+          button.addEventListener('click', () => { revealPackage(name); state.openClasses.add(name); renderClass(name, method.signature); }); branch.appendChild(button);
         }
-        folder.appendChild(branch);
+        parent.appendChild(branch);
       }
-      list.appendChild(folder);
     }
-    if (!groups.size) { const empty = document.createElement('p'); empty.className = 'tree-empty'; empty.textContent = 'No matching code'; list.appendChild(empty); }
+    appendNode(root, list); list.scrollTop = scroll;
+    if (!root.packages.size) { const empty = document.createElement('p'); empty.className = 'tree-empty'; empty.textContent = 'No matching code'; list.appendChild(empty); }
+  }
+  function revealPackage(name) {
+    const parts = name.includes('.') ? name.slice(0, name.lastIndexOf('.')).split('.') : ['(default package)'];
+    let path = ''; for (const part of parts) { path = path ? `${path}.${part}` : part; state.openPackages.add(path); }
   }
   $('class-search').addEventListener('input', renderClasses);
   function renderClass(name, selectedMethod = null) {

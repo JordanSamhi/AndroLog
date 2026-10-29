@@ -155,7 +155,10 @@ test('custom code explorer groups methods under classes and searches method name
     { className: 'org.other.Other', signature: '<org.other.Other: void third()>', statements: [] }
   ] }) }); t.after(() => dom.window.close());
   doc.getElementById('choose-apk').click(); await tick(); doc.getElementById('open-custom').click(); await tick();
-  assert.equal(doc.querySelectorAll('.tree-package').length, 2);
+  assert.equal(doc.querySelectorAll('#classes > .tree-package').length, 1);
+  assert.equal(doc.querySelector('#classes > .tree-package > summary').textContent, 'org');
+  assert.equal(doc.querySelectorAll('[data-package="org"] > .tree-children > .tree-package').length, 2);
+  assert.equal(doc.querySelector('[data-package="org.example"] > summary').textContent, 'example');
   assert.equal(doc.querySelectorAll('.tree-class')[0].querySelectorAll('.tree-method').length, 2);
   doc.querySelectorAll('.tree-method')[1].click();
   assert.match(doc.getElementById('code-class').textContent, /Main/);
