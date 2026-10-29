@@ -4,6 +4,7 @@ package com.jordansamhi.androlog.runtime;
 public final class CustomLogRuntime {
     private static final int MAX_CHARS = 3000;
     private static final int MAX_BYTES = 3000;
+    private static final ThreadLocal<Boolean> CONVERTING_OBJECT = new ThreadLocal<Boolean>();
     private CustomLogRuntime() { }
 
     public static StringBuilder create() { return new StringBuilder(); }
@@ -25,6 +26,34 @@ public final class CustomLogRuntime {
             else if (next == '\0') append(output, "\\0");
             else output.append(next);
         }
+    }
+    public static void value(StringBuilder output, Object value) {
+        if (output.length() > MAX_CHARS) return;
+        if (value == null) { value(output, (String) null); return; }
+        // A custom toString may itself contain an inserted object log. Do not
+        // recursively invoke another toString while this thread is converting one.
+        if (Boolean.TRUE.equals(CONVERTING_OBJECT.get())) {
+            append(output, "<recursive toString>"); return;
+        }
+        CONVERTING_OBJECT.set(Boolean.TRUE);
+        try {
+            value(output, String.valueOf(value));
+        } catch (ThreadDeath fatal) {
+            throw fatal;
+        } catch (VirtualMachineError fatal) {
+            throw fatal;
+        } catch (Throwable failed) {
+            append(output, "<toString failed>");
+        } finally {
+            CONVERTING_OBJECT.remove();
+        }
+    }
+
+    /** Compact probe for a message consisting of one selected object variable. */
+    public static void logObject(String tag, String id, String template, Object value) {
+        StringBuilder output = create();
+        value(output, value);
+        write(tag, id, template, output);
     }
     private static void append(StringBuilder output, String value) {
         // Retain one extra character as a truncation sentinel, avoiding huge temporary strings.

@@ -14,6 +14,18 @@ const DEVICE = /^[^\s\x00-\x1f\x7f]{1,512}$/;
 const CAPTURE_CLASS = 'com.jordansamhi.androlog.DeviceCapture';
 const CAPTURE_STATES = new Set(['preparing', 'installing', 'launching', 'recording', 'stopping']);
 const PACKAGE = /^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*\.?$/;
+const LOCAL_TYPES = new Set(['byte', 'short', 'int', 'long', 'float', 'double', 'boolean', 'java.lang.String']);
+
+function supportedLocalType(type) {
+  // Keep aligned with LocalVariableAvailability.supported and the renderer.
+  if (typeof type !== 'string' || !type || type.length > 1024) return false;
+  let base = type, dimensions = 0;
+  while (base.endsWith('[]')) { base = base.slice(0, -2); if (++dimensions > 255) return false; }
+  if (LOCAL_TYPES.has(base)) return true;
+  if (base === 'char') return dimensions > 0;
+  if (['void', 'null', 'null_type', 'unknown', 'bottom_type', 'address'].includes(base)) return false;
+  return /^[^\s\u0000-\u001f\u007f\[\];/(){}<>:.]+(?:\.[^\s\u0000-\u001f\u007f\[\];/(){}<>:.]+)*$/u.test(base);
+}
 
 function javaProperty(value) {
   return [...value].map(c => {
@@ -67,9 +79,9 @@ function validatePlan(plan) {
     if (typeof point.message !== 'string' || !point.message.trim() || /[\n\r\0]/.test(point.message) || Buffer.byteLength(point.message, 'utf8') > 1000) throw new Error('Use a nonempty single-line message of at most 1,000 UTF-8 bytes.');
     if (point.variables != null) {
       if (!Array.isArray(point.variables)) throw new Error('The custom log variables are invalid. Browse the statement again.');
-      const variables = new Set(), types = new Set(['byte', 'short', 'int', 'long', 'float', 'double', 'boolean', 'java.lang.String']);
+      const variables = new Set();
       for (const variable of point.variables) {
-        if (!variable || typeof variable.name !== 'string' || !/^[^\s{}\u0000-\u001f\u007f]{1,200}$/u.test(variable.name) || !types.has(variable.type)) throw new Error('Choose a local number, boolean, or string from Insert variable.');
+        if (!variable || typeof variable.name !== 'string' || !/^[^\s{}\u0000-\u001f\u007f]{1,200}$/u.test(variable.name) || !supportedLocalType(variable.type)) throw new Error('Choose a supported local variable from Insert variable.');
         if (variables.has(variable.name)) throw new Error('A custom log variable may only be listed once.');
         if (!point.message.includes(`{${variable.name}}`)) throw new Error('A selected variable is missing from the custom log message.');
         variables.add(variable.name);

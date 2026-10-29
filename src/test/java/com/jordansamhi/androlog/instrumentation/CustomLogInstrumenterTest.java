@@ -135,6 +135,60 @@ public class CustomLogInstrumenterTest {
         catch (IllegalArgumentException expected) { assertTrue(expected.getMessage().contains("not initialized")); }
     }
 
+    @Test public void aSingleObjectPlaceholderUsesOneProbeWithoutAddingCallerLocals() throws Exception {
+        runtimeSignatures();
+        JimpleBody body = body(method(app, "objectValue", Collections.singletonList(object.getType()), VoidType.v()));
+        parameter(body, "value", object.getType(), 0);
+        Unit target = Jimple.v().newReturnVoidStmt(); body.getUnits().add(target);
+        CustomLogPlan.Point point = new CustomLogPlan.Point(body.getMethod().getSignature(), 2, target.toString(), "{value}");
+        point.variables.add(new CustomLogPlan.Variable("value", "java.lang.Object"));
+        CustomLogInstrumenter custom = new CustomLogInstrumenter("TEST", new CustomLogPlan(String.join("", Collections.nCopies(64, "a")), Collections.singletonList(point)));
+        custom.capture(body); custom.instrument(body); custom.verifyComplete();
+        assertEquals(1, body.getLocals().size()); assertEquals(3, body.getUnits().size());
+        InvokeExpr probe = ((Stmt) body.getUnits().getSuccOf(body.getUnits().getFirst())).getInvokeExpr();
+        assertEquals("void logObject(java.lang.String,java.lang.String,java.lang.String,java.lang.Object)", probe.getMethodRef().getSubSignature().toString());
+        assertEquals("{value}", ((StringConstant) probe.getArg(2)).value);
+        ByteArrayOutputStream output = new ByteArrayOutputStream(); PrintStream previous = System.out;
+        try {
+            System.setOut(new PrintStream(output, true, "UTF-8"));
+            load().getMethod("objectValue", Object.class).invoke(null, new Object() { @Override public String toString() { return "rendered"; } });
+        } finally { System.setOut(previous); }
+        assertTrue(output.toString("UTF-8").contains("CUSTOM_VALUE=" + point.id + "|rendered"));
+        assertTrue(output.toString("UTF-8").contains("CUSTOM_POINT=" + point.id));
+    }
+
+    @Test public void mixedObjectAndArrayValuesUseTheObjectOverloadWithoutCallerCasts() throws Exception {
+        runtimeSignatures();
+        RefType builderType = RefType.v("java.lang.StringBuilder");
+        ArrayType arrayType = ArrayType.v(IntType.v(), 1);
+        JimpleBody body = body(method(app, "mixedObjects", Arrays.asList(builderType, arrayType), VoidType.v()));
+        parameter(body, "value", builderType, 0); parameter(body, "array", arrayType, 1);
+        Unit target = Jimple.v().newReturnVoidStmt(); body.getUnits().add(target);
+        CustomLogPlan.Point point = new CustomLogPlan.Point(body.getMethod().getSignature(), 3, target.toString(), "object={value}; again={value}; array={array}");
+        point.variables.add(new CustomLogPlan.Variable("value", builderType.toString()));
+        point.variables.add(new CustomLogPlan.Variable("array", arrayType.toString()));
+        CustomLogInstrumenter custom = new CustomLogInstrumenter("TEST", new CustomLogPlan(String.join("", Collections.nCopies(64, "a")), Collections.singletonList(point)));
+        custom.capture(body); custom.instrument(body); custom.verifyComplete();
+        int objectCalls = 0;
+        for (Unit unit : body.getUnits()) {
+            if (unit instanceof AssignStmt) assertFalse(((AssignStmt) unit).getRightOp() instanceof CastExpr);
+            if (unit instanceof Stmt && ((Stmt) unit).containsInvokeExpr()) {
+                SootMethodRef reference = ((Stmt) unit).getInvokeExpr().getMethodRef();
+                if (reference.name().equals("value")) {
+                    assertEquals("void value(java.lang.StringBuilder,java.lang.Object)", reference.getSubSignature().toString()); objectCalls++;
+                }
+            }
+        }
+        assertEquals(3, objectCalls);
+        int[] array = {1, 2};
+        ByteArrayOutputStream output = new ByteArrayOutputStream(); PrintStream previous = System.out;
+        try {
+            System.setOut(new PrintStream(output, true, "UTF-8"));
+            load().getMethod("mixedObjects", StringBuilder.class, int[].class).invoke(null, new StringBuilder("text"), array);
+        } finally { System.setOut(previous); }
+        assertTrue(output.toString("UTF-8").contains("CUSTOM_VALUE=" + point.id + "|object=text; again=text; array=" + array.toString()));
+    }
+
     @Test public void bracesRemainLiteralWithoutAnExplicitVariableSelection() throws Exception {
         JimpleBody body = body(method(app, "literalBraces", Collections.emptyList(), VoidType.v()));
         Unit end = Jimple.v().newReturnVoidStmt(); body.getUnits().add(end);
@@ -149,10 +203,11 @@ public class CustomLogInstrumenterTest {
         runtime.setResolvingLevel(SootClass.SIGNATURES); builder.setResolvingLevel(SootClass.SIGNATURES);
         method(runtime, "create", Collections.emptyList(), builder.getType());
         method(runtime, "text", Arrays.asList(builder.getType(), string()), VoidType.v());
-        for (Type type : Arrays.asList(ByteType.v(), ShortType.v(), IntType.v(), BooleanType.v(), string(), LongType.v(), FloatType.v(), DoubleType.v())) {
+        for (Type type : Arrays.asList(ByteType.v(), ShortType.v(), IntType.v(), BooleanType.v(), string(), LongType.v(), FloatType.v(), DoubleType.v(), object.getType())) {
             method(runtime, "value", Arrays.asList(builder.getType(), type), VoidType.v());
         }
         method(runtime, "write", Arrays.asList(string(), string(), string(), builder.getType()), VoidType.v());
+        method(runtime, "logObject", Arrays.asList(string(), string(), string(), object.getType()), VoidType.v());
     }
 
     private CustomLogInstrumenter custom(Body body, int index, String statement, String message) throws IOException {

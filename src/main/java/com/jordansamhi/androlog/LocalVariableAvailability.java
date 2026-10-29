@@ -12,14 +12,18 @@ public final class LocalVariableAvailability {
     private final Map<Unit, BitSet> before = new IdentityHashMap<>();
 
     public LocalVariableAvailability(Body body) {
-        Set<Local> allocatedStrings = allocationDerivedStrings(body);
-        for (Local local : body.getLocals()) if (supported(local.getType().toString()) && !allocatedStrings.contains(local)) locals.add(local);
+        for (Local local : body.getLocals()) if (supported(local.getType().toString())) locals.add(local);
         // Every picker uses this same order; avoid sorting again for each statement.
         locals.sort(Comparator.comparing(Local::getName));
         if (body.getUnits().isEmpty() || locals.isEmpty()) return;
         List<Unit> units = new ArrayList<>(); for (Unit unit : body.getUnits()) units.add(unit);
         Map<Local, Integer> positions = new IdentityHashMap<>();
         for (int i = 0; i < locals.size(); i++) positions.put(locals.get(i), i);
+        int[] referencePositions = new int[locals.size()]; Arrays.fill(referencePositions, -1);
+        List<Integer> referenceLocals = new ArrayList<>();
+        for (int i = 0; i < locals.size(); i++) if (locals.get(i).getType() instanceof RefLikeType) {
+            referencePositions[i] = referenceLocals.size(); referenceLocals.add(i);
+        }
         BriefUnitGraph normal = new BriefUnitGraph(body);
         Map<Unit, Set<Unit>> exceptional = new IdentityHashMap<>(), successors = new IdentityHashMap<>();
         Map<Unit, Integer> indices = new IdentityHashMap<>();
@@ -41,17 +45,10 @@ public final class LocalVariableAvailability {
             Unit unit = visit.removeFirst();
             if (reachable.add(unit)) visit.addAll(successors.get(unit));
         }
-        BitSet universe = new BitSet(); universe.set(0, locals.size());
-        Map<Unit, BitSet> after = new IdentityHashMap<>();
-        Map<Unit, BitSet> definitions = new IdentityHashMap<>();
+        Map<Unit, Facts> inputs = new IdentityHashMap<>(), outputs = new IdentityHashMap<>();
         for (Unit unit : units) {
-            BitSet defined = new BitSet();
-            for (ValueBox box : unit.getDefBoxes()) {
-                Integer index = positions.get(box.getValue()); if (index != null) defined.set(index);
-            }
-            definitions.put(unit, defined);
-            before.put(unit, reachable.contains(unit) ? (BitSet) universe.clone() : new BitSet());
-            after.put(unit, reachable.contains(unit) ? (BitSet) universe.clone() : new BitSet());
+            inputs.put(unit, new Facts(locals.size(), referenceLocals.size(), reachable.contains(unit)));
+            outputs.put(unit, new Facts(locals.size(), referenceLocals.size(), reachable.contains(unit)));
         }
         // IdentityHashMap iteration is arbitrary. Visit statements in body order
         // so ordinary forward edges see their predecessors' facts on the first pass.
@@ -60,16 +57,49 @@ public final class LocalVariableAvailability {
         Set<Unit> queued = identitySet(reachable);
         while (!work.isEmpty()) {
             Unit unit = work.removeFirst(); queued.remove(unit);
-            BitSet input = (BitSet) universe.clone();
-            if (unit == units.get(0)) input.clear();
-            for (Unit pred : normal.getPredsOf(unit)) if (reachable.contains(pred)) input.and(after.get(pred));
-            for (Unit pred : exceptional.getOrDefault(unit, Collections.emptySet())) if (reachable.contains(pred)) input.and(before.get(pred));
-            BitSet output = (BitSet) input.clone(); output.or(definitions.get(unit));
-            if (!input.equals(before.get(unit)) || !output.equals(after.get(unit))) {
-                before.put(unit, input); after.put(unit, output);
+            Facts input = new Facts(locals.size(), referenceLocals.size(), unit != units.get(0));
+            for (Unit pred : normal.getPredsOf(unit)) if (reachable.contains(pred)) input.intersect(outputs.get(pred));
+            for (Unit pred : exceptional.getOrDefault(unit, Collections.emptySet())) if (reachable.contains(pred)) input.intersect(inputs.get(pred));
+            Facts output = input.copy();
+            if (unit instanceof DefinitionStmt) {
+                DefinitionStmt definition = (DefinitionStmt) unit;
+                Integer target = positions.get(definition.getLeftOp());
+                if (target != null) {
+                    Value source = definition.getRightOp();
+                    int targetReference = referencePositions[target];
+                    if (targetReference < 0) output.initialized.set(target);
+                    else {
+                        while (source instanceof CastExpr) source = ((CastExpr) source).getOp();
+                        Integer sourcePosition = positions.get(source);
+                        if (source instanceof Local) {
+                            output.initialized.set(target, sourcePosition != null && input.initialized.get(sourcePosition));
+                            int sourceReference = sourcePosition == null ? -1 : referencePositions[sourcePosition];
+                            if (sourceReference >= 0) output.assignAlias(targetReference, sourceReference);
+                            else output.detach(targetReference);
+                        } else {
+                            output.detach(targetReference);
+                            output.initialized.set(target, !(source instanceof NewExpr)
+                                    && !(source instanceof ThisRef && body.getMethod().isConstructor()));
+                        }
+                    }
+                }
+            }
+            if (unit instanceof Stmt && ((Stmt) unit).containsInvokeExpr()) {
+                InvokeExpr invoke = ((Stmt) unit).getInvokeExpr();
+                if (invoke instanceof SpecialInvokeExpr && "<init>".equals(invoke.getMethodRef().name())) {
+                    Integer receiver = positions.get(((SpecialInvokeExpr) invoke).getBase());
+                    if (receiver != null && referencePositions[receiver] >= 0) {
+                        int group = output.aliases[referencePositions[receiver]];
+                        for (int i = 0; i < output.aliases.length; i++) if (output.aliases[i] == group) output.initialized.set(referenceLocals.get(i));
+                    }
+                }
+            }
+            if (!input.equals(inputs.get(unit)) || !output.equals(outputs.get(unit))) {
+                inputs.put(unit, input); outputs.put(unit, output);
                 for (Unit next : successors.get(unit)) if (queued.add(next)) work.addLast(next);
             }
         }
+        for (Unit unit : units) before.put(unit, inputs.get(unit).initialized);
     }
 
     public List<CustomLogPlan.Variable> at(Unit unit) {
@@ -104,32 +134,54 @@ public final class LocalVariableAvailability {
     }
 
     public static boolean supported(String type) {
-        return Arrays.asList("byte", "short", "int", "long", "float", "double", "boolean", "java.lang.String").contains(type);
+        if (type == null || type.isEmpty() || type.length() > 1024) return false;
+        int dimensions = 0;
+        while (type.endsWith("[]")) { if (++dimensions > 255) return false; type = type.substring(0, type.length() - 2); }
+        if (Arrays.asList("byte", "short", "int", "long", "float", "double", "boolean").contains(type)) return true;
+        if ("char".equals(type)) return dimensions > 0;
+        if (Arrays.asList("void", "null", "null_type", "unknown", "bottom_type", "address").contains(type)) return false;
+        return type.matches("[^\\s\\p{Cntrl}\\[\\];/(){}<>:.]+(?:\\.[^\\s\\p{Cntrl}\\[\\];/(){}<>:.]+)*");
     }
 
-    private static Set<Local> allocationDerivedStrings(Body body) {
-        Set<Local> unsafe = Collections.newSetFromMap(new IdentityHashMap<Local, Boolean>());
-        for (Unit unit : body.getUnits()) if (unit instanceof DefinitionStmt) {
-            DefinitionStmt definition = (DefinitionStmt) unit;
-            if (!(definition.getLeftOp() instanceof Local)) continue;
-            Value source = definition.getRightOp();
-            if ((source instanceof NewExpr && "java.lang.String".equals(((NewExpr) source).getBaseType().toString()))
-                    || (source instanceof ThisRef && body.getMethod().isConstructor() && "java.lang.String".equals(source.getType().toString()))) unsafe.add((Local) definition.getLeftOp());
+    /** Must facts: constructor success initializes only references guaranteed to alias its receiver. */
+    private static final class Facts {
+        final BitSet initialized;
+        final int[] aliases;
+        Facts(int locals, int references, boolean top) {
+            initialized = new BitSet(locals); aliases = new int[references];
+            if (top) initialized.set(0, locals);
+            else for (int i = 0; i < references; i++) aliases[i] = i;
         }
-        // Keep allocation-derived Strings out until constructor/alias analysis is supported.
-        // A `new String` value is verifier-uninitialized even though its local has a definition.
-        boolean changed;
-        do {
-            changed = false;
-            for (Unit unit : body.getUnits()) if (unit instanceof AssignStmt) {
-                AssignStmt assignment = (AssignStmt) unit;
-                if (!(assignment.getLeftOp() instanceof Local)) continue;
-                Value source = assignment.getRightOp();
-                if (source instanceof CastExpr) source = ((CastExpr) source).getOp();
-                if (source instanceof Local && unsafe.contains(source) && unsafe.add((Local) assignment.getLeftOp())) changed = true;
+        Facts(BitSet initialized, int[] aliases) { this.initialized = initialized; this.aliases = aliases; }
+        Facts copy() { return new Facts((BitSet) initialized.clone(), aliases.clone()); }
+        void intersect(Facts other) {
+            initialized.and(other.initialized);
+            Map<Long, Integer> groups = new HashMap<>();
+            for (int i = 0; i < aliases.length; i++) {
+                long pair = ((long) aliases[i] << 32) | (other.aliases[i] & 0xffffffffL);
+                Integer representative = groups.get(pair);
+                if (representative == null) { representative = i; groups.put(pair, representative); }
+                aliases[i] = representative;
             }
-        } while (changed);
-        return unsafe;
+        }
+        void detach(int target) {
+            int old = aliases[target], replacement = -1;
+            for (int i = 0; i < aliases.length; i++) if (i != target && aliases[i] == old) { replacement = i; break; }
+            if (replacement >= 0) for (int i = 0; i < aliases.length; i++) if (i != target && aliases[i] == old) aliases[i] = replacement;
+            aliases[target] = target;
+        }
+        void assignAlias(int target, int source) {
+            if (target == source) return;
+            detach(target);
+            int old = aliases[source], replacement = Math.min(target, old);
+            for (int i = 0; i < aliases.length; i++) if (i == target || aliases[i] == old) aliases[i] = replacement;
+        }
+        @Override public boolean equals(Object value) {
+            if (!(value instanceof Facts)) return false;
+            Facts other = (Facts) value;
+            return initialized.equals(other.initialized) && Arrays.equals(aliases, other.aliases);
+        }
+        @Override public int hashCode() { return 31 * initialized.hashCode() + Arrays.hashCode(aliases); }
     }
 
     private static Set<Unit> identitySet(Collection<Unit> initial) {

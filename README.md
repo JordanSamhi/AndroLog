@@ -39,7 +39,7 @@ Open the **original APK** in **Instrument**. Select classes, methods, statements
 
 [![Instrument view: choose an APK, logging options, and a Logcat tag](data/screenshots/gui-instrument.png)](data/screenshots/gui-instrument.png)
 
-Want a message at one specific point? Open **Your own messages**, browse the package → class → method tree, select a statement, and type a message such as `reached this point`. Use **Insert variable** to include an available local number, boolean, or string, for example `score = {i3}`.
+Want a message at one specific point? Open **Your own messages**, browse the package → class → method tree, select a statement, and type a message such as `reached this point`. Use **Insert variable** to include an available local number, boolean, string, or object, for example `score = {i3}`. Objects use their `toString()` representation.
 
 <details>
 <summary>See custom log selection</summary>

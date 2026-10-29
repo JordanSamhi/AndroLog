@@ -95,11 +95,11 @@ test('variable plans accept only explicit supported template bindings and leave 
   const plan = value => ({ apkSha256: 'a'.repeat(64), points: [value] });
   assert.doesNotThrow(() => validatePlan(plan(point)));
   assert.doesNotThrow(() => validatePlan(plan({ ...point, variables: undefined })));
-  for (const type of ['byte', 'short', 'int', 'long', 'float', 'double', 'boolean', 'java.lang.String']) assert.doesNotThrow(() => validatePlan(plan({ ...point, variables: [{ name: 'i0', type }] })));
+  for (const type of ['byte', 'short', 'int', 'long', 'float', 'double', 'boolean', 'java.lang.String', 'java.lang.Object', 'e.a.h', 'a', 'pkg.Outer$Inner', 'exemple.Élément', 'a-b', 'int[]', 'char[]', 'java.lang.String[][]', 'a' + '[]'.repeat(255)]) assert.doesNotThrow(() => validatePlan(plan({ ...point, variables: [{ name: 'i0', type }] })), type);
   for (const variables of [null, []]) assert.doesNotThrow(() => validatePlan(plan({ ...point, variables })));
   for (const variables of [false, {}, 'i0']) assert.throws(() => validatePlan(plan({ ...point, variables })), /variables/);
   for (const name of ['', 'two names', 'bad\nname', '{i0}', 'x'.repeat(201)]) assert.throws(() => validatePlan(plan({ ...point, variables: [{ name, type: 'int' }] })), /Insert variable/);
-  for (const type of ['char', 'java.lang.Object', 'int[]']) assert.throws(() => validatePlan(plan({ ...point, variables: [{ name: 'i0', type }] })), /Insert variable/);
+  for (const type of [null, undefined, 1, '', 'char', 'void', 'void[]', 'null', 'null_type', 'unknown', 'bottom_type', 'address', '[]', '[Ljava.lang.Object;', 'pkg..Type', '.Type', 'pkg.', 'pkg/Type', 'pkg:Type', 'pkg Type', 'pkg\nType', 'pkg\0Type', 'pkg\x7fType', 'pkg.<Type>', 'pkg{Type}', 'pkg(Type)', 'a' + '[]'.repeat(256), 'a'.repeat(1025)]) assert.throws(() => validatePlan(plan({ ...point, variables: [{ name: 'i0', type }] })), /Insert variable/, String(type));
   assert.throws(() => validatePlan(plan({ ...point, variables: [{ name: 'i0', type: 'int' }, { name: 'i0', type: 'int' }] })), /only be listed once/);
   assert.throws(() => validatePlan(plan({ ...point, variables: [{ name: 'other', type: 'int' }] })), /missing/);
 });

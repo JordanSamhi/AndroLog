@@ -103,6 +103,16 @@ public final class CustomLogInstrumenter {
 
     private void insertValues(Body body, Selected selected) {
         RefType builder = RefType.v("java.lang.StringBuilder"), string = RefType.v("java.lang.String");
+        if (selected.variables.size() == 1) {
+            Local value = selected.variables.values().iterator().next();
+            if (objectValue(value.getType()) && selected.point.message.equals("{" + value.getName() + "}")) {
+                Unit probe = Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(
+                        runtimeRef("logObject", Arrays.asList(string, string, string, RefType.v("java.lang.Object")), VoidType.v()),
+                        StringConstant.v(tag), StringConstant.v(selected.point.id), StringConstant.v(selected.point.message), value));
+                body.getUnits().insertBefore(probe, selected.unit);
+                return;
+            }
+        }
         String name = "$andrologValues";
         Set<String> names = new HashSet<>(); for (Local local : body.getLocals()) names.add(local.getName());
         while (names.contains(name)) name += "_";
@@ -121,14 +131,19 @@ public final class CustomLogInstrumenter {
                     runtimeRef("text", Arrays.asList(builder, string), VoidType.v()), output, StringConstant.v(template.substring(offset, next)))));
             if (variable == null) break;
             Local local = selected.variables.get(variable);
+            Type valueType = objectValue(local.getType()) ? RefType.v("java.lang.Object") : local.getType();
             probes.add(Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(
-                    runtimeRef("value", Arrays.asList(builder, local.getType()), VoidType.v()), output, local)));
+                    runtimeRef("value", Arrays.asList(builder, valueType), VoidType.v()), output, local)));
             offset = next + variable.length() + 2;
         }
         probes.add(Jimple.v().newInvokeStmt(Jimple.v().newStaticInvokeExpr(
                 runtimeRef("write", Arrays.asList(string, string, string, builder), VoidType.v()),
                 StringConstant.v(tag), StringConstant.v(selected.point.id), StringConstant.v(template), output)));
         body.getUnits().insertBefore(probes, selected.unit);
+    }
+
+    private static boolean objectValue(Type type) {
+        return type instanceof ArrayType || (type instanceof RefType && !type.toString().equals("java.lang.String"));
     }
 
     private SootMethodRef runtimeRef(String name, List<Type> parameters, Type result) {

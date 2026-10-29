@@ -17,6 +17,7 @@ public final class InstrumentedCode {
     private static final String CUSTOM_LOG = "int i(java.lang.String,java.lang.String)";
     private static final String CUSTOM_RUNTIME = "com.jordansamhi.androlog.runtime.CustomLogRuntime";
     private static final String CUSTOM_WRITE = "void write(java.lang.String,java.lang.String,java.lang.String,java.lang.StringBuilder)";
+    private static final String CUSTOM_OBJECT = "void logObject(java.lang.String,java.lang.String,java.lang.String,java.lang.Object)";
     private static final String BEFORE = "long before(java.lang.String,java.lang.String,int,java.lang.String,java.lang.String,java.lang.Object)";
     private static final String ENTER = "void enter(java.lang.String,java.lang.Object)";
     private static final Set<String> KINDS = new HashSet<>(Arrays.asList("static", "interface", "virtual", "special", "constructor", "dynamic"));
@@ -119,8 +120,9 @@ public final class InstrumentedCode {
                     hidden.add(unit);
                 }
             } else if (CUSTOM_RUNTIME.equals(clazz)) {
-                if (CUSTOM_WRITE.equals(signature)) {
+                if (CUSTOM_WRITE.equals(signature) || CUSTOM_OBJECT.equals(signature)) {
                     hidden.add(unit);
+                    if (CUSTOM_OBJECT.equals(signature)) protectDefinitions(invoke.getArg(3), unit, applicationDefinitions, resolver);
                     String id = resolver.string(invoke.getArg(1), unit);
                     String template = resolver.string(invoke.getArg(2), unit);
                     if (Objects.equals(tag, resolver.string(invoke.getArg(0), unit))
@@ -131,7 +133,7 @@ public final class InstrumentedCode {
                 } else if ("java.lang.StringBuilder create()".equals(signature)
                         || "void text(java.lang.StringBuilder,java.lang.String)".equals(signature)) {
                     hidden.add(unit);
-                } else if (signature.matches("void value\\(java\\.lang\\.StringBuilder,(byte|short|int|long|float|double|boolean|java\\.lang\\.String)\\)")) {
+                } else if (signature.matches("void value\\(java\\.lang\\.StringBuilder,(byte|short|int|long|float|double|boolean|java\\.lang\\.String|java\\.lang\\.Object)\\)")) {
                     hidden.add(unit);
                     // A local read only by a custom value is still application code, not probe setup.
                     protectDefinitions(invoke.getArg(1), unit, applicationDefinitions, resolver);

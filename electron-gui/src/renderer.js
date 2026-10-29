@@ -9,6 +9,16 @@
   ];
   const basename = value => value ? value.split(/[\\/]/).pop() : '';
   const localTypes = new Set(['byte', 'short', 'int', 'long', 'float', 'double', 'boolean', 'java.lang.String']);
+  function supportedLocalType(type) {
+    // Keep aligned with LocalVariableAvailability.supported in the Java backend.
+    if (typeof type !== 'string' || !type || type.length > 1024) return false;
+    let base = type, dimensions = 0;
+    while (base.endsWith('[]')) { base = base.slice(0, -2); if (++dimensions > 255) return false; }
+    if (localTypes.has(base)) return true;
+    if (base === 'char') return dimensions > 0;
+    if (['void', 'null', 'null_type', 'unknown', 'bottom_type', 'address'].includes(base)) return false;
+    return /^[^\s\u0000-\u001f\u007f\[\];/(){}<>:.]+(?:\.[^\s\u0000-\u001f\u007f\[\];/(){}<>:.]+)*$/u.test(base);
+  }
   let variableSelection = null;
   const codeBrowser = { view: 0, classRequest: 0, classLoads: new Map(), variableLoads: new Map() };
   let toastTimer;
@@ -498,7 +508,7 @@
       } catch { /* An invalid mask must not offer potentially uninitialized values. */ }
     }
     for (const local of locals) {
-      if (local && typeof local.name === 'string' && /^[^\s{}\u0000-\u001f\u007f]{1,200}$/u.test(local.name) && localTypes.has(local.type)) unique.set(local.name, { name: local.name, type: local.type });
+      if (local && typeof local.name === 'string' && /^[^\s{}\u0000-\u001f\u007f]{1,200}$/u.test(local.name) && supportedLocalType(local.type)) unique.set(local.name, { name: local.name, type: local.type });
     }
     return [...unique.values()];
   }
@@ -509,7 +519,7 @@
   function updateVariables() {
     closeVariables();
     const available = state.selected?.variablesPending || state.selected?.variablesError ? [] : availableVariables(); $('insert-variable').disabled = !available.length;
-    $('variable-hint').textContent = !state.selected ? 'Select a statement to insert a local variable.' : state.selected.variablesPending ? 'Reading available variables…' : state.selected.variablesError ? `${state.selected.variablesError} Select this statement again to retry.` : available.length ? 'Insert variables to log their values before this statement.' : 'No initialized number, boolean, or string is available here.';
+    $('variable-hint').textContent = !state.selected ? 'Select a statement to insert a local variable.' : state.selected.variablesPending ? 'Reading available variables…' : state.selected.variablesError ? `${state.selected.variablesError} Select this statement again to retry.` : available.length ? 'Insert variables to log their values before this statement.' : 'No initialized supported local is available here.';
     $('insert-variable').title = $('variable-hint').textContent;
   }
   $('insert-variable').addEventListener('click', () => {
@@ -520,7 +530,9 @@
     for (const variable of available) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'variable-choice'; button.dataset.variable = variable.name;
       const name = document.createElement('span'); name.textContent = variable.name;
-      const type = document.createElement('small'); type.textContent = variable.type === 'java.lang.String' ? 'String' : variable.type;
+      const type = document.createElement('small');
+      type.textContent = variable.type === 'java.lang.String' ? 'String' : localTypes.has(variable.type) ? variable.type : `${variable.type} · uses toString()`;
+      button.title = type.textContent;
       button.append(name, type);
       button.addEventListener('click', () => {
         if (!state.selected || !variableSelection) return;

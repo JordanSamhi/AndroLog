@@ -172,6 +172,49 @@ public class InstrumentedCodeTest {
         }
     }
 
+    @Test public void objectOnlyHelperKeepsItsTemplateLocationAndOriginalReferenceDefinitions() {
+        SootClass helper = type("com.jordansamhi.androlog.runtime.CustomLogRuntime", object);
+        SootMethod logObject = method(helper, "logObject", Arrays.asList(string(), string(), string(), object.getType()), VoidType.v());
+        JimpleBody body = body("objectOnly");
+        Local original = local(body, "original", object.getType()), alias = local(body, "alias", object.getType());
+        Local template = local(body, "$template", string());
+        body.getUnits().add(Jimple.v().newAssignStmt(original, NullConstant.v()));
+        body.getUnits().add(Jimple.v().newAssignStmt(alias, original));
+        body.getUnits().add(Jimple.v().newAssignStmt(template, StringConstant.v("{alias}")));
+        body.getUnits().add(invoke(logObject, StringConstant.v("TEST"), StringConstant.v("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), template, alias));
+        body.getUnits().add(Jimple.v().newReturnVoidStmt());
+        InstrumentedCode.Result scan = InstrumentedCode.inspect(body, "TEST", null);
+        assertTrue(scan.foundProbes); assertTrue(scan.expected.isEmpty());
+        assertEquals(3, scan.code.getStatements().size());
+        assertEquals("original = null", scan.code.getStatements().get(0).getText());
+        assertEquals("alias = original", scan.code.getStatements().get(1).getText());
+        Map<String, Object> point = scan.customPoints.get(0);
+        assertEquals("{alias}", point.get("message")); assertEquals(Boolean.TRUE, point.get("dynamic"));
+        assertEquals("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", point.get("id"));
+        assertEquals(3, point.get("index")); assertEquals("return", point.get("statement"));
+        assertFalse(InstrumentedCode.inspect(body, "OTHER", null).foundProbes);
+    }
+
+    @Test public void mixedObjectValueHelperIsHiddenButItsOriginalNullAssignmentRemains() {
+        SootClass helper = type("com.jordansamhi.androlog.runtime.CustomLogRuntime", object);
+        RefType builderType = type("java.lang.StringBuilder", object).getType();
+        SootMethod create = method(helper, "create", Collections.emptyList(), builderType);
+        SootMethod value = method(helper, "value", Arrays.asList(builderType, object.getType()), VoidType.v());
+        SootMethod write = method(helper, "write", Arrays.asList(string(), string(), string(), builderType), VoidType.v());
+        JimpleBody body = body("mixedObject");
+        Local reference = local(body, "reference", object.getType()), builder = local(body, "$custom", builderType);
+        body.getUnits().add(Jimple.v().newAssignStmt(reference, NullConstant.v()));
+        body.getUnits().add(Jimple.v().newAssignStmt(builder, Jimple.v().newStaticInvokeExpr(create.makeRef())));
+        body.getUnits().add(invoke(value, builder, reference));
+        body.getUnits().add(invoke(write, StringConstant.v("TEST"), StringConstant.v("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+                StringConstant.v("object={reference}"), builder));
+        body.getUnits().add(Jimple.v().newReturnVoidStmt());
+        InstrumentedCode.Result scan = InstrumentedCode.inspect(body, "TEST", null);
+        assertEquals(2, scan.code.getStatements().size());
+        assertEquals("reference = null", scan.code.getStatements().get(0).getText());
+        assertEquals(2, scan.customPoints.get(0).get("index"));
+    }
+
     @Test public void applicationLoggingAndUnpairedMarkersAreNotHiddenByTheirTagOrTextAlone() {
         JimpleBody body = body("ordinary");
         SootMethod appLog = method(application, "log", Arrays.asList(string(), string()), VoidType.v());

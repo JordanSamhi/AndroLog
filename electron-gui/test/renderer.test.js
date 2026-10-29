@@ -417,7 +417,7 @@ test('a successful capture returned after a late cancel still synchronizes the s
 function variableCatalog() {
   return { apkSha256: 'a'.repeat(64), methods: [{ className: 'org.example.Main', signature: '<org.example.Main: void run()>', statements: [
     { index: 1, text: 'i0 = 3', selectable: true, locals: [] },
-    { index: 2, text: 'i1 = i0 + 1', selectable: true, locals: [{ name: 'i0', type: 'int' }, { name: 'z0', type: 'boolean' }, { name: '$r1', type: 'java.lang.String' }, { name: 'object', type: 'java.lang.Object' }] },
+    { index: 2, text: 'i1 = i0 + 1', selectable: true, locals: [{ name: 'i0', type: 'int' }, { name: 'z0', type: 'boolean' }, { name: '$r1', type: 'java.lang.String' }, { name: 'object', type: 'java.lang.Object' }, { name: 'character', type: 'char' }] },
     { index: 3, text: 'return', selectable: true, locals: [{ name: 'i1', type: 'int' }] }
   ] }] };
 }
@@ -439,11 +439,40 @@ test('Insert variable offers only initialized supported locals at the selected p
   assert.equal(doc.getElementById('insert-variable').disabled, true); assert.match(doc.getElementById('variable-hint').textContent, /No initialized/);
   doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('insert-variable').click();
   assert.equal(doc.getElementById('variable-picker').hidden, false);
-  assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['i0', 'z0', '$r1']);
+  assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['i0', 'z0', '$r1', 'object']);
   assert.match(doc.querySelectorAll('.variable-choice')[1].textContent, /boolean/); assert.match(doc.querySelectorAll('.variable-choice')[2].textContent, /String/);
+  assert.match(doc.querySelectorAll('.variable-choice')[3].textContent, /java\.lang\.Object · uses toString\(\)/);
   doc.querySelectorAll('.code-line')[2].click(); assert.equal(doc.getElementById('variable-picker').hidden, true);
   doc.getElementById('insert-variable').click();
   assert.deepEqual([...doc.querySelectorAll('.variable-choice')].map(button => button.dataset.variable), ['i1']);
+});
+test('object and array variables keep their exact types and expose toString behavior only after availability', async t => {
+  const types = ['e.a.h', 'a', 'exemple.Élément', 'int[]', 'char[]', 'java.lang.String[]'];
+  const locals = types.map((type, index) => ({ name: `$r${index}`, type }));
+  const catalog = { apkSha256: 'a'.repeat(64), methods: [{ className: 'org.example.Main', signature: '<org.example.Main: void run()>', locals, statements: [
+    { index: 1, text: 'specialinvoke $r0.<e.a.h: void <init>()>()', selectable: true, localMask: '' },
+    { index: 2, text: 'return', selectable: true, localMask: Buffer.from([63]).toString('base64') }
+  ] }] };
+  const { dom, doc, calls } = createUi({ inspectCode: async () => catalog }); t.after(() => dom.window.close());
+  await openVariableEditor(doc);
+  doc.querySelectorAll('.code-line')[0].click();
+  assert.equal(doc.getElementById('insert-variable').disabled, true);
+  assert.equal(doc.getElementById('variable-hint').textContent, 'No initialized supported local is available here.');
+  doc.querySelectorAll('.code-line')[1].click(); doc.getElementById('insert-variable').click();
+  assert.deepEqual([...doc.querySelectorAll('.variable-choice small')].map(label => label.textContent), types.map(type => `${type} · uses toString()`));
+  doc.querySelector('.variable-choice[data-variable="$r0"]').click();
+  doc.getElementById('code-apply').click(); doc.getElementById('open-custom').click(); await tick();
+  doc.querySelectorAll('.code-line')[1].click(); assert.equal(doc.getElementById('point-message').value, '{$r0}');
+  insertVariable(doc, '$r3');
+  doc.getElementById('code-apply').click(); doc.getElementById('instrument').click(); await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].plan.points[0].variables)), [{ name: '$r0', type: 'e.a.h' }, { name: '$r3', type: 'int[]' }]);
+});
+test('invalid reference metadata is excluded from the variable picker', async t => {
+  const catalog = variableCatalog();
+  catalog.methods[0].statements[1].locals = ['char', 'void', 'void[]', 'null_type', '[]', 'pkg..Type', 'pkg/Type', 'pkg\nType', 'pkg\x7fType', 'pkg.<Type>', 'a' + '[]'.repeat(256), 'a'.repeat(1025)].map((type, index) => ({ name: `value${index}`, type }));
+  const { dom, doc } = createUi({ inspectCode: async () => catalog }); t.after(() => dom.window.close());
+  await openVariableEditor(doc); doc.querySelectorAll('.code-line')[1].click();
+  assert.equal(doc.getElementById('insert-variable').disabled, true);
 });
 test('compact variable masks use the selected method dictionary across byte boundaries', async t => {
   const dictionary = Array.from({ length: 10 }, (_, i) => ({ name: `i${i}`, type: 'int' }));

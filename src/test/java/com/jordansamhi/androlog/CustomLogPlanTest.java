@@ -53,7 +53,11 @@ public class CustomLogPlanTest {
         CustomLogPlan restored = CustomLogPlan.read(file);
         assertEquals("$i0", restored.points.get(0).variables.get(0).name);
         assertEquals("int", restored.points.get(0).variables.get(0).type);
-        point.variables.get(0).type = "java.lang.Object"; expectFailure(plan::validate, "supported local");
+        for (String type : Arrays.asList("java.lang.Object", "example.Custom", "a", "int[]", "java.lang.Object[][]")) {
+            point.variables.get(0).type = type; plan.write(file);
+            assertEquals(type, CustomLogPlan.read(file).points.get(0).variables.get(0).type);
+        }
+        point.variables.get(0).type = "char"; expectFailure(plan::validate, "supported local");
         point.variables.get(0).type = "int"; point.message = "literal"; expectFailure(plan::validate, "placeholder");
         point.message = "{$i0}"; point.variables.add(new CustomLogPlan.Variable("$i0", "int")); expectFailure(plan::validate, "only be listed once");
     }
