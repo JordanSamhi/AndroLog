@@ -74,7 +74,7 @@ Keep capture running, launch the app in a fresh process, and exercise the behavi
 
 Start capture before launching the app because some automatic probes are emitted only once per process. Logcat can include previously buffered matching records; if you want to clear those before a new test session, run `adb logcat -c` first. That command clears the device's log buffers.
 
-The GUI currently reads files; it does not capture from a connected device. The CLI's [`--capture` workflow](../README.md#automatic-capture) can automate installation, launch, capture, and report generation.
+The GUI currently reads files; it does not capture from a connected device. The CLI's [`--capture` workflow](../docs/cli.md#automatic-capture) can automate installation, launch, capture, and report generation.
 
 ## Analyze coverage
 
@@ -156,4 +156,12 @@ node --test src/test/js/report-links.test.js src/test/js/report-graph.test.js
 
 Tests cover backend arguments and cancellation, file safety, custom-point validation and matching, renderer workflows, and report navigation. Real APK instrumentation also depends on the Android SDK and should be exercised on target devices.
 
-The earlier Swing GUI and command-line interface remain available; see the [main README](../README.md) for their launch commands and the complete CLI reference.
+## Earlier Java GUI
+
+The earlier Swing interface remains available. After `mvn package`, launch it from the repository root with `./androlog-gui` (`androlog-gui.bat` on Windows), or:
+
+```bash
+java -jar target/androlog-gui-0.1.jar
+```
+
+For command-line instrumentation and reporting, see the [CLI guide](../docs/cli.md).
