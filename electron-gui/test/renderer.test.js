@@ -6,6 +6,7 @@ const path = require('node:path');
 const { JSDOM } = require('jsdom');
 const html = fs.readFileSync(path.join(__dirname, '../src/index.html'), 'utf8');
 const script = fs.readFileSync(path.join(__dirname, '../src/renderer.js'), 'utf8');
+const stylesheet = fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8');
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 function createUi(overrides = {}) {
   const dom = new JSDOM(html, { runScripts: 'outside-only', url: 'https://androlog.invalid/' });
@@ -23,6 +24,7 @@ function createUi(overrides = {}) {
     instrument: async (opts, plan) => { calls.push({ opts, plan }); return { name: 'original.apk' }; },
     saveApk: async () => '/apps/saved.apk', analyze: async () => ({ coverageSummary: { methods: { covered: 1, total: 4 }, services: { covered: 0, total: 0 } } }), saveReport: async () => '/tmp/report.html', ...overrides
   };
+  const style = window.document.createElement('style'); style.textContent = stylesheet; window.document.head.appendChild(style);
   window.androlog = api; window.eval(script);
   return { dom, window, doc: window.document, calls };
 }
@@ -62,4 +64,16 @@ test('coverage requires both inputs and displays matched statistics without inve
   assert.match(cards[1].textContent, /25\.0%/); assert.match(cards[1].textContent, /1 of 4 observed/);
   assert.match(cards[4].textContent, /Nothing to cover/); assert.equal(doc.getElementById('report-frame').hidden, false);
   doc.querySelector('[data-probe="1"]').click(); assert.equal(doc.getElementById('report-frame').hidden, true);
+});
+
+
+test('the class and statement panes remain independently scrollable in the dialog', async t => {
+  const { dom, window, doc } = createUi(); t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick();
+  doc.getElementById('open-custom').click(); await tick();
+  const codePane = window.getComputedStyle(doc.getElementById('code-lines'));
+  const classPane = window.getComputedStyle(doc.getElementById('classes'));
+  assert.equal(codePane.overflow, 'auto'); assert.equal(codePane.minHeight, '0');
+  assert.equal(classPane.overflow, 'auto'); assert.equal(classPane.minHeight, '0');
+  assert.equal(window.getComputedStyle(doc.querySelector('.code-main')).minHeight, '0');
 });

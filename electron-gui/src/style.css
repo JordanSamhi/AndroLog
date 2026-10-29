@@ -6,3 +6,11 @@ dialog{border:1px solid #dfeae4;border-radius:18px;padding:0;box-shadow:0 30px 1
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 .messages-panel{margin-top:14px;background:white;border:1px solid #e1ebe5;border-radius:14px;padding:15px}.messages-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.messages-heading h3{font-size:12px}.messages-heading p{font-size:10px;color:#91a59c;margin-top:5px}.messages-list{max-height:170px;overflow:auto}.message-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #edf2ef;margin-top:10px;font:11px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}.message-row strong{color:#139675;white-space:nowrap}
 .workflow{display:grid;gap:17px;padding:2px 12px;color:#789088;font-size:12px;font-weight:600}.workflow span{color:#3eaf8a;font-size:10px;font-weight:800;margin-right:10px}.workspace-tabs{display:flex;align-items:center;gap:5px;align-self:stretch}.workspace-tab{position:relative;background:none;border:0;color:#859a91;padding:0 16px;font-size:12px;font-weight:700}.workspace-tab:hover{color:#147c63}.workspace-tab.active{color:#087b63}.workspace-tab.active::after{content:'';position:absolute;bottom:-1px;left:14px;right:14px;height:3px;background:#21a77d;border-radius:3px 3px 0 0}
+
+/* Keep both panes inside the dialog's finite height so their contents scroll. */
+.code-layout{grid-template-rows:minmax(0,1fr);overflow:hidden}
+.code-main{min-height:0;height:100%;overflow:hidden}
+.class-list{height:100%;overflow:hidden}
+#classes{flex:1 1 0;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.code-lines{flex:1 1 0;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.code-line:disabled{pointer-events:none}
