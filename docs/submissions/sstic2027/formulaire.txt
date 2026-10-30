@@ -1,5 +1,5 @@
 TITRE
-AndroLog : analyse Android en boîte noire
+AndroLog: Instrumentation d'Apps Android en Boîte Noire
 
 CATÉGORIE
 Présentation d’un outil (15 minutes)

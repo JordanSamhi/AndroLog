@@ -1,4 +1,4 @@
-# AndroLog : analyse Android en boîte noire
+# AndroLog: Instrumentation d'Apps Android en Boîte Noire
 
 **Jordan Samhi · Université du Luxembourg · j.samhi@me.com**
 

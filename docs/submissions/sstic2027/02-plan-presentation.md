@@ -1,6 +1,6 @@
 # Plan de présentation
 
-**AndroLog : analyse Android en boîte noire**
+**AndroLog: Instrumentation d'Apps Android en Boîte Noire**
 
 Présentation d’un outil · Jordan Samhi · 15 minutes, dont 2 minutes de questions
 
