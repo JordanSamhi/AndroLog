@@ -8,7 +8,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle, KeepTogether
+from reportlab.platypus import Image, SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle, KeepTogether
 
 HERE = Path(__file__).resolve().parent
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE.parents[2] / 'target/sstic2027/submission'
@@ -37,6 +37,10 @@ def render(source):
       'tablehead': ParagraphStyle('tablehead', fontName='ArialBold', fontSize=9, leading=12, textColor=GREEN),
     }
     lines = source.read_text(encoding='utf8').splitlines(); story=[]; i=0
+    if compact:
+        logo = Image(str(HERE.parents[2] / 'data/androlog_logo_v2.png'), width=52*mm, height=52*mm/3)
+        logo.hAlign = 'LEFT'
+        story.extend([logo, Spacer(1, 3*mm)])
     while i < len(lines):
         line=lines[i].strip()
         if not line: i+=1; continue
@@ -66,5 +70,5 @@ def render(source):
     doc=SimpleDocTemplate(str(OUT/(source.stem+'.pdf')),pagesize=(210*mm,297*mm),leftMargin=19*mm,rightMargin=20*mm,topMargin=15*mm,bottomMargin=20*mm,title=source.stem,author='Jordan Samhi')
     doc.build(story,onFirstPage=header,onLaterPages=header)
 
-for name in ('01-description-outil.md','02-plan-presentation.md','03-guide-evaluation.md'):
+for name in (sys.argv[2:] or ('01-description-outil.md','02-plan-presentation.md','03-guide-evaluation.md')):
     render(HERE/name)
