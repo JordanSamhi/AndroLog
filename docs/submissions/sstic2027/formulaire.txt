@@ -1,5 +1,5 @@
 TITRE
-AndroLog : analyser l’exécution d’un APK sans son code source
+AndroLog : analyse Android en boîte noire
 
 CATÉGORIE
 Présentation d’un outil (15 minutes)

@@ -1,12 +1,12 @@
-# AndroLog : analyser l’exécution d’un APK sans son code source
+# AndroLog : analyse Android en boîte noire
 
-**Jordan Samhi · Université du Luxembourg · Présentation d’un outil, 15 minutes**
+**Jordan Samhi · Université du Luxembourg · j.samhi@me.com**
 
 ## Couverture de code
 
-AndroLog permet de mesurer la couverture de code d’une app Android à partir de son APK, sans avoir accès à son code source. Il ajoute des logs dans l’APK pour savoir quelles instructions, méthodes, classes et composants Android ont été exécutés. Après le test de l’app, il analyse les logs et génère un rapport qui permet de retrouver les parties couvertes et non couvertes dans le code.
+AndroLog permet de mesurer la couverture de code d’une app Android à partir de son APK, sans avoir accès à son code source. Il propose plusieurs niveaux de granularité : instructions, méthodes, classes et composants Android. Il ajoute des logs dans l’APK pour savoir lesquels ont été exécutés. Après le test de l’app, il analyse les logs et génère un rapport qui permet de retrouver les parties couvertes et non couvertes dans le code.
 
-AndroLog a été développé à l’origine dans un cadre académique, sous forme d’outil en ligne de commande. Il a été présenté à FSE 2024 par Jordan Samhi et Andreas Zeller ([DOI : 10.1145/3663529.3663806](https://doi.org/10.1145/3663529.3663806)). Il a également été utilisé dans des travaux présentés à ISSTA 2024 à Vienne. Depuis, son développement a continué et une interface graphique a récemment été ajoutée.
+AndroLog a été développé à l’origine dans un cadre académique, sous forme d’outil en ligne de commande. Il a été présenté à FSE 2024 à Porto de Galinhas, au Brésil, par Jordan Samhi et Andreas Zeller ([DOI : 10.1145/3663529.3663806](https://doi.org/10.1145/3663529.3663806)). Depuis, son développement a continué et une interface graphique a récemment été ajoutée.
 
 ## Nouvelle interface et logs personnalisés
 
@@ -24,6 +24,6 @@ Le code affiché est du Jimple, une représentation du bytecode. Un point rouge 
 
 ## Disponibilité
 
-AndroLog est libre sous **LGPL v2.1** : [github.com/JordanSamhi/AndroLog](https://github.com/JordanSamhi/AndroLog). Le dossier comprend les sources, un rapport HTML et une version macOS Apple Silicon avec Java. Le SDK Android est nécessaire pour instrumenter ou analyser un APK, mais pas pour ouvrir le rapport. Les paquets Windows et Linux n’ont pas été testés pour ce dossier.
+AndroLog est libre sous **LGPL v2.1** : [github.com/JordanSamhi/AndroLog](https://github.com/JordanSamhi/AndroLog). Le dossier comprend les sources, un rapport HTML et une version macOS Apple Silicon avec Java. Le SDK Android est nécessaire pour instrumenter ou analyser un APK, mais pas pour ouvrir le rapport. Les versions Windows et Linux n’ont pas été testées pour ce dossier.
 
 Un outil d’assistance par IA a été utilisé pour la rédaction et l’amélioration de ce document. Les autres utilisations de l’IA sont précisées dans le guide.

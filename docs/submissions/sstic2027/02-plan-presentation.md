@@ -1,6 +1,6 @@
 # Plan de présentation
 
-**AndroLog : analyser l’exécution d’un APK sans son code source**
+**AndroLog : analyse Android en boîte noire**
 
 Présentation d’un outil · Jordan Samhi · 15 minutes, dont 2 minutes de questions
 
