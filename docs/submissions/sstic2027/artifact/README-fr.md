@@ -8,7 +8,7 @@ Ce dossier contient AndroLog 0.1, son moteur Java et les éléments de provenanc
 2. Décompresser `AndroLog-0.1-SSTIC2027-macos-arm64.zip` dans un dossier local, puis déplacer `AndroLog.app` dans Applications et l’ouvrir. Java est inclus ; Java, Maven et Node.js ne sont pas à installer pour utiliser cette application.
 3. Installer les **Android SDK Platforms** avec le SDK Manager d’Android Studio, puis choisir le dossier `sdk/platforms` dans **Settings → Android SDK platforms**. Pour la démo, installer la plateforme Android 36. Pour instrumenter, installer aussi les **Android SDK Build-Tools** et sélectionner leur dossier de version dans **Android Build Tools**. Pour tester sur un appareil, installer les **Android SDK Platform-Tools** (`adb`). Le SDK Android n’est pas inclus.
 4. Laisser **Java executable** vide pour utiliser le runtime fourni. Les chemins SDK sont enregistrés sur votre ordinateur ; le JAR distribué ne contient aucun chemin de signature local.
-5. Pour une première analyse sans téléphone : ouvrir **Coverage**, choisir `demo/instrumented.apk` puis `demo/accepted/runtime.log`, saisir le tag `SSTIC_DEMO` et cliquer sur **Analyze run**. Résultat attendu : 62/77 instructions, 9/12 méthodes, 3/4 classes et 1/1 activité. Cinq des six points personnalisés sont observés ; les valeurs incluent `https://trusted.example/account` et `true`.
+5. Pour une première analyse sans téléphone : ouvrir **Coverage**, choisir `demo/instrumented.apk` puis `demo/incorrect/runtime.log`, saisir le tag `SSTIC_PASSWORD` et cliquer sur **Analyze run**. Résultat attendu : 58/61 instructions, 7/8 méthodes et trois points personnalisés observés sur quatre. La valeur enregistrée est `incorrect` ; la branche de refus est observée et celle de succès ne l’est pas.
 6. Ouvrir **Explore report** pour parcourir le code et le graphe dynamique, ou exporter le rapport HTML. Les rapports HTML déjà fournis peuvent être consultés dans un navigateur sans installer le SDK.
 
 L’archive a une signature **ad hoc**, sans notarisation Apple ni Developer ID. macOS peut bloquer son ouverture après téléchargement. Après vérification de la provenance et des empreintes, utiliser l’autorisation proposée dans **Réglages Système → Confidentialité et sécurité → Ouvrir quand même**. Ne pas désactiver globalement Gatekeeper. La validation locale ne reproduit pas le contrôle de notarisation d’un téléchargement sur un Mac vierge.
@@ -24,7 +24,7 @@ Exemple d’analyse en Bash/Zsh depuis la racine de l’artefact complet, en rem
 ```bash
 java -jar application/androlog-0.1.jar \
   -a demo/instrumented.apk -p /chemin/vers/sdk/platforms \
-  -pam demo/accepted/runtime.log -l SSTIC_DEMO \
+  -pam demo/incorrect/runtime.log -l SSTIC_PASSWORD \
   --instrumented-input -o resultat \
   -html resultat/coverage.html -j resultat/coverage.json
 ```

@@ -25,9 +25,9 @@ function base(title, n) {
  s.speakerNotes.text=noteMap.get(n); return s;
 }
 function label(s, content, x,y,w,size=24) { return text(s,content,x,y,w,42,size,C.green,true); }
-async function image(s, filename,x,y,w,h,alt) {
+async function image(s, filename,x,y,w,h,alt,options={}) {
  const bytes=await fs.readFile(path.join(root,filename));
- s.images.add({blob:bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),contentType:'image/png',alt,fit:'contain',position:{left:x,top:y,width:w,height:h}});
+ s.images.add({blob:bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),contentType:'image/png',alt,fit:'contain',position:{left:x,top:y,width:w,height:h},...options});
 }
 function caption(s, y=640) {text(s,'Capture de l’interface : autre app de démonstration',66,y,1100,22,17,C.mid);}
 
@@ -48,7 +48,7 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
  text(s,'Le contrôle est-il atteint ?',72,285,1050,50,32,C.ink);
  text(s,'Quelle valeur arrive au contrôle ?',72,356,1050,50,32,C.ink);
  text(s,'Quelle méthode est réellement appelée ?',72,427,1050,50,32,C.ink);
- text(s,'Exemple : une URL reçue par l’app',72,552,1000,38,25,C.green,true);
+ text(s,'Exemple : une app qui vérifie un mot de passe',72,552,1100,38,25,C.green,true);
 }
 // 3 - couverture
 {
@@ -78,13 +78,14 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
 }
 // 6 - cas d'audit
 {
- const s=base('Une URL à vérifier',6);
- label(s,'URL reçue avec des espaces autour',70,155,1100,27);
- text(s,'  https://trusted.example/account  ',70,228,1100,54,35,C.dark,true);
- text(s,'Quelle valeur arrive au contrôle ?',70,347,1080,49,31,C.ink);
- text(s,'Quelle politique est appelée ?',70,418,1080,49,31,C.ink);
- text(s,'Quelle branche est exécutée ?',70,489,1080,49,31,C.ink);
- text(s,'L’app affiche une décision. Elle ne visite pas l’URL.',70,592,1100,40,23,C.mid);
+ const s=base('Une app avec un mot de passe codé en dur',6);
+ label(s,'Code de l’app pédagogique',70,160,1100,27);
+ text(s,'if (password.equals("sstic2027")) {\n    return showSecret();\n}\nreturn showError();',70,220,750,205,34,C.dark,true);
+ text(s,'Mot de passe incorrect : refus',70,459,800,49,29,C.ink);
+ text(s,'Mot de passe correct : secret fictif',70,518,800,49,29,C.ink);
+ await image(s,'docs/submissions/sstic2027/password-demo/screenshots/incorrect.png',850,210,360,260,'App pédagogique : accès refusé',{fit:'cover',crop:{left:0,top:0,right:0,bottom:0.7}});
+ text(s,'Capture de l’app de démonstration',850,485,380,32,17,C.mid);
+ text(s,'Le code révèle déjà le mot de passe ; observons l’exécution.',70,593,1100,40,22,C.mid);
 }
 // 7 - trois modes
 {
@@ -104,35 +105,37 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
  text(s,'Stop & analyze',70,463,460,52,34,C.dark,true);
  await image(s,'data/screenshots/gui-device-test.png',550,140,670,490,'Capture sur un appareil'); caption(s);
 }
-// 9 - evidence
+// 9 - evidence from two separate captures
 {
- const s=base('Ce que montre la capture',9);
- text(s,'62 / 77',70,167,330,65,50,C.green,true);
- text(s,'instructions',70,239,330,40,27,C.ink);
- text(s,'9 / 12',470,167,330,65,50,C.green,true);
- text(s,'méthodes',470,239,330,40,27,C.ink);
- text(s,'5 / 6',865,167,330,65,50,C.green,true);
- text(s,'points observés',865,239,330,40,27,C.ink);
- label(s,'Valeur enregistrée',70,332,1100,25);
- text(s,'https://trusted.example/account',70,375,1100,52,34,C.dark,true);
- text(s,'Décision : true',70,465,430,43,29,C.green,true);
- text(s,'Branche de refus : non observée',515,465,650,43,27,C.red,true);
- text(s,'Capture de référence : une exécution de l’app de démonstration',70,585,1050,34,22,C.mid);
- s.speakerNotes.append('\n\nSource : demo/accepted/coverage.json et demo/validation.json, capture du 30 octobre 2026.');
+ const s=base('Deux tests, deux résultats',9);
+ label(s,'Essai incorrect',70,160,350,26);
+ text(s,'incorrect',70,209,350,48,34,C.dark,true);
+ text(s,'58 / 61 instructions',70,290,350,45,27,C.ink);
+ text(s,'showError atteint',70,355,350,42,25,C.green,true);
+ text(s,'showSecret non observé',70,405,360,42,23,C.red);
+ label(s,'Essai correct',450,160,350,26);
+ text(s,'sstic2027',450,209,350,48,34,C.dark,true);
+ text(s,'59 / 61 instructions',450,290,350,45,27,C.ink);
+ text(s,'showSecret atteint',450,355,350,42,25,C.green,true);
+ text(s,'showError non observé',450,405,350,42,23,C.red);
+ await image(s,'docs/submissions/sstic2027/password-demo/screenshots/correct.png',850,210,360,260,'App pédagogique : accès autorisé',{fit:'cover',crop:{left:0,top:0,right:0,bottom:0.7}});
+ text(s,'Capture de l’app de démonstration',850,485,380,32,17,C.mid);
+ text(s,'Captures séparées : 3 points personnalisés observés sur 4',70,585,1100,38,22,C.mid);
+ s.speakerNotes.append('\n\nSource : demo/incorrect/coverage.json, demo/correct/coverage.json et demo/validation.json, captures du 30 octobre 2026.');
 }
-// 10 - dynamic dispatch
+// 10 - observed dynamic calls
 {
- const s=base('Quelle implémentation a été appelée ?',10);
- label(s,'Cible déclarée',70,170,1100,27);
- text(s,'UrlPolicy.allow',70,211,1000,55,39,C.dark,true);
- text(s,'Capture accepted',70,337,470,42,25,C.mid);
- text(s,'HostPolicy.allow',70,383,500,52,35,C.green,true);
- text(s,'URL de confiance  /  true',70,437,500,38,24,C.ink);
- text(s,'Capture deny-policy',680,337,470,42,25,C.mid);
- text(s,'DenyPolicy.allow',680,383,500,52,35,C.green,true);
- text(s,'Même URL  /  false',680,437,500,38,24,C.ink);
- text(s,'Une cible déclarée n’est pas toujours confirmée par la trace.',70,581,1100,46,24,C.mid);
- s.speakerNotes.append('\n\nSource : demo/validation.json, captures accepted et deny-policy.');
+ const s=base('Quelles méthodes ont été appelées ?',10);
+ label(s,'Méthode de vérification',70,170,1100,27);
+ text(s,'PasswordCheck.check',70,211,1000,55,39,C.dark,true);
+ text(s,'Essai incorrect',70,337,470,42,25,C.mid);
+ text(s,'showError()',70,383,500,52,35,C.green,true);
+ text(s,'Appel confirmé dans la trace',70,437,500,38,24,C.ink);
+ text(s,'Essai correct',680,337,470,42,25,C.mid);
+ text(s,'showSecret()',680,383,500,52,35,C.green,true);
+ text(s,'Appel confirmé dans la trace',680,437,500,38,24,C.ink);
+ text(s,'Le graphe dépend des appels observés pendant le test.',70,581,1100,46,24,C.mid);
+ s.speakerNotes.append('\n\nSource : demo/validation.json, captures incorrect et correct.');
 }
 // 11 - sharing
 {

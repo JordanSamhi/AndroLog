@@ -6,7 +6,8 @@ Ce répertoire contient les sources du dossier de présentation d’un outil (15
 - `build_presentation.mjs` et `presentation-notes.md` : présentation complète, avec notes et scénario de démonstration.
 - `03-guide-evaluation.md` : évaluation, prérequis, limites et déclarations.
 - `formulaire.txt` : éléments à copier dans le portail ; la note privée finale n’est pas destinée au comité.
-- `demo/` : application pédagogique et protocole de reproduction.
+- `password-demo/` : app pédagogique avec mot de passe fictif et protocole de reproduction.
+- `demo/` : ancien exemple de validation d’URL, conservé dans les sources.
 - `artifact/` : instructions et provenance du paquet de bureau.
 
 Les PDF générés, la présentation PowerPoint, l’application emballée et les captures se trouvent sous `target/sstic2027/` ; ils ne sont pas suivis par Git. Pour régénérer la description et le guide sur macOS, utiliser un Python avec ReportLab :

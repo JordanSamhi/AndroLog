@@ -18,7 +18,7 @@ Le rapport montre si chaque point a été observé et affiche la dernière valeu
 
 ## Présentation et démonstration
 
-Cette présentation se concentre sur la nouvelle interface graphique et les fonctionnalités de logs personnalisés. Nous utiliserons une petite app qui reçoit une URL, la normalise et choisit une politique de validation. Nous verrons quelle valeur arrive au contrôle, quelle méthode est appelée et si l’URL est acceptée ou refusée. L’app, les APK, les logs et les rapports sont fournis pour reproduire la démonstration.
+Cette présentation se concentre sur la nouvelle interface graphique et les fonctionnalités de logs personnalisés. Nous utiliserons une petite app qui compare un mot de passe saisi par l’utilisateur à un mot de passe fictif codé en dur. Nous verrons la valeur saisie, les branches exécutées et les méthodes appelées, avec un mot de passe incorrect puis correct. L’app, les APK, les logs et les rapports sont fournis pour reproduire la démonstration.
 
 Le code affiché est du Jimple, une représentation du bytecode. Un point rouge signifie qu’il n’a pas été observé dans la capture, sans prouver qu’il est inaccessible. Un log est ajouté avant l’instruction : il indique qu’elle a été atteinte, pas qu’elle s’est terminée.
 
