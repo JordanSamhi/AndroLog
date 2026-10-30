@@ -73,5 +73,5 @@ def render(source):
     doc=SimpleDocTemplate(str(OUT/(source.stem+'.pdf')),pagesize=(210*mm,297*mm),leftMargin=19*mm,rightMargin=20*mm,topMargin=15*mm,bottomMargin=20*mm,title=source.stem,author='Jordan Samhi')
     doc.build(story,onFirstPage=header,onLaterPages=header)
 
-for name in (sys.argv[2:] or ('01-description-outil.md','02-plan-presentation.md','03-guide-evaluation.md')):
+for name in (sys.argv[2:] or ('01-description-outil.md','03-guide-evaluation.md')):
     render(HERE/name)

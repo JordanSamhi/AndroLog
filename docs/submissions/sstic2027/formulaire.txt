@@ -40,7 +40,7 @@ Aucune vidéo n’est jointe à cette étape ; elle sera préparée séparément
 
 PIÈCES
 01-description-outil.pdf
-02-plan-presentation.pdf
+02-presentation-androlog.pdf
 03-guide-evaluation.pdf
 AndroLog-SSTIC2027-artefact.zip
 
