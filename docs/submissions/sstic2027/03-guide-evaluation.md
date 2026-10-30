@@ -83,4 +83,4 @@ Codex a aidé au développement d’AndroLog, notamment pour l’interface, l’
 - [Présentation à FSE 2024](https://2024.esec-fse.org/details/fse-2024-demonstrations/11/AndroLog-Android-Instrumentation-and-Code-Coverage-Analysis)
 - [Appel à soumission SSTIC 2027](https://www.sstic.org/2027/cfp/)
 
-Contact : **Jordan Samhi · Université du Luxembourg · j.samhi@me.com**
+Contact : **Jordan Samhi · Université du Luxembourg · jordan.samhi@uni.lu**

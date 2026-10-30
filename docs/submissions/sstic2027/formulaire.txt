@@ -7,7 +7,7 @@ Présentation d’un outil (15 minutes)
 AUTEUR ET ORATEUR
 Jordan Samhi
 Université du Luxembourg
-Contact : j.samhi@me.com
+Contact : jordan.samhi@uni.lu
 
 RÉSUMÉ
 AndroLog permet d’ajouter des logs à une application Android à partir de son APK, sans avoir accès à son code source. Il permet de voir quelles parties du code ont été exécutées, d’enregistrer la valeur d’une variable et d’explorer les appels entre méthodes. L’interface permet de choisir où ajouter ces logs, de tester l’APK sur un appareil ou un émulateur et d’analyser les résultats. La présentation utilise une petite application qui reçoit une URL et vérifie si elle est autorisée. Nous montrerons comment voir la valeur reçue par le contrôle, identifier la méthode appelée et retrouver ces informations dans le code. Les rapports peuvent être exportés en HTML et partagés. L’analyse peut aussi être reprise sur une autre machine avec l’APK instrumenté et les logs.

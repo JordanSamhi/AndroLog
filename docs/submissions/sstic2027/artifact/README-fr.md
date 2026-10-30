@@ -29,7 +29,7 @@ java -jar application/androlog-0.1.jar \
   -html resultat/coverage.html -j resultat/coverage.json
 ```
 
-Pour la GUI sur un autre système, les sources du dépôt permettent une construction native avec JDK 17+, Maven et Node.js 22.12+ : `mvn package`, puis `cd electron-gui`, `npm ci`, `npm start`. Pour produire une archive avec Java inclus, exécuter `npm run dist` sur le système et l’architecture cibles avec un JDK complet. Ce chemin de construction est documenté mais n’a pas été exécuté sur Windows ou Linux lors de cette préparation.
+Pour l’interface graphique sur un autre système, les sources du dépôt permettent une construction native avec JDK 17+, Maven et Node.js 22.12+ : `mvn package`, puis `cd electron-gui`, `npm ci`, `npm start`. Pour produire une archive avec Java inclus, exécuter `npm run dist` sur le système et l’architecture cibles avec un JDK complet. Ce chemin de construction est documenté mais n’a pas été exécuté sur Windows ou Linux lors de cette préparation.
 
 ## Sources et licences
 

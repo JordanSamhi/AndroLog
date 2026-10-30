@@ -9,7 +9,7 @@ Le scénario représente une question d’audit : **quelle valeur atteint le con
 Les fichiers générés se trouvent dans `target/sstic2027/demo/` dans le dépôt, ou dans le dossier de démonstration de l’archive de soumission.
 
 1. Ouvrir `accepted/coverage.html` dans un navigateur : le rapport est autonome.
-2. Dans la GUI AndroLog, choisir **Coverage**, charger `instrumented.apk` et `accepted/runtime.log`, puis utiliser le tag `SSTIC_DEMO` et lancer l’analyse.
+2. Dans l’interface graphique d’AndroLog, choisir **Coverage**, charger `instrumented.apk` et `accepted/runtime.log`, puis utiliser le tag `SSTIC_DEMO` et lancer l’analyse.
 3. Examiner les six points personnalisés. Le point de `rejected` reste rouge ; l’URL normalisée et le booléen sont affichés avec leur valeur réellement capturée.
 4. Cliquer sur un point pour rejoindre son instruction dans **Explore**. Sélectionner `UrlAudit` dans l’arbre, puis ouvrir le graphe dynamique. L’appel à l’interface `UrlPolicy.allow` mène à la cible confirmée `HostPolicy.allow`.
 5. Refaire l’analyse avec `rejected/runtime.log`, puis `deny-policy/runtime.log`, en conservant la même APK. Dans le dernier cas, la cible confirmée devient `DenyPolicy.allow`.
