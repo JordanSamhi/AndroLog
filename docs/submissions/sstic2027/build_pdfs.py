@@ -3,7 +3,7 @@
 from pathlib import Path
 import re, sys, html
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
@@ -29,17 +29,18 @@ def render(source):
     font = 10.1 if compact else 10.4
     leading = 13.7 if compact else 14.4
     styles = {
-      'title': ParagraphStyle('title', fontName='ArialBold', fontSize=17 if compact else 19, leading=20 if compact else 23, textColor=INK, spaceAfter=7),
-      'heading': ParagraphStyle('heading', fontName='ArialBold', fontSize=10.3, leading=12.5, textColor=GREEN, spaceBefore=7, spaceAfter=3),
-      'body': ParagraphStyle('body', fontName='Arial', fontSize=font, leading=leading, textColor=INK, spaceAfter=5),
-      'bullet': ParagraphStyle('bullet', fontName='Arial', fontSize=font, leading=leading, textColor=INK, leftIndent=10, firstLineIndent=-8, spaceAfter=3),
+      'title': ParagraphStyle('title', fontName='ArialBold', fontSize=17 if compact else 19, leading=20 if compact else 23, textColor=INK, spaceAfter=7, alignment=TA_CENTER),
+      'heading': ParagraphStyle('heading', fontName='ArialBold', fontSize=10.3, leading=12.5, textColor=GREEN, spaceBefore=7, spaceAfter=3, alignment=TA_CENTER),
+      'body': ParagraphStyle('body', fontName='Arial', fontSize=font, leading=leading, textColor=INK, spaceAfter=5, alignment=TA_JUSTIFY),
+      'byline': ParagraphStyle('byline', fontName='Arial', fontSize=font, leading=leading, textColor=INK, spaceAfter=5, alignment=TA_CENTER),
+      'bullet': ParagraphStyle('bullet', fontName='Arial', fontSize=font, leading=leading, textColor=INK, leftIndent=10, firstLineIndent=-8, spaceAfter=3, alignment=TA_JUSTIFY),
       'table': ParagraphStyle('table', fontName='Arial', fontSize=9, leading=12, textColor=INK),
       'tablehead': ParagraphStyle('tablehead', fontName='ArialBold', fontSize=9, leading=12, textColor=GREEN),
     }
     lines = source.read_text(encoding='utf8').splitlines(); story=[]; i=0
     if compact:
         logo = Image(str(HERE.parents[2] / 'data/androlog_logo_v2.png'), width=52*mm, height=52*mm/3)
-        logo.hAlign = 'LEFT'
+        logo.hAlign = 'CENTER'
         story.extend([logo, Spacer(1, 3*mm)])
     while i < len(lines):
         line=lines[i].strip()
@@ -61,7 +62,9 @@ def render(source):
             line=re.sub(r'^- ', '• ', line); story.append(Paragraph(inline(line), styles['bullet'])); i+=1; continue
         para=[line]; i+=1
         while i<len(lines) and lines[i].strip() and not re.match(r'^(#|\||<!--|\d+\. |- )',lines[i].strip()): para.append(lines[i].strip()); i+=1
-        story.append(Paragraph(inline(' '.join(para)), styles['body']))
+        text = ' '.join(para)
+        style = styles['byline'] if re.fullmatch(r'\*\*[^*]+\*\*', text) else styles['body']
+        story.append(Paragraph(inline(text), style))
     def header(canvas,doc):
         canvas.saveState(); w,h=doc.pagesize
         canvas.setFillColor(GREEN); canvas.rect(0,h-8*mm,w,8*mm,fill=1,stroke=0)
