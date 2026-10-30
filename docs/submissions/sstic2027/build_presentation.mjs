@@ -76,58 +76,61 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
  await image(s,'data/screenshots/gui-instrument.png',525,145,695,490,'Écran d’instrumentation AndroLog'); caption(s);
  s.speakerNotes.append('\n\nSource : https://doi.org/10.1145/3663529.3663806');
 }
-// 6 - cas d'audit
+// 6 - la première piste
 {
- const s=base('Une app avec un mot de passe obfusqué',6);
- label(s,'Code de l’app pédagogique',70,160,1100,27);
- text(s,'String expected = decodePassword();\nif (password.equals(expected)) {\n    return showSecret();\n}\nreturn showError();',70,220,750,205,31,C.dark,true);
- text(s,'Mot de passe incorrect : refus',70,459,800,49,29,C.ink);
- text(s,'Mot de passe correct : secret fictif',70,518,800,49,29,C.ink);
- await image(s,'docs/submissions/sstic2027/password-demo/screenshots/incorrect.png',850,210,360,260,'App pédagogique : accès refusé',{fit:'cover',crop:{left:0,top:0,right:0,bottom:0.7}});
- text(s,'Capture de l’app de démonstration',850,485,380,32,17,C.mid);
- text(s,'Le mot de passe est décodé avant la comparaison.',70,593,1100,40,22,C.mid);
+ const s=base('Une piste dans MainActivity',6);
+ label(s,'Dans le code de MainActivity',70,160,760,27);
+ text(s,'String expectedUsername = "admin";\nString expectedPassword = "admin123";',70,225,750,115,28,C.dark,true);
+ text(s,'On essaie ces identifiants dans l’app…',70,390,730,55,29,C.ink);
+ text(s,'Connexion refusée.',70,465,730,55,36,C.red,true);
+ text(s,'Extrait Java simplifié de l’app pédagogique',70,583,750,38,20,C.mid);
+ await image(s,'docs/submissions/sstic2027/classroom-demo/launcher-decoy-rejected.png',875,145,275,455,'L’app refuse les identifiants admin et admin123');
+ text(s,'Capture de l’app de démonstration',830,617,380,28,16,C.mid);
 }
-// 7 - trois modes
+// 7 - le manifeste
 {
- const s=base('Choisir où ajouter un log',7);
- label(s,'Statement reached',70,155,460,27); text(s,'L’instruction est-elle atteinte ?',70,196,455,43,25,C.ink);
- label(s,'Custom message',70,283,460,27); text(s,'Afficher le message choisi',70,324,455,43,25,C.ink);
- label(s,'Variable value',70,411,460,27); text(s,'Enregistrer $r2 après décodage',70,452,470,75,25,C.ink);
- text(s,'Le log est placé avant l’instruction.',70,560,460,48,23,C.mid);
- await image(s,'data/screenshots/gui-custom-logs.png',550,145,670,475,'Sélection de logs personnalisés'); caption(s);
+ const s=base('Quelle activité démarre vraiment ?',7);
+ label(s,'Le manifeste Android',70,160,1100,27);
+ text(s,'MainActivity',70,230,400,53,35,C.dark,true);
+ text(s,'présente dans l’APK',540,230,620,50,28,C.ink);
+ text(s,'MainActivity1',70,320,400,53,35,C.green,true);
+ text(s,'MAIN + LAUNCHER',540,320,620,50,31,C.green,true);
+ text(s,'C’est MainActivity1 qui est lancée à l’ouverture.',70,445,1120,55,29,C.ink);
+ text(s,'Le nom d’une classe ne suffit pas pour trouver le point d’entrée.',70,540,1120,65,24,C.mid);
 }
-// 8 - exécution
+// 8 - les points de log
 {
- const s=base('Tester sur un appareil',8);
- text(s,'Test on device',70,180,460,53,36,C.green,true);
- text(s,'Choisir un appareil\nou un émulateur',70,250,450,82,28,C.ink);
- text(s,'Premier essai : mot de passe incorrect',70,377,460,75,27,C.ink);
- text(s,'Stop & analyze',70,463,460,52,34,C.dark,true);
- await image(s,'data/screenshots/gui-device-test.png',550,140,670,490,'Capture sur un appareil'); caption(s);
+ const s=base('Observer les valeurs décodées',8);
+ label(s,'Dans MainActivity1.authenticate()',70,150,510,27);
+ text(s,'decode → utilisateur\ndecode → mot de passe\ncomparaison avec les valeurs saisies',70,204,480,115,25,C.ink);
+ label(s,'Deux points « Variable value »',70,350,470,25);
+ text(s,'$r5  : utilisateur décodé\n$r6  : mot de passe décodé',70,400,470,90,26,C.dark,true);
+ text(s,'Tester l’app, puis arrêter la capture',70,555,475,70,23,C.mid);
+ await image(s,'data/screenshots/gui-custom-logs.png',550,155,670,425,'Sélection de logs personnalisés dans AndroLog'); caption(s);
 }
-// 9 - reveal the decoded value after the first capture
+// 9 - résultats de la capture
 {
- const s=base('Le log révèle la valeur décodée',9);
- label(s,'Premier essai : mot de passe incorrect',70,165,1100,27);
- text(s,'Valeur décodée enregistrée : $r2',70,255,1100,45,30,C.ink);
- text(s,'sstic2027',70,310,1100,70,54,C.green,true);
- text(s,'La branche de refus est observée.',70,450,1100,45,29,C.ink);
- text(s,'82 / 85 instructions couvertes',70,515,1100,42,25,C.ink);
- text(s,'Valeur fictive enregistrée pendant une capture de référence',70,585,1100,38,22,C.mid);
- s.speakerNotes.append('\n\nSource : demo/incorrect/coverage.json, demo/correct/coverage.json et demo/validation.json, captures du 30 octobre 2026.');
+ const s=base('Les valeurs apparaissent dans les logs',9);
+ label(s,'Après décodage, avant comparaison',70,165,1100,27);
+ text(s,'Utilisateur',70,245,400,44,30,C.ink);
+ text(s,'demo',520,235,650,64,47,C.green,true);
+ text(s,'Mot de passe',70,345,400,44,30,C.ink);
+ text(s,'androlog-demo',520,335,650,64,47,C.green,true);
+ text(s,'2 points personnalisés sur 2 observés',70,485,1100,47,29,C.dark,true);
+ text(s,'Valeurs fictives relevées pendant la capture de l’app pédagogique',70,585,1100,44,21,C.mid);
 }
-// 10 - reuse the recovered value and inspect observed calls
+// 10 - utiliser les valeurs et analyser les appels
 {
- const s=base('Utiliser la valeur retrouvée',10);
- label(s,'Deuxième essai',70,160,700,27);
- text(s,'sstic2027',70,215,700,55,39,C.green,true);
- text(s,'Accès autorisé',70,300,700,50,34,C.dark,true);
- text(s,'showSecret() est atteinte',70,380,700,50,29,C.ink);
- text(s,'L’appel est confirmé dans le graphe.',70,445,700,50,26,C.ink);
- text(s,'83 / 85 instructions couvertes',70,525,700,42,25,C.ink);
- await image(s,'docs/submissions/sstic2027/password-demo/screenshots/correct.png',850,210,360,260,'App pédagogique : accès autorisé',{fit:'cover',crop:{left:0,top:0,right:0,bottom:0.7}});
- text(s,'Capture de l’app de démonstration',850,485,380,32,17,C.mid);
- s.speakerNotes.append('\n\nSource : demo/validation.json, captures incorrect et correct.');
+ const s=base('Utiliser les valeurs retrouvées',10);
+ label(s,'Deuxième essai',70,155,700,27);
+ text(s,'demo  /  androlog-demo',70,205,720,56,36,C.green,true);
+ text(s,'Connexion acceptée',70,282,720,52,31,C.dark,true);
+ text(s,'Appels observés dans le graphe dynamique :',70,373,750,42,25,C.ink);
+ text(s,'submit() → authenticate() → decode()',70,424,750,48,25,C.green,true);
+ text(s,'179 / 360 instructions couvertes',70,503,750,40,25,C.ink);
+ text(s,'Capture cumulée : un refus, puis une connexion réussie',70,555,745,56,20,C.mid);
+ await image(s,'docs/submissions/sstic2027/classroom-demo/launcher-success.png',875,145,275,455,'L’app accepte les identifiants retrouvés');
+ text(s,'Capture de l’app de démonstration',830,617,380,28,16,C.mid);
 }
 // 11 - sharing
 {
