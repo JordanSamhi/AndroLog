@@ -76,27 +76,25 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
  await image(s,'data/screenshots/gui-instrument.png',525,145,695,490,'Écran d’instrumentation AndroLog'); caption(s);
  s.speakerNotes.append('\n\nSource : https://doi.org/10.1145/3663529.3663806');
 }
-// 6 - la première piste
+// 6 - scénario de démonstration
 {
- const s=base('Une piste dans MainActivity',6);
- label(s,'Dans le code de MainActivity',70,160,760,27);
- text(s,'String expectedUsername = "admin";\nString expectedPassword = "admin123";',70,225,750,115,28,C.dark,true);
- text(s,'On essaie ces identifiants dans l’app…',70,390,730,55,29,C.ink);
- text(s,'Connexion refusée.',70,465,730,55,36,C.red,true);
- text(s,'Extrait Java simplifié de l’app pédagogique',70,583,750,38,20,C.mid);
- await image(s,'docs/submissions/sstic2027/classroom-demo/launcher-decoy-rejected.png',875,145,275,455,'L’app refuse les identifiants admin et admin123');
- text(s,'Capture de l’app de démonstration',830,617,380,28,16,C.mid);
+ const s=base('Une app de connexion à analyser',6);
+ text(s,'On dispose uniquement de son APK.',70,164,1060,48,33,C.dark,true);
+ label(s,'Dans l’app',70,256,450,27);
+ text(s,'Les valeurs attendues sont\nencodées puis décodées\navant la vérification.',70,310,450,130,29,C.ink);
+ label(s,'Notre objectif',650,256,500,27);
+ text(s,'Observer les valeurs\neffectivement utilisées\npendant l’exécution.',650,310,500,130,29,C.ink);
+ text(s,'Comment les récupérer au bon moment ?',70,535,1100,55,30,C.green,true);
 }
-// 7 - le manifeste
+// 7 - observer au bon endroit
 {
- const s=base('Quelle activité démarre vraiment ?',7);
- label(s,'Le manifeste Android',70,160,1100,27);
- text(s,'MainActivity',70,230,400,53,35,C.dark,true);
- text(s,'présente dans l’APK',540,230,620,50,28,C.ink);
- text(s,'MainActivity1',70,320,400,53,35,C.green,true);
- text(s,'MAIN + LAUNCHER',540,320,620,50,31,C.green,true);
- text(s,'C’est MainActivity1 qui est lancée à l’ouverture.',70,445,1120,55,29,C.ink);
- text(s,'Le nom d’une classe ne suffit pas pour trouver le point d’entrée.',70,540,1120,65,24,C.mid);
+ const s=base('Choisir le bon point dans le code',7);
+ label(s,'Dans MainActivity1.authenticate()',70,155,1100,27);
+ text(s,'23   $r5 = decode(…)   // utilisateur',70,225,1090,48,28,C.dark,true);
+ text(s,'24   $r6 = decode(…)   // mot de passe',70,292,1090,48,28,C.dark,true);
+ text(s,'25   comparaison avec les valeurs saisies',70,359,1090,48,28,C.dark,true);
+ text(s,'Un log de variable après chaque décodage',70,470,1100,47,29,C.green,true);
+ text(s,'Extrait Jimple simplifié : les logs sont placés avant les instructions 24 et 25.',70,565,1120,65,22,C.mid);
 }
 // 8 - les points de log
 {
@@ -132,12 +130,15 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
  await image(s,'docs/submissions/sstic2027/classroom-demo/launcher-success.png',875,145,275,455,'L’app accepte les identifiants retrouvés');
  text(s,'Capture de l’app de démonstration',830,617,380,28,16,C.mid);
 }
-// 11 - sharing
+// 11 - au-delà de l’exemple
 {
- const s=base('Partager et reprendre l’analyse',11);
- label(s,'Rapport HTML',70,162,465,28); text(s,'Un fichier à ouvrir\ndans un navigateur',70,207,455,88,28,C.ink);
- label(s,'APK instrumenté et logs',70,352,465,28); text(s,'Reprendre l’analyse\nsur une autre machine',70,398,455,88,28,C.ink);
- await image(s,'data/screenshots/gui-custom-results.png',550,170,670,390,'Résultats de logs personnalisés'); caption(s);
+ const s=base('Au-delà de cet exemple',11);
+ text(s,'Observer des valeurs pendant l’exécution',70,155,1100,54,36,C.dark,true);
+ text(s,'Clés d’API',70,255,440,47,32,C.green,true);
+ text(s,'Jetons et mots de passe',70,325,760,47,32,C.green,true);
+ text(s,'Autres données sensibles',70,395,760,47,32,C.green,true);
+ text(s,'Décodées, calculées ou reçues par l’app',70,505,1100,45,27,C.ink);
+ text(s,'L’analyse porte sur les valeurs réellement observées pendant le test.',70,570,1100,45,22,C.mid);
 }
 // 12 - conclusion
 {
@@ -148,7 +149,7 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
  text(s,'Observer un point, un message ou une valeur',70,364,1090,43,26,C.ink);
  text(s,'Analyse liée au code',70,460,1090,53,36,C.dark,true);
  text(s,'Rapport HTML et graphe d’appels dynamique',70,512,1090,43,26,C.ink);
- text(s,'Une obfuscation peut aussi être analysée statiquement.',70,562,1090,38,22,C.mid);
+ text(s,'Les résultats dépendent de l’exécution observée.',70,562,1090,38,22,C.mid);
  text(s,'github.com/JordanSamhi/AndroLog',70,615,1090,36,24,C.green,true);
 }
 
