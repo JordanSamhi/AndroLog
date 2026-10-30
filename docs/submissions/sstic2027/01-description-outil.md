@@ -26,4 +26,4 @@ Le code affiché est du Jimple, une représentation du bytecode. Un point rouge 
 
 AndroLog est libre sous **LGPL v2.1** : [github.com/JordanSamhi/AndroLog](https://github.com/JordanSamhi/AndroLog). Le dossier comprend les sources, un rapport HTML et une version macOS Apple Silicon avec Java. Le SDK Android est nécessaire pour instrumenter ou analyser un APK, mais pas pour ouvrir le rapport. Les paquets Windows et Linux n’ont pas été testés pour ce dossier.
 
-Codex a assisté le développement et la préparation du dossier ; les détails figurent dans le guide.
+Un outil d’assistance par IA a été utilisé pour la rédaction et l’amélioration de ce document. Les autres utilisations de l’IA sont précisées dans le guide.
