@@ -16,7 +16,7 @@ Je vais d’abord expliquer comment fonctionne l’outil, puis vous montrer la n
 
 Imaginons que nous ayons un APK à analyser. Nous pouvons parcourir son code, mais cela ne nous dit pas forcément ce qui se passe lorsqu’on lance l’app avec une entrée particulière.
 
-Prenons une app qui demande un mot de passe. Le contrôle est-il atteint ? Quelle valeur est comparée ? Quelle branche et quelle méthode sont exécutées si le mot de passe est correct ou incorrect ?
+Prenons une app qui demande un mot de passe. La valeur attendue n’apparaît pas directement en clair : elle est reconstruite pendant l’exécution. Quelle valeur est comparée ? Et quelle branche est exécutée selon le mot de passe saisi ?
 
 Ces questions sont utiles pendant un audit : elles permettent de vérifier ce que fait l’app pour une entrée donnée. AndroLog aide à y répondre en ajoutant des logs directement dans l’APK, puis en les reliant au code dans un rapport.
 
@@ -44,13 +44,13 @@ Depuis, son développement a continué avec de nouvelles fonctionnalités et une
 
 La ligne de commande reste disponible. Aujourd’hui, je vais surtout montrer l’interface graphique et les logs personnalisés.
 
-## 6. Une app avec un mot de passe codé en dur — 0:50
+## 6. Une app avec un mot de passe obfusqué — 0:50
 
-Pour la suite, nous utilisons une petite app créée pour cette démonstration. Elle demande un mot de passe et le compare à une valeur codée en dur : `sstic2027`. Si la comparaison réussit, elle affiche un secret fictif ; sinon, elle affiche une erreur.
+Pour la suite, nous utilisons une petite app créée pour cette démonstration. Elle demande un mot de passe. La valeur attendue est stockée sous forme obfusquée dans l’APK, puis décodée juste avant la comparaison. Si la comparaison réussit, l’app affiche un secret fictif ; sinon, elle affiche une erreur.
 
-Ce mot de passe est fictif et choisi pour être visible. On peut aussi le retrouver en lisant le code : AndroLog nous sert ici à observer ce que fait l’app quand on essaie différentes valeurs.
+Notre objectif est de retrouver la valeur décodée à l’exécution. L’obfuscation utilisée est volontairement simple : elle peut aussi être analysée statiquement. Ici, nous allons observer la valeur reconstruite avec AndroLog.
 
-Nous allons essayer un mot de passe incorrect, puis le bon. Pour chaque test, nous regarderons quelle branche a été exécutée et quelle valeur a été enregistrée.
+Nous allons d’abord essayer un mot de passe incorrect, lire la valeur enregistrée, puis l’utiliser pour nous connecter.
 
 ## 7. Choisir où ajouter un log — 1:10
 
@@ -58,7 +58,7 @@ Dans l’interface, je parcours les packages, les classes et les méthodes jusqu
 
 Trois options sont disponibles. Avec Statement reached, je vérifie si une instruction a été atteinte, sans avoir à saisir de message. Avec Custom message, je choisis le texte à afficher. Avec Variable value, je sélectionne une variable locale initialisée et j’enregistre sa valeur.
 
-Dans notre exemple, nous plaçons un point dans chaque branche, le message « Vérification du mot de passe » avant le choix de la branche et un log pour enregistrer la valeur du mot de passe avant sa comparaison. Les logs sont ajoutés avant l’instruction choisie : pour voir le résultat d’une instruction, il faut donc choisir l’instruction suivante.
+Dans notre exemple, nous plaçons un point dans chaque branche, le message « Vérification du mot de passe » avant le choix de la branche et un log sur la variable qui contient le mot de passe décodé. Dans le Jimple de cette version de l’app, elle s’appelle `$r2`. Nous choisissons le point après le décodage et avant la comparaison. Les logs sont ajoutés avant l’instruction choisie : pour voir le résultat d’une instruction, il faut donc choisir l’instruction suivante.
 
 Les captures de l’interface qui montrent une variable de score et la valeur 14 proviennent d’une autre app de démonstration. Elles servent à illustrer l’interface ; les résultats du scénario de mot de passe sont ceux que je vais montrer maintenant.
 
@@ -66,26 +66,26 @@ Les captures de l’interface qui montrent une variable de score et la valeur 14
 
 Pour gagner du temps, j’ai instrumenté l’APK avant la présentation et laissé cette session d’AndroLog ouverte. Je choisis Test on device, je sélectionne l’émulateur et je lance le test. L’outil installe l’APK, démarre la capture puis lance l’app.
 
-Je saisis d’abord un mot de passe incorrect et je lance la vérification. Je clique ensuite sur Stop & analyze. AndroLog ouvre le tableau de couverture avec l’APK et les logs de cette exécution. Je peux refaire le test dans une nouvelle capture avec le bon mot de passe.
+Je saisis d’abord un mot de passe incorrect et je lance la vérification. Je clique ensuite sur Stop & analyze. AndroLog ouvre le tableau de couverture avec l’APK et les logs de cette exécution. Je consulte alors la valeur de la variable décodée dans les résultats des logs personnalisés.
 
 Je regarde d’abord la couverture, puis les logs personnalisés. On peut ouvrir un résultat pour revenir directement à l’instruction correspondante dans le code.
 
 [En cas de problème pendant la démonstration, ouvrir les rapports `demo/incorrect/coverage.html` et `demo/correct/coverage.html` fournis avec le dossier. Préciser au public qu’il s’agit de captures précédentes. Ces captures ont été produites avec une entrée de test qui utilise le même traitement que le bouton de l’app.]
 
 
-## 9. Deux tests, deux résultats — 1:00
+## 9. Le log révèle la valeur décodée — 1:00
 
-Nous avons réalisé deux captures séparées avant la présentation. Avec `incorrect`, AndroLog a observé 58 instructions sur 61. Avec `sstic2027`, il en a observé 59 sur 61. Dans les deux cas, 7 méthodes sur 8 et 3 points personnalisés sur 4 ont été observés. Les chiffres d’une démonstration en direct peuvent différer.
+Lors de l’essai incorrect, le log de variable affiche la valeur décodée : `sstic2027`. Ce n’est pas la saisie incorrecte : c’est la valeur que l’app a reconstruite pour la comparaison.
 
-Pour l’essai incorrect, `showError()` est vert et `showSecret()` est rouge. Pour l’essai correct, les couleurs sont inversées. Le point rouge indique qu’il n’a pas été observé dans la capture, pas qu’il est inaccessible.
+Le point dans `showError()` est vert et celui de `showSecret()` est rouge. Le point rouge indique qu’il n’a pas été observé dans cette capture, pas qu’il est inaccessible.
 
-Les valeurs enregistrées sont respectivement `incorrect` et `sstic2027`. On peut cliquer sur un résultat pour retrouver l’instruction où la valeur a été enregistrée. Le mot de passe est une valeur fictive choisie pour la démonstration.
+Dans la capture de référence, 82 instructions sur 85, 8 méthodes sur 9 et 3 points personnalisés sur 4 ont été observés. Les chiffres d’une démonstration en direct peuvent différer. On peut cliquer sur le résultat pour revenir à l’instruction qui utilise la valeur décodée. Le mot de passe montré ici est fictif.
 
-## 10. Quelles méthodes ont été appelées ? — 1:20
+## 10. Utiliser la valeur retrouvée — 1:20
 
-Ouvrons maintenant le graphe d’appels dynamique pour la méthode `PasswordCheck.check`. Il permet de voir les méthodes appelées pendant l’exécution.
+Nous relançons le test et saisissons la valeur retrouvée : `sstic2027`. L’app affiche maintenant le secret fictif. Dans la nouvelle capture, le point de `showSecret()` est atteint.
 
-Dans la capture avec `incorrect`, le graphe confirme l’appel de `check()` vers `showError()`. Dans la capture avec `sstic2027`, il confirme l’appel de `check()` vers `showSecret()`.
+Dans la capture de référence du second essai, 83 instructions sur 85, 8 méthodes sur 9 et 3 points personnalisés sur 4 ont été observés. Le graphe d’appels dynamique montre les méthodes appelées : `PasswordCheck.check()` vers `showError()` pour le premier essai, puis vers `showSecret()` dans la seconde capture.
 
 Le graphe distingue les cibles confirmées par les logs des cibles déclarées dont l’exécution n’a pas pu être confirmée. Il décrit les appels observés pendant ces tests, pas tous les appels possibles de l’app.
 
@@ -101,6 +101,6 @@ Pour le comité, nous fournissons les APK de démonstration, les captures et les
 
 AndroLog permet de mesurer la couverture d’une app Android sans son code source, à plusieurs niveaux de granularité. La nouvelle interface permet aussi d’ajouter des logs personnalisés, de tester l’APK et de relier les résultats au code.
 
-Dans notre exemple, nous avons pu voir quelle valeur était comparée, quelle branche avait été atteinte et quelle méthode avait été appelée. Ce sont des observations pour les exécutions effectuées : un résultat non observé ne prouve pas qu’un code est inaccessible.
+Dans notre exemple, nous avons pu lire la valeur décodée, l’utiliser pour nous connecter et voir quelle branche avait été atteinte. Ce sont des observations pour les exécutions effectuées : un résultat non observé ne prouve pas qu’un code est inaccessible. L’obfuscation de l’exemple est simple et peut également être analysée statiquement.
 
 L’outil est libre et disponible sur GitHub. Merci pour votre attention, je suis prêt à répondre à vos questions.

@@ -37,16 +37,20 @@ const write = (file, value) => fs.writeFile(path.join(out, file), JSON.stringify
       labels.push(label);
       points.push({ kind, method: m.signature, index: statement.index, statement: statement.text, ...extra });
     };
-    const comparison = pick(inspect, t => t.includes('java.lang.String: boolean equals(') && t.includes('sstic2027'));
+    const comparison = pick(inspect, t => t.includes('java.lang.String: boolean equals(java.lang.Object)'));
     add('message', inspect, pick(inspect, t => t.startsWith('if ')), 'message', { message: 'Vérification du mot de passe' });
     const variables = await backend.inspectVariables(apk, settings, inspect.signature);
-    const argument = comparison.text.match(/virtualinvoke (\S+)\.</)[1];
+    const decoded = comparison.text.match(/equals\(java\.lang\.Object\)>\((\S+)\)/);
+    assert.ok(decoded, 'The comparison must have a local argument.');
+    const argument = decoded[1];
     const local = variables.locals.find(v => v.name === argument && v.type === 'java.lang.String');
-    assert.ok(local, 'The password must be a local string.');
+    assert.ok(local, 'The decoded password must be a local string.');
+    const decodeAssignment = inspect.statements.find(s => s.text.startsWith(`${local.name} = `) && s.text.includes(' decodePassword()'));
+    assert.ok(decodeAssignment && decodeAssignment.index < comparison.index, 'The selected local must come from decodePassword.');
     const mask = Buffer.from(variables.statements.find(s => s.index === comparison.index).localMask, 'base64');
     const position = variables.locals.indexOf(local);
     assert.ok(mask[position >> 3] & (1 << (position & 7)), 'The string must be initialized at the selected point.');
-    add('mot de passe', inspect, comparison, 'value', { message: `{${local.name}}`, variables: [local] });
+    add('mot de passe décodé', inspect, comparison, 'value', { message: `{${local.name}}`, variables: [local] });
     for (const name of ['showSecret', 'showError']) {
       const m = method(name);
       add(name, m, m.statements.find(s => s.selectable), 'reached');

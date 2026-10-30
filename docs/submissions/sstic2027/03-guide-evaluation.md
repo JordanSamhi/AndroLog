@@ -32,20 +32,20 @@ Aucun abonnement, logiciel payant ou matériel spécialisé n’est nécessaire.
 
 ## App et scénarios
 
-L’app `com.example.andrologpassword` propose un champ de saisie et un bouton « Vérifier ». Elle compare la valeur saisie au mot de passe fictif `sstic2027`, codé en dur dans l’app, puis affiche si l’accès est autorisé ou refusé. L’app a été créée pour cette démonstration ; elle n’utilise pas le réseau ni des fichiers.
+L’app `com.example.andrologpassword` propose un champ de saisie et un bouton « Vérifier ». Son mot de passe fictif est obfusqué dans un tableau d’octets, puis reconstruit par un XOR. L’app compare la valeur saisie au mot de passe reconstruit et affiche la décision. Elle n’utilise pas le réseau ni des fichiers.
 
 | Capture | Mot de passe saisi | Résultat attendu |
 | --- | --- | --- |
 | incorrect | `incorrect` | Accès refusé ; branche d’échec observée. |
 | correct | `sstic2027` | Accès autorisé ; branche de succès observée. |
 
-Les quatre points personnalisés utilisent les trois options : **Statement reached** vérifie le passage dans les branches, **Custom message** affiche un message et **Variable value** enregistre la valeur saisie. Le code de l’app et les commandes de reproduction sont fournis dans `docs/submissions/sstic2027/password-demo/`, dans l’archive des sources.
+Les quatre points utilisent les trois options : **Statement reached** vérifie les branches, **Custom message** affiche un message et **Variable value** enregistre le mot de passe reconstruit avant la comparaison. Dans le code Jimple de l’APK fourni, il se trouve dans la variable `$r2`. Le code et les commandes sont dans `docs/submissions/sstic2027/password-demo/`, dans l’archive des sources.
 
-Dans la capture `incorrect`, 58 instructions sur 61 et 7 méthodes sur 8 sont observées. Le point `showError` est atteint, le point `showSecret` ne l’est pas et l’appel à `showError` est confirmé dans le graphe. Dans la capture `correct`, 59 instructions sur 61 et 7 méthodes sur 8 sont observées ; les points et l’appel confirmé correspondent à `showSecret`. Chaque capture a trois points personnalisés observés sur quatre. Ces chiffres décrivent uniquement ces tests.
+Dans la capture `incorrect`, `$r2` vaut `sstic2027` : 82 instructions sur 85 et 8 méthodes sur 9 sont observées ; `showError` est atteint et son appel est confirmé. Dans `correct`, 83 instructions sur 85 et 8 méthodes sur 9 sont observées ; `showSecret` est atteint et son appel confirmé. Chaque capture a trois points personnalisés observés sur quatre. Ces chiffres décrivent uniquement ces tests.
 
-Pour les captures fournies, un paramètre de test remplit le champ et déclenche le même traitement que le bouton. L’app permet aussi de saisir le mot de passe dans l’interface. Le mot de passe fictif est visible dans le code : AndroLog permet de vérifier le comportement pendant les tests, et non de revendiquer une vulnérabilité découverte.
+Pour les captures fournies, un paramètre de test remplit le champ et déclenche le même traitement que le bouton. Le script récupère le premier log pour effectuer le second essai. L’app permet aussi la saisie dans l’interface. L’obfuscation est volontairement simple et réversible par analyse statique ; AndroLog montre comment retrouver la valeur pendant l’exécution.
 
-Pour refaire la démonstration, ouvrir l’APK original dans Instrument, choisir les points de logs et activer les sondes de couverture et de graphe. Instrumenter l’APK et utiliser Test on device. Faire une capture par entrée et conserver l’APK utilisé avec ses logs et son tag.
+Pour refaire la démonstration, ouvrir l’APK original dans Instrument, choisir les points de logs et activer les sondes de couverture et de graphe. Instrumenter l’APK et utiliser Test on device. Faire un premier essai avec `incorrect`, puis consulter la valeur enregistrée pour `$r2` dans Coverage. Utiliser cette valeur pour un deuxième essai et comparer les deux captures. Conserver l’APK utilisé avec ses logs et son tag.
 
 ## Comment lire les résultats
 

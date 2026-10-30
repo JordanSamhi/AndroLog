@@ -46,7 +46,7 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
  const s=base('Que fait vraiment cette app ?',2);
  text(s,'Vous avez un APK à analyser.',70,172,1000,58,39,C.dark,true);
  text(s,'Le contrôle est-il atteint ?',72,285,1050,50,32,C.ink);
- text(s,'Quelle valeur arrive au contrôle ?',72,356,1050,50,32,C.ink);
+ text(s,'Quelle valeur est décodée avant le contrôle ?',72,356,1050,50,32,C.ink);
  text(s,'Quelle méthode est réellement appelée ?',72,427,1050,50,32,C.ink);
  text(s,'Exemple : une app qui vérifie un mot de passe',72,552,1100,38,25,C.green,true);
 }
@@ -78,21 +78,21 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
 }
 // 6 - cas d'audit
 {
- const s=base('Une app avec un mot de passe codé en dur',6);
+ const s=base('Une app avec un mot de passe obfusqué',6);
  label(s,'Code de l’app pédagogique',70,160,1100,27);
- text(s,'if (password.equals("sstic2027")) {\n    return showSecret();\n}\nreturn showError();',70,220,750,205,34,C.dark,true);
+ text(s,'String expected = decodePassword();\nif (password.equals(expected)) {\n    return showSecret();\n}\nreturn showError();',70,220,750,205,31,C.dark,true);
  text(s,'Mot de passe incorrect : refus',70,459,800,49,29,C.ink);
  text(s,'Mot de passe correct : secret fictif',70,518,800,49,29,C.ink);
  await image(s,'docs/submissions/sstic2027/password-demo/screenshots/incorrect.png',850,210,360,260,'App pédagogique : accès refusé',{fit:'cover',crop:{left:0,top:0,right:0,bottom:0.7}});
  text(s,'Capture de l’app de démonstration',850,485,380,32,17,C.mid);
- text(s,'Le code révèle déjà le mot de passe ; observons l’exécution.',70,593,1100,40,22,C.mid);
+ text(s,'Le mot de passe est décodé avant la comparaison.',70,593,1100,40,22,C.mid);
 }
 // 7 - trois modes
 {
  const s=base('Choisir où ajouter un log',7);
  label(s,'Statement reached',70,155,460,27); text(s,'L’instruction est-elle atteinte ?',70,196,455,43,25,C.ink);
  label(s,'Custom message',70,283,460,27); text(s,'Afficher le message choisi',70,324,455,43,25,C.ink);
- label(s,'Variable value',70,411,460,27); text(s,'Enregistrer une valeur locale',70,452,455,43,25,C.ink);
+ label(s,'Variable value',70,411,460,27); text(s,'Enregistrer $r2 après décodage',70,452,470,75,25,C.ink);
  text(s,'Le log est placé avant l’instruction.',70,560,460,48,23,C.mid);
  await image(s,'data/screenshots/gui-custom-logs.png',550,145,670,475,'Sélection de logs personnalisés'); caption(s);
 }
@@ -101,40 +101,32 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
  const s=base('Tester sur un appareil',8);
  text(s,'Test on device',70,180,460,53,36,C.green,true);
  text(s,'Choisir un appareil\nou un émulateur',70,250,450,82,28,C.ink);
- text(s,'Exercer le scénario',70,377,450,50,29,C.ink);
+ text(s,'Premier essai : mot de passe incorrect',70,377,460,75,27,C.ink);
  text(s,'Stop & analyze',70,463,460,52,34,C.dark,true);
  await image(s,'data/screenshots/gui-device-test.png',550,140,670,490,'Capture sur un appareil'); caption(s);
 }
-// 9 - evidence from two separate captures
+// 9 - reveal the decoded value after the first capture
 {
- const s=base('Deux tests, deux résultats',9);
- label(s,'Essai incorrect',70,160,350,26);
- text(s,'incorrect',70,209,350,48,34,C.dark,true);
- text(s,'58 / 61 instructions',70,290,350,45,27,C.ink);
- text(s,'showError atteint',70,355,350,42,25,C.green,true);
- text(s,'showSecret non observé',70,405,360,42,23,C.red);
- label(s,'Essai correct',450,160,350,26);
- text(s,'sstic2027',450,209,350,48,34,C.dark,true);
- text(s,'59 / 61 instructions',450,290,350,45,27,C.ink);
- text(s,'showSecret atteint',450,355,350,42,25,C.green,true);
- text(s,'showError non observé',450,405,350,42,23,C.red);
- await image(s,'docs/submissions/sstic2027/password-demo/screenshots/correct.png',850,210,360,260,'App pédagogique : accès autorisé',{fit:'cover',crop:{left:0,top:0,right:0,bottom:0.7}});
- text(s,'Capture de l’app de démonstration',850,485,380,32,17,C.mid);
- text(s,'Captures séparées : 3 points personnalisés observés sur 4',70,585,1100,38,22,C.mid);
+ const s=base('Le log révèle la valeur décodée',9);
+ label(s,'Premier essai : mot de passe incorrect',70,165,1100,27);
+ text(s,'Valeur décodée enregistrée : $r2',70,255,1100,45,30,C.ink);
+ text(s,'sstic2027',70,310,1100,70,54,C.green,true);
+ text(s,'La branche de refus est observée.',70,450,1100,45,29,C.ink);
+ text(s,'82 / 85 instructions couvertes',70,515,1100,42,25,C.ink);
+ text(s,'Valeur fictive enregistrée pendant une capture de référence',70,585,1100,38,22,C.mid);
  s.speakerNotes.append('\n\nSource : demo/incorrect/coverage.json, demo/correct/coverage.json et demo/validation.json, captures du 30 octobre 2026.');
 }
-// 10 - observed dynamic calls
+// 10 - reuse the recovered value and inspect observed calls
 {
- const s=base('Quelles méthodes ont été appelées ?',10);
- label(s,'Méthode de vérification',70,170,1100,27);
- text(s,'PasswordCheck.check',70,211,1000,55,39,C.dark,true);
- text(s,'Essai incorrect',70,337,470,42,25,C.mid);
- text(s,'showError()',70,383,500,52,35,C.green,true);
- text(s,'Appel confirmé dans la trace',70,437,500,38,24,C.ink);
- text(s,'Essai correct',680,337,470,42,25,C.mid);
- text(s,'showSecret()',680,383,500,52,35,C.green,true);
- text(s,'Appel confirmé dans la trace',680,437,500,38,24,C.ink);
- text(s,'Le graphe dépend des appels observés pendant le test.',70,581,1100,46,24,C.mid);
+ const s=base('Utiliser la valeur retrouvée',10);
+ label(s,'Deuxième essai',70,160,700,27);
+ text(s,'sstic2027',70,215,700,55,39,C.green,true);
+ text(s,'Accès autorisé',70,300,700,50,34,C.dark,true);
+ text(s,'showSecret() est atteinte',70,380,700,50,29,C.ink);
+ text(s,'L’appel est confirmé dans le graphe.',70,445,700,50,26,C.ink);
+ text(s,'83 / 85 instructions couvertes',70,525,700,42,25,C.ink);
+ await image(s,'docs/submissions/sstic2027/password-demo/screenshots/correct.png',850,210,360,260,'App pédagogique : accès autorisé',{fit:'cover',crop:{left:0,top:0,right:0,bottom:0.7}});
+ text(s,'Capture de l’app de démonstration',850,485,380,32,17,C.mid);
  s.speakerNotes.append('\n\nSource : demo/validation.json, captures incorrect et correct.');
 }
 // 11 - sharing
@@ -153,6 +145,7 @@ function caption(s, y=640) {text(s,'Capture de l’interface : autre app de dém
  text(s,'Observer un point, un message ou une valeur',70,364,1090,43,26,C.ink);
  text(s,'Analyse liée au code',70,460,1090,53,36,C.dark,true);
  text(s,'Rapport HTML et graphe d’appels dynamique',70,512,1090,43,26,C.ink);
+ text(s,'Une obfuscation peut aussi être analysée statiquement.',70,562,1090,38,22,C.mid);
  text(s,'github.com/JordanSamhi/AndroLog',70,615,1090,36,24,C.green,true);
 }
 

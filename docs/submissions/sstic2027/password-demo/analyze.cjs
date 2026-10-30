@@ -16,6 +16,7 @@ const backend = new Backend({ jar, tempRoot: out });
   try {
     const points = JSON.parse(await fs.readFile(path.join(out, 'points.json'), 'utf8'));
     const summaries = [];
+    let recoveredPassword;
     for (const scenario of ['incorrect', 'correct']) {
       const dir = path.join(out, scenario);
       const capture = JSON.parse(await fs.readFile(path.join(dir, 'capture.json'), 'utf8'));
@@ -30,7 +31,15 @@ const backend = new Backend({ jar, tempRoot: out });
       assert.equal(report.custom.summary.unknown, 0);
       assert.equal(report.custom.unmatchedMarkers, 0);
       assert.equal(point('message').status, 'covered');
-      assert.equal(point('mot de passe').latestValue, capture.expected.password);
+      const decoded = point('mot de passe décodé').latestValue;
+      assert.equal(decoded, capture.expected.decodedPassword);
+      assert.equal(decoded, 'sstic2027', 'Known synthetic fixture must decode correctly.');
+      if (scenario === 'incorrect') {
+        assert.notEqual(decoded, capture.testInput, 'The log must capture the decoded value, not the entered value.');
+        recoveredPassword = decoded;
+      } else {
+        assert.equal(capture.testInput, recoveredPassword, 'The second test must use the value recovered from the first log.');
+      }
       assert.equal(point('showSecret').status, capture.expected.allowed ? 'covered' : 'uncovered');
       assert.equal(point('showError').status, capture.expected.allowed ? 'uncovered' : 'covered');
       assert.ok(report.coverageSummary.statements.covered > 0, 'Automatic coverage must have runtime records too.');
@@ -43,7 +52,7 @@ const backend = new Backend({ jar, tempRoot: out });
       const summary = {
         scenario, coverage: report.coverageSummary, logLines: capture.logLines,
         custom: { observed: report.custom.summary.observed, total: actual.length, unknown: report.custom.summary.unknown },
-        password: point('mot de passe').latestValue, allowed: capture.expected.allowed,
+        input: capture.testInput, decodedPassword: decoded, allowed: capture.expected.allowed,
         showSecret: point('showSecret').status, showError: point('showError').status,
         confirmedCallEdge: edge, graphStats: report.callGraph.stats
       };
