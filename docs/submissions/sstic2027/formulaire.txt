@@ -1,5 +1,5 @@
 TITRE
-AndroLog : observer l’exécution d’un APK sans son code source
+AndroLog : analyser l’exécution d’un APK sans son code source
 
 CATÉGORIE
 Présentation d’un outil (15 minutes)
@@ -10,7 +10,7 @@ Université du Luxembourg
 Contact : j.samhi@me.com
 
 RÉSUMÉ
-Lors de l’audit d’une application Android, comment vérifier qu’un contrôle est atteint, lire la valeur qu’il reçoit et identifier l’implémentation réellement appelée ? AndroLog ajoute des sondes à un APK sans exiger son code source. Son interface permet de choisir un point dans le code, de vérifier son passage, d’imprimer un message ou de capturer une variable locale. Elle réunit aussi l’instrumentation, le test sur un appareil, la couverture et un graphe d’appels dynamique. La démonstration suit une URL reçue par une application pédagogique, depuis sa normalisation jusqu’à sa validation. Nous montrerons comment relier les observations au code et les partager avec l’APK instrumenté, les logs ou un rapport HTML autonome, en précisant ce que ces traces permettent et ne permettent pas de conclure.
+AndroLog permet d’ajouter des logs à une application Android à partir de son APK, sans avoir accès à son code source. Il permet de voir quelles parties du code ont été exécutées, d’enregistrer la valeur d’une variable et d’explorer les appels entre méthodes. L’interface permet de choisir où ajouter ces logs, de tester l’APK sur un appareil ou un émulateur et d’analyser les résultats. La présentation utilise une petite application qui reçoit une URL et vérifie si elle est autorisée. Nous montrerons comment voir la valeur reçue par le contrôle, identifier la méthode appelée et retrouver ces informations dans le code. Les rapports peuvent être exportés en HTML et partagés. L’analyse peut aussi être reprise sur une autre machine avec l’APK instrumenté et les logs.
 
 BIOGRAPHIE COURTE
 Jordan Samhi est chercheur à l’Université du Luxembourg. Ses travaux portent sur l’analyse de programmes, le génie logiciel et la sécurité des applications Android. Il est auteur et mainteneur d’AndroLog.
@@ -19,24 +19,24 @@ MOTS-CLÉS
 Android ; instrumentation de bytecode ; analyse dynamique ; audit ; couverture de code ; graphe d’appels ; rétro-ingénierie
 
 PRÉREQUIS
-Un navigateur suffit pour consulter le rapport HTML fourni. Le paquet de bureau fourni cible macOS sur Apple Silicon et inclut Java. Instrumenter ou réanalyser un APK nécessite le SDK Android ; l’instrumentation utilise aussi ses Build Tools. La capture nécessite adb et un téléphone Android avec débogage USB autorisé ou un émulateur. Aucun périphérique spécialisé, abonnement ou logiciel payant n’est requis. Le SDK et ses images système restent soumis aux conditions de leurs éditeurs. Les sources permettent aussi de construire l’interface pour Windows et Linux ; ces paquets ne sont pas validés dans cet artefact.
+Un navigateur suffit pour consulter le rapport HTML fourni. Le paquet de bureau fourni fonctionne sur macOS avec Apple Silicon et comprend Java. Pour instrumenter ou analyser un APK, il faut installer le SDK Android ; pour l’instrumentation, ses Build Tools sont aussi nécessaires. Pour collecter de nouveaux logs, il faut adb et un téléphone Android autorisé pour le débogage USB ou un émulateur. Aucun périphérique spécialisé, abonnement ou logiciel payant n’est nécessaire. Le SDK et les images d’émulateur restent soumis aux licences de leurs éditeurs. Les sources permettent aussi de construire l’interface pour Windows et Linux, mais ces versions n’ont pas été testées pour ce dossier.
 
 DISPONIBILITÉ
-AndroLog est déjà public et gratuit, sous licence LGPL v2.1 :
+AndroLog est public et gratuit, sous licence LGPL v2.1 :
 https://github.com/JordanSamhi/AndroLog
 Version publique du code fonctionnel utilisé :
 https://github.com/JordanSamhi/AndroLog/tree/cfc8f9924c9368d59059262dee599ad0ccc963df
-La version déployable, le scénario et les traces sont fournis dans l’artefact joint. Ne pas remplacer le lien de version par un lien vers une branche mouvante.
+La version à déployer, l’application de démonstration et les captures sont fournies dans l’artefact. Si l’artefact est mis en ligne, utiliser une URL stable qui pointe vers la version fournie au comité.
 
 PUBLICATION ANTÉRIEURE
-AndroLog a fait l’objet de l’article « AndroLog: Android Instrumentation and Code Coverage Analysis », par Jordan Samhi et Andreas Zeller, publié dans FSE Companion 2024, pages 597–601, DOI 10.1145/3663529.3663806. L’outil a été présenté à la session Demonstrations le 17 juillet 2024. Une prépublication est disponible depuis le 17 avril 2024 (arXiv:2404.11223).
-La proposition SSTIC reprend le logiciel mais propose un texte nouveau et un angle d’audit interactif : interface de bureau, trois modes de journalisation personnalisée, capture intégrée sur appareil et reprise d’analyse à partir de l’APK instrumenté et des logs. La couverture et l’existence d’un graphe dynamique ne sont pas revendiquées comme des inventions nouvelles dans cette soumission. Les figures et le texte de l’article ACM ne sont pas reproduits.
+AndroLog a fait l’objet de l’article « AndroLog: Android Instrumentation and Code Coverage Analysis », par Jordan Samhi et Andreas Zeller, publié dans FSE Companion 2024, pages 597–601, DOI 10.1145/3663529.3663806. L’outil a été présenté à FSE le 17 juillet 2024. Une prépublication est disponible depuis le 17 avril 2024 (arXiv:2404.11223).
+La proposition SSTIC porte sur le même outil, avec un nouveau texte et une démonstration de son utilisation actuelle pour l’audit : interface, trois types de logs personnalisés, capture sur appareil et analyse à partir de l’APK instrumenté et des logs. La couverture et l’existence d’un graphe dynamique ne sont pas présentées comme de nouvelles contributions. Le texte et les figures de l’article ACM ne sont pas reproduits.
 
 ASSISTANCE PAR IA
-Codex a été utilisé pour assister le développement d’AndroLog, notamment l’interface et les évolutions d’instrumentation et de rapport, ainsi que pour préparer le scénario de démonstration, automatiser des vérifications et rédiger et mettre en forme ce dossier en français. Les traces de démonstration et les résultats rapportés proviennent d’exécutions effectives de l’application, et non de données générées pour simuler une exécution.
+Codex a aidé au développement d’AndroLog, notamment pour l’interface, l’instrumentation et les rapports. Il a aussi été utilisé pour préparer la démonstration, automatiser des vérifications et rédiger et mettre en forme ce dossier en français. Les logs et les résultats fournis viennent d’exécutions réelles de l’application de démonstration.
 
 VIDÉO
-Aucune vidéo jointe à cette étape ; elle sera préparée séparément si souhaité.
+Aucune vidéo n’est jointe à cette étape ; elle sera préparée séparément si souhaité.
 
 PIÈCES
 01-description-outil.pdf
