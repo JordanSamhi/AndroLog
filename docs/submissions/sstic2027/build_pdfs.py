@@ -32,6 +32,9 @@ def render_sstic_description():
         (work / '_build').mkdir()
         command = ['pdflatex', '-shell-escape', '-interaction=nonstopmode', '-halt-on-error',
                    '-output-directory=_build', '01-description-outil.tex']
+        subprocess.run(command, cwd=work, check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(['bibtex', '_build/01-description-outil'], cwd=work, check=True,
+                       stdout=subprocess.DEVNULL)
         for _ in range(2):
             subprocess.run(command, cwd=work, check=True, stdout=subprocess.DEVNULL)
         shutil.copy2(work / '_build/01-description-outil.pdf', OUT / '01-description-outil.pdf')

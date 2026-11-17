@@ -1,12 +1,22 @@
 # Source LaTeX : description d’AndroLog pour SSTIC 2027
 
-Le contenu figure dans `JordanSamhi/master.tex` et le logo dans `JordanSamhi/img/`.
+Le contenu figure dans `JordanSamhi/master.tex`, la bibliographie dans `JordanSamhi/biblio.bib` et le logo dans `JordanSamhi/img/`.
 Le document utilise les classes officielles inchangées `sstic.cls` et `llncs.cls` du [template SSTIC](https://gitlab.com/sstic/author-template), commit `011dda9f21001167b2380096fa12d71815dcb012`.
 
-Pour l’environnement officiel SSTIC, copier le dossier `JordanSamhi` dans une copie du template et suivre son fichier `README`. Pour compiler localement avec TeX Live 2025, placer `sstic.cls` et `llncs.cls` à côté de `01-description-outil.tex`, puis lancer :
+Pour compiler dans l’environnement officiel, copier le dossier `JordanSamhi` dans une copie du template et suivre son `README`. Depuis la racine de cette copie, avec Docker installé et démarré :
+
+```sh
+make from_docker SSTIC_TARGET=_build/JordanSamhi.pdf
+```
+
+Le PDF est créé dans `_build/JordanSamhi.pdf`. Les classes et le processus de compilation du template ne sont pas modifiés.
+
+Pour compiler localement avec TeX Live 2025, placer `sstic.cls` et `llncs.cls` à côté de `01-description-outil.tex`, puis lancer :
 
 ```sh
 mkdir -p _build
+pdflatex -shell-escape -interaction=nonstopmode -halt-on-error -output-directory=_build 01-description-outil.tex
+bibtex _build/01-description-outil
 pdflatex -shell-escape -interaction=nonstopmode -halt-on-error -output-directory=_build 01-description-outil.tex
 pdflatex -shell-escape -interaction=nonstopmode -halt-on-error -output-directory=_build 01-description-outil.tex
 ```

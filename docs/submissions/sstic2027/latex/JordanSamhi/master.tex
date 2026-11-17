@@ -3,15 +3,18 @@
 \setauthor[J. Samhi]{Jordan Samhi\\\email{jordan.samhi@uni.lu}}
 \institute{Université du Luxembourg}
 \maketitle
-\begin{center}
+\begin{figure}[ht]
+\centering
 \includegraphics[width=.26\textwidth]{JordanSamhi/img/androlog.png}
-\end{center}
+\caption{Logo d’AndroLog}
+\label{fig:samhi:androlog}
+\end{figure}
 
 \section{Couverture de code}
 
 AndroLog permet de mesurer la couverture de code d’une app Android à partir de son APK, sans avoir accès à son code source. Il propose plusieurs niveaux de granularité : instructions, méthodes, classes et composants Android. Il ajoute des logs dans l’APK pour savoir lesquels ont été exécutés. Après le test de l’app, il analyse les logs et génère un rapport qui permet de retrouver les parties couvertes et non couvertes dans le code.
 
-AndroLog a été développé à l’origine dans un cadre académique, sous forme d’outil en ligne de commande. Il a été présenté à FSE 2024 à Porto de Galinhas, au Brésil (\href{https://doi.org/10.1145/3663529.3663806}{DOI : 10.1145/3663529.3663806}). Depuis, son développement a continué avec de nouvelles fonctionnalités et une interface graphique.
+AndroLog a été développé à l’origine dans un cadre académique, sous forme d’outil en ligne de commande. Il a été présenté à FSE 2024 à Porto de Galinhas, au Brésil~\cite{samhi:androlog2024} (\href{https://doi.org/10.1145/3663529.3663806}{DOI : 10.1145/3663529.3663806}). Depuis, son développement a continué avec de nouvelles fonctionnalités et une interface graphique.
 
 \section{Nouvelle interface et logs personnalisés}
 
@@ -31,6 +34,8 @@ Le code affiché est du Jimple, une représentation du bytecode. Un point rouge 
 
 \section{Disponibilité}
 
-AndroLog est libre sous \textbf{LGPL v2.1} : \urlstyle{same}\href{https://github.com/JordanSamhi/AndroLog}{\nolinkurl{github.com/JordanSamhi/AndroLog}}. Le dossier comprend les sources, un rapport HTML et une version macOS Apple Silicon avec Java. Le SDK Android est nécessaire pour instrumenter ou analyser un APK, mais pas pour ouvrir le rapport.
+AndroLog est libre sous \textbf{LGPL v2.1} : {\urlstyle{same}\href{https://github.com/JordanSamhi/AndroLog}{\nolinkurl{github.com/JordanSamhi/AndroLog}}}. Le dossier comprend les sources, un rapport HTML et une version macOS Apple Silicon avec Java. Le SDK Android est nécessaire pour instrumenter ou analyser un APK, mais pas pour ouvrir le rapport.
 
 Un outil d’assistance par IA a été utilisé pour la rédaction et l’amélioration de ce document. Les autres utilisations de l’IA sont précisées dans le guide.
+
+\bibliography{JordanSamhi/biblio}
