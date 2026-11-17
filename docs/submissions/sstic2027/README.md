@@ -5,6 +5,7 @@ Ce répertoire contient les sources du dossier de présentation d’un outil (15
 - `01-description-outil.md` : texte destiné au comité, une page en PDF.
 - `build_presentation.mjs` et `presentation-notes.md` : présentation complète, avec notes et scénario de démonstration.
 - `03-guide-evaluation.md` : évaluation, prérequis, limites et déclarations.
+- `04-prerequis.md` : prérequis logiciels et matériels pour l’utilisation d’AndroLog.
 - `formulaire.txt` : éléments à copier dans le portail ; la note privée finale n’est pas destinée au comité.
 - `password-demo/` : app pédagogique avec mot de passe fictif et protocole de reproduction.
 - `demo/` : ancien exemple de validation d’URL, conservé dans les sources.
@@ -14,6 +15,12 @@ Les PDF générés, la présentation PowerPoint, l’application emballée et le
 
 ```sh
 python3 docs/submissions/sstic2027/build_pdfs.py target/sstic2027/submission
+```
+
+Pour régénérer uniquement le document des prérequis à partir de sa source LaTeX :
+
+```sh
+python3 docs/submissions/sstic2027/build_pdfs.py target/sstic2027/submission 04-prerequis.md
 ```
 
 La présentation est construite avec `@oai/artifact-tool`. Exécuter `build_presentation.mjs` depuis la racine du dépôt avec ce module disponible ; le script lit les notes et les captures du dépôt et écrit un PowerPoint et ses aperçus dans `target/sstic2027/presentation-build/`.

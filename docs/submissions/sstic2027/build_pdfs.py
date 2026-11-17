@@ -18,8 +18,8 @@ pdfmetrics.registerFont(TTFont('ArialBold', '/System/Library/Fonts/Supplemental/
 pdfmetrics.registerFontFamily('Arial', normal='Arial', bold='ArialBold', italic='Arial', boldItalic='ArialBold')
 GREEN = colors.HexColor('#087b64'); INK = colors.HexColor('#1b3030'); MUTED = colors.HexColor('#637a74')
 
-def render_sstic_description():
-    """Keep the original Markdown for reference; the LaTeX source is authoritative."""
+def render_sstic_document(wrapper, output_name, bibliography=False):
+    """Build a document from its authoritative LaTeX source."""
     classes = Path(os.environ.get('SSTIC_TEMPLATE_DIR', HERE.parents[2] / 'target/sstic2027/source-latex-sstic'))
     for name in ('sstic.cls', 'llncs.cls'):
         if not (classes / name).is_file():
@@ -31,13 +31,14 @@ def render_sstic_description():
             shutil.copy2(classes / name, work / name)
         (work / '_build').mkdir()
         command = ['pdflatex', '-shell-escape', '-interaction=nonstopmode', '-halt-on-error',
-                   '-output-directory=_build', '01-description-outil.tex']
+                   '-output-directory=_build', wrapper]
         subprocess.run(command, cwd=work, check=True, stdout=subprocess.DEVNULL)
-        subprocess.run(['bibtex', '_build/01-description-outil'], cwd=work, check=True,
-                       stdout=subprocess.DEVNULL)
+        if bibliography:
+            subprocess.run(['bibtex', '_build/' + Path(wrapper).stem], cwd=work, check=True,
+                           stdout=subprocess.DEVNULL)
         for _ in range(2):
             subprocess.run(command, cwd=work, check=True, stdout=subprocess.DEVNULL)
-        shutil.copy2(work / '_build/01-description-outil.pdf', OUT / '01-description-outil.pdf')
+        shutil.copy2(work / '_build' / (Path(wrapper).stem + '.pdf'), OUT / output_name)
 
 def inline(s):
     s = html.escape(s)
@@ -48,7 +49,10 @@ def inline(s):
 def render(source):
     compact = source.name.startswith('01-')
     if source.name == '01-description-outil.md':
-        render_sstic_description()
+        render_sstic_document('01-description-outil.tex', '01-description-outil.pdf', bibliography=True)
+        return
+    if source.name == '04-prerequis.md':
+        render_sstic_document('04-prerequis.tex', '04-prerequis.pdf')
         return
     font = 10.1 if compact else 10.4
     leading = 13.7 if compact else 14.4
