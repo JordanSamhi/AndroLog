@@ -1,6 +1,6 @@
 # Source LaTeX : description d’AndroLog pour SSTIC 2027
 
-Le contenu figure dans `JordanSamhi/master.tex`, la bibliographie dans `JordanSamhi/biblio.bib` et le logo dans `JordanSamhi/img/`.
+Le contenu figure dans `JordanSamhi/master.tex`, la bibliographie dans `JordanSamhi/biblio.bib`.
 Le document utilise les classes officielles inchangées `sstic.cls` et `llncs.cls` du [template SSTIC](https://gitlab.com/sstic/author-template), commit `011dda9f21001167b2380096fa12d71815dcb012`.
 
 Pour compiler dans l’environnement officiel, copier le dossier `JordanSamhi` dans une copie du template et suivre son `README`. Depuis la racine de cette copie, avec Docker installé et démarré :
