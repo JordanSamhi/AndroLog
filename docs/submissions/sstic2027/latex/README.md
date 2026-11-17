@@ -1,6 +1,6 @@
 # Source LaTeX : description d’AndroLog pour SSTIC 2027
 
-Le contenu figure dans `JordanSamhi/master.tex`, la bibliographie dans `JordanSamhi/biblio.bib`.
+Le contenu figure dans `JordanSamhi/master.tex`, la bibliographie dans `JordanSamhi/biblio.bib` et le logo dans `JordanSamhi/img/`.
 Le document utilise les classes officielles inchangées `sstic.cls` et `llncs.cls` du [template SSTIC](https://gitlab.com/sstic/author-template), commit `011dda9f21001167b2380096fa12d71815dcb012`.
 
 Pour compiler dans l’environnement officiel, copier le dossier `JordanSamhi` dans une copie du template et suivre son `README`. Depuis la racine de cette copie, avec Docker installé et démarré :
@@ -24,3 +24,5 @@ pdflatex -shell-escape -interaction=nonstopmode -halt-on-error -output-directory
 Le fichier autonome précharge `minted2`, fourni avec TeX Live 2025, pour la compatibilité avec la classe SSTIC et son option `outputdir`. Le mode `frozencache` convient ici car le document ne contient pas de listing `minted`. La taille du titre est ajustée pour tenir sur une ligne ; le corps conserve la taille prévue par le modèle.
 
 Le script `build_pdfs.py` du dossier parent construit aussi la description à partir de cette source. Il cherche les classes dans `target/sstic2027/source-latex-sstic` par défaut ; la variable `SSTIC_TEMPLATE_DIR` peut indiquer une autre copie du template officiel.
+
+Le logo est placé dans le bloc auteur à la demande de l’auteur. Il ne suit donc pas la recommandation du README SSTIC de placer les images dans un environnement `figure` avec légende.
