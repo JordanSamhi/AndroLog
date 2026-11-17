@@ -8,7 +8,7 @@ AndroLog ne nécessite aucun logiciel payant ni matériel spécialisé.
 
 Pour instrumenter ou analyser un APK, AndroLog nécessite le **SDK Android**, avec une plateforme Android. L’instrumentation nécessite également les *Build Tools*, notamment `zipalign` et `apksigner`. Ces outils sont disponibles gratuitement ; leur utilisation est soumise aux conditions de licence du SDK Android.
 
-AndroLog nécessite aussi **Java 17 ou une version plus récente**, sauf si Java est déjà intégré à la version utilisée.
+AndroLog nécessite aussi **Java 17 ou une version plus récente**.
 
 ## Exécuter l’app et collecter les logs
 
@@ -16,6 +16,6 @@ Pour exécuter une app instrumentée et collecter de nouveaux logs, il faut un *
 
 ## Plateformes et consultation d’un rapport
 
-AndroLog est multiplateforme. Une version prête à l’emploi pour **macOS avec Apple Silicon**, intégrant Java, peut être fournie. Les sources permettent également de construire l’outil pour Windows et Linux ; la compilation nécessite notamment un JDK, Maven, Node.js et npm.
+AndroLog est multiplateforme. Les sources permettent de construire l’outil pour macOS, Windows et Linux ; la compilation nécessite notamment un JDK, Maven, Node.js et npm.
 
 Un rapport HTML déjà généré s’ouvre dans un navigateur web, sans SDK Android, appareil Android ou environnement Java.
