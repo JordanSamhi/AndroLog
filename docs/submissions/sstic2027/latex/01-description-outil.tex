@@ -1,0 +1,9 @@
+% Pour TeX Live 2025 : minted2 assure la compatibilité avec la classe SSTIC.
+% Ce document ne contient aucun listing minted ; frozencache évite de modifier
+% le chemin de sortie prévu pour l'image Docker officielle du SSTIC.
+\RequirePackage[outputdir=/SSTIC/_build,frozencache]{minted2}
+\documentclass{sstic}
+\begin{document}
+\selectlanguage{french}
+\input{JordanSamhi/master}
+\end{document}

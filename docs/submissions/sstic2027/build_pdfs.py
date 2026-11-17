@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Render the French SSTIC submission Markdown using ReportLab."""
+"""Build the SSTIC description with LaTeX and the other documents with ReportLab."""
 from pathlib import Path
-import re, sys, html
+import os, re, sys, html, shutil, subprocess, tempfile
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.lib.styles import ParagraphStyle
@@ -18,6 +18,24 @@ pdfmetrics.registerFont(TTFont('ArialBold', '/System/Library/Fonts/Supplemental/
 pdfmetrics.registerFontFamily('Arial', normal='Arial', bold='ArialBold', italic='Arial', boldItalic='ArialBold')
 GREEN = colors.HexColor('#087b64'); INK = colors.HexColor('#1b3030'); MUTED = colors.HexColor('#637a74')
 
+def render_sstic_description():
+    """Keep the original Markdown for reference; the LaTeX source is authoritative."""
+    classes = Path(os.environ.get('SSTIC_TEMPLATE_DIR', HERE.parents[2] / 'target/sstic2027/source-latex-sstic'))
+    for name in ('sstic.cls', 'llncs.cls'):
+        if not (classes / name).is_file():
+            raise SystemExit(f'Missing {name} in {classes}. Set SSTIC_TEMPLATE_DIR to the official SSTIC template.')
+    with tempfile.TemporaryDirectory(prefix='androlog-sstic-') as temp:
+        work = Path(temp)
+        shutil.copytree(HERE / 'latex', work, dirs_exist_ok=True)
+        for name in ('sstic.cls', 'llncs.cls'):
+            shutil.copy2(classes / name, work / name)
+        (work / '_build').mkdir()
+        command = ['pdflatex', '-shell-escape', '-interaction=nonstopmode', '-halt-on-error',
+                   '-output-directory=_build', '01-description-outil.tex']
+        for _ in range(2):
+            subprocess.run(command, cwd=work, check=True, stdout=subprocess.DEVNULL)
+        shutil.copy2(work / '_build/01-description-outil.pdf', OUT / '01-description-outil.pdf')
+
 def inline(s):
     s = html.escape(s)
     s = re.sub(r'\[([^\]]+)\]\((https?://[^)]+)\)', r'<link href="\2" color="#087b64">\1</link>', s)
@@ -26,6 +44,9 @@ def inline(s):
 
 def render(source):
     compact = source.name.startswith('01-')
+    if source.name == '01-description-outil.md':
+        render_sstic_description()
+        return
     font = 10.1 if compact else 10.4
     leading = 13.7 if compact else 14.4
     styles = {
