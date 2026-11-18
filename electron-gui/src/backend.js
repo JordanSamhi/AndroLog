@@ -12,7 +12,10 @@ const FLAGS = ['-c', '-m', '-s', '-cp', '-mc'];
 const TAG = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 const DEVICE = /^[^\s\x00-\x1f\x7f]{1,512}$/;
 const CAPTURE_CLASS = 'com.jordansamhi.androlog.DeviceCapture';
-const CAPTURE_STATES = new Set(['preparing', 'installing', 'launching', 'recording', 'stopping']);
+const CAPTURE_STATES = new Set(['preparing', 'installing', 'signature-conflict', 'launching', 'recording', 'stopping']);
+// This value comes from the APK manifest and is shown in a destructive-action
+// confirmation. Match the Java bridge's validated package-name character set.
+const CAPTURE_PACKAGE = /^[A-Za-z0-9_.$]{1,255}$/;
 const PACKAGE = /^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*\.?$/;
 const LOCAL_TYPES = new Set(['byte', 'short', 'int', 'long', 'float', 'double', 'boolean', 'java.lang.String']);
 
@@ -270,7 +273,7 @@ class Backend {
     if (!devices) throw new Error('The backend did not return a device list. Rebuild AndroLog and try again.');
     return devices;
   }
-  async capture(apk, settings, opts, sessionRoot) {
+  async capture(apk, settings, opts, sessionRoot, confirmUninstall) {
     if (this.active) throw new Error('Another operation is already running.');
     // Reserve before any await: cancelling during APK validation/copying must
     // prevent a later install, just as cancelling the Java process does.
@@ -296,7 +299,7 @@ class Backend {
       await fsp.writeFile(path.join(dir, 'session.json'), JSON.stringify({ apk: path.basename(session.apk), log: 'runtime.log', tag: opts.tag, device: opts.device, apkSha256: originalHash, startedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
       checkCancelled();
       this.emit({ type: 'log', text: `Saved session files: ${dir}\n` });
-      let recordingSeen = false;
+      let recordingSeen = false, conflictSeen = false, conflictPending = false;
       await this.run(settings, ['--platforms', settings.platforms, '--apk', session.apk, '--device', opts.device, '--tag', opts.tag, '--output', session.log], {
         mainClass: CAPTURE_CLASS, interactive: true, label: 'Testing on device', reservation: operation,
         onLine: line => {
@@ -304,6 +307,27 @@ class Backend {
           let update;
           try { update = JSON.parse(line.slice('@@ANDROLOG_CAPTURE '.length)); } catch { throw new Error('The backend returned an invalid capture status.'); }
           if (!update || !CAPTURE_STATES.has(update.state)) throw new Error('The backend returned an invalid capture status.');
+          if (update.state === 'signature-conflict') {
+            if (conflictSeen || operation.state !== 'installing' || typeof update.packageName !== 'string' || !CAPTURE_PACKAGE.test(update.packageName)) {
+              throw new Error('The backend returned an invalid capture status.');
+            }
+            conflictSeen = true; conflictPending = true; operation.state = update.state;
+            this.emit({ type: 'capture', state: update.state, packageName: update.packageName, ...session });
+            const child = operation.child;
+            Promise.resolve().then(() => {
+              if (this.active !== operation || operation.cancelled || operation.failure) return false;
+              return typeof confirmUninstall === 'function' ? confirmUninstall({ packageName: update.packageName, device: opts.device }) : false;
+            }).catch(() => false).then(confirmed => {
+              // The dialog can outlive a cancelled operation. A late response
+              // must never authorize or write to a new capture process.
+              if (this.active !== operation || operation.child !== child || operation.cancelled || operation.failure || !conflictPending || !child || child.exitCode !== null || child.signalCode !== null || !child.stdin?.writable) return;
+              conflictPending = false;
+              try { child.stdin.write(confirmed === true ? 'uninstall\n' : 'cancel\n'); }
+              catch (error) { operation.failure = new Error(`Cannot respond to device installation conflict: ${error.message}`); this.cancel(); }
+            });
+            return;
+          }
+          if (conflictPending) throw new Error('The backend returned an invalid capture status.');
           operation.state = update.state;
           if (update.state === 'recording') recordingSeen = true;
           this.emit({ type: 'capture', state: update.state, ...session });

@@ -70,6 +70,89 @@ public class DeviceCaptureTest {
         assertFalse(commands.contains("force-stop"));
     }
 
+    @Test public void approvedSignatureConflictUninstallsOnlyTheTargetThenRetriesAndCaptures() throws Exception {
+        Path root = temporary.newFolder("approved-conflict").toPath();
+        Files.createFile(root.resolve("conflict-until-removed"));
+        ByteArrayOutputStream progress = new ByteArrayOutputStream();
+        capture(root, control("uninstall\n\n"), progress);
+        String states = progress.toString("UTF-8");
+        assertTrue(states.contains("\"state\":\"signature-conflict\""));
+        assertTrue(states.contains("\"packageName\":\"example.app\""));
+        assertTrue(states.contains("\"state\":\"recording\""));
+        List<String> commands = Files.readAllLines(root.resolve("commands"), StandardCharsets.UTF_8);
+        int firstInstall = findCommand(commands, "install|-r|", 0);
+        int uninstall = findCommand(commands, "uninstall|example.app", firstInstall + 1);
+        int secondInstall = findCommand(commands, "install|-r|", uninstall + 1);
+        assertTrue(firstInstall >= 0 && uninstall > firstInstall && secondInstall > uninstall);
+        assertEquals(1, commands.stream().filter(command -> command.startsWith("uninstall|")).count());
+        assertEquals(commands.get(firstInstall), commands.get(secondInstall));
+        List<String> targeted = Files.readAllLines(root.resolve("targeted-commands"), StandardCharsets.UTF_8);
+        assertTrue(targeted.contains("emulator-5554|uninstall|example.app"));
+        assertTrue(targeted.stream().allMatch(command -> command.startsWith("emulator-5554|")));
+        assertTrue(read(root.resolve("runtime.log")).contains("CLASS=launcher"));
+    }
+
+    @Test public void nonzeroSignatureConflictAlsoRequiresApprovalAndRetries() throws Exception {
+        Path root = temporary.newFolder("nonzero-conflict").toPath();
+        Files.createFile(root.resolve("conflict-until-removed"));
+        Files.createFile(root.resolve("nonzero-install"));
+        capture(root, control("uninstall\n\n"), new ByteArrayOutputStream());
+        assertTrue(read(root.resolve("commands")).contains("uninstall|example.app"));
+        assertTrue(read(root.resolve("runtime.log")).contains("CLASS=launcher"));
+    }
+
+    @Test public void refusingOrClosingTheControllerNeverRemovesTheExistingApp() throws Exception {
+        for (String decision : Arrays.asList("cancel\n", "yes\n", "uninstall", "", String.join("", Collections.nCopies(6, "uninstall ")) + "\n")) {
+            Path root = temporary.newFolder().toPath();
+            Files.createFile(root.resolve("conflict-until-removed"));
+            ByteArrayOutputStream progress = new ByteArrayOutputStream();
+            assertFailure(() -> capture(root, control(decision), progress), "existing app was not removed");
+            assertTrue(progress.toString("UTF-8").contains("\"state\":\"signature-conflict\""));
+            assertFalse(read(root.resolve("commands")).contains("uninstall|"));
+            assertFalse(Files.exists(root.resolve("runtime.log")));
+        }
+    }
+
+    @Test public void unrelatedInstallErrorsDoNotRequestOrTriggerRemoval() throws Exception {
+        Path root = temporary.newFolder("unrelated-failure").toPath();
+        Files.createFile(root.resolve("fail-unrelated-install"));
+        ByteArrayOutputStream progress = new ByteArrayOutputStream();
+        assertFailure(() -> capture(root, control("uninstall\n"), progress), "INSTALL_FAILED_VERSION_DOWNGRADE");
+        assertFalse(progress.toString("UTF-8").contains("signature-conflict"));
+        assertFalse(read(root.resolve("commands")).contains("uninstall|"));
+    }
+
+    @Test public void conflictCodeInAnUnrelatedApkPathIsNotASignatureFailure() throws Exception {
+        Path root = temporary.newFolder("marker-in-path").toPath();
+        Files.createFile(root.resolve("marker-in-path"));
+        ByteArrayOutputStream progress = new ByteArrayOutputStream();
+        assertFailure(() -> capture(root, control("uninstall\n"), progress), "INSTALL_FAILED_VERSION_DOWNGRADE");
+        assertFalse(progress.toString("UTF-8").contains("signature-conflict"));
+        assertFalse(read(root.resolve("commands")).contains("uninstall|"));
+    }
+
+    @Test public void removalFailureDoesNotRetryInstallation() throws Exception {
+        Path root = temporary.newFolder("uninstall-failure").toPath();
+        Files.createFile(root.resolve("conflict-until-removed"));
+        Files.createFile(root.resolve("fail-uninstall"));
+        assertFailure(() -> capture(root, control("uninstall\n"), new ByteArrayOutputStream()), "did not confirm removal");
+        List<String> commands = Files.readAllLines(root.resolve("commands"), StandardCharsets.UTF_8);
+        assertEquals(1, commands.stream().filter(command -> command.startsWith("install|-r|")).count());
+        assertEquals(1, commands.stream().filter(command -> command.startsWith("uninstall|")).count());
+        assertFalse(Files.exists(root.resolve("runtime.log")));
+    }
+
+    @Test public void retryFailureDoesNotRemoveAgainOrLaunch() throws Exception {
+        Path root = temporary.newFolder("retry-failure").toPath();
+        Files.createFile(root.resolve("conflict-until-removed"));
+        Files.createFile(root.resolve("fail-retry"));
+        assertFailure(() -> capture(root, control("uninstall\n"), new ByteArrayOutputStream()), "after removing the existing app");
+        List<String> commands = Files.readAllLines(root.resolve("commands"), StandardCharsets.UTF_8);
+        assertEquals(2, commands.stream().filter(command -> command.startsWith("install|-r|")).count());
+        assertEquals(1, commands.stream().filter(command -> command.startsWith("uninstall|")).count());
+        assertFalse(commands.stream().anyMatch(command -> command.contains("force-stop")));
+    }
+
     @Test public void controllerClosureIsAnAbortAndPreservesThePartialCapture() throws Exception {
         Path root = temporary.newFolder("controller-closed").toPath();
         ByteArrayOutputStream progress = new ByteArrayOutputStream();
@@ -112,7 +195,7 @@ public class DeviceCaptureTest {
         Path apk = root.resolve("instrumented with spaces.apk");
         Files.write(apk, new byte[]{1});
         List<String> command = new ArrayList<>(Arrays.asList(Paths.get(System.getProperty("java.home"), "bin", "java").toString(),
-                "-cp", System.getProperty("java.class.path"), FakeAdb.class.getName(), root.toString()));
+                "-cp", System.getProperty("java.class.path"), FakeAdb.class.getName(), root.toString(), "-s", "emulator-5554"));
         LauncherActivities.LaunchTarget launcher = new LauncherActivities.LaunchTarget("example.app", "example.app.Main$Entry", "example.app.Main$Entry", "android.intent.category.LAUNCHER");
         try (CaptureProcesses processes = new CaptureProcesses(System.err, root)) {
             DeviceCapture.capture(processes, command, launcher, apk, "TEST", root.resolve("runtime.log"), input, new PrintStream(progress, true, "UTF-8"));
@@ -120,6 +203,11 @@ public class DeviceCaptureTest {
     }
 
     private static String read(Path file) throws IOException { return new String(Files.readAllBytes(file), StandardCharsets.UTF_8); }
+    private static InputStream control(String commands) { return new ByteArrayInputStream(commands.getBytes(StandardCharsets.UTF_8)); }
+    private static int findCommand(List<String> commands, String prefix, int from) {
+        for (int index = from; index < commands.size(); index++) if (commands.get(index).startsWith(prefix)) return index;
+        return -1;
+    }
     private static void append(Path root, String line) throws IOException {
         Files.write(root.resolve("bus"), (line + "\n").getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
@@ -134,12 +222,34 @@ public class DeviceCaptureTest {
         public static void main(String[] arguments) throws Exception {
             Path root = Paths.get(arguments[0]);
             String[] args = Arrays.copyOfRange(arguments, 1, arguments.length);
+            String device = "";
+            if (args.length >= 2 && "-s".equals(args[0])) {
+                device = args[1];
+                args = Arrays.copyOfRange(args, 2, args.length);
+            }
             for (int i = 0; i < args.length; i++) {
                 if (args[i].startsWith("'") && args[i].endsWith("'")) args[i] = args[i].substring(1, args[i].length() - 1);
             }
             Files.write(root.resolve("commands"), (String.join("|", args) + "\n").getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            Files.write(root.resolve("targeted-commands"), (device + "|" + String.join("|", args) + "\n").getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             if ("install".equals(args[0])) {
-                System.out.println(Files.exists(root.resolve("fail-install")) ? "Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]" : "Success");
+                if (Files.exists(root.resolve("marker-in-path"))) {
+                    System.out.println("adb: failed to install /tmp/INSTALL_FAILED_UPDATE_INCOMPATIBLE.apk: Failure [INSTALL_FAILED_VERSION_DOWNGRADE]");
+                } else if (Files.exists(root.resolve("fail-unrelated-install"))) {
+                    System.out.println("Failure [INSTALL_FAILED_VERSION_DOWNGRADE]");
+                } else if (Files.exists(root.resolve("fail-install"))) {
+                    // Existing test exercises a generic installation failure.
+                    System.out.println("Failure [INSTALL_FAILED_INVALID_APK]");
+                } else if (Files.exists(root.resolve("conflict-until-removed"))
+                        && (!Files.exists(root.resolve("uninstalled")) || Files.exists(root.resolve("fail-retry")))) {
+                    System.out.println("Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures differ]");
+                    if (Files.exists(root.resolve("nonzero-install"))) System.exit(1);
+                } else System.out.println("Success");
+                return;
+            }
+            if ("uninstall".equals(args[0])) {
+                if (Files.exists(root.resolve("fail-uninstall"))) System.out.println("Failure [DELETE_FAILED_INTERNAL_ERROR]");
+                else { Files.createFile(root.resolve("uninstalled")); System.out.println("Success"); }
                 return;
             }
             if ("shell".equals(args[0])) {

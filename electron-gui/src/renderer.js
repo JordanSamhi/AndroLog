@@ -285,6 +285,7 @@
     const labels = {
       preparing: ['Preparing your test', 'Connecting to your device…'],
       installing: ['Installing the APK', 'Your instrumented app is being installed.'],
+      'signature-conflict': ['App signing conflict', 'Choose whether to remove the existing app and retry.'],
       launching: ['Opening your app', 'Starting the app and its log recording…'],
       recording: ['Recording', 'Use the app on your device. Stop when you are ready to see coverage.'],
       stopping: ['Finishing the recording', 'Saving the last logs before analysis…'],

@@ -162,3 +162,105 @@ test('cancel immediately after capture is requested is retained across validatio
   assert.equal(f.events.some(event => event.type === 'start'), false);
   await assert.rejects(fs.stat(f.root), { code: 'ENOENT' });
 });
+
+const conflict = `
+console.log('@@ANDROLOG_CAPTURE ' + JSON.stringify({state:'installing'}));
+console.log('@@ANDROLOG_CAPTURE ' + JSON.stringify({state:'signature-conflict', packageName:'com.example.app'}));
+let buffer = '', replied = false;
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => {
+  buffer += chunk;
+  while (buffer.includes('\\n')) {
+    const i = buffer.indexOf('\\n'), command = buffer.slice(0, i); buffer = buffer.slice(i + 1);
+    if (!replied) {
+      replied = true;
+      fs.writeFileSync(arg('--output') + '.response', command);
+      if (command !== 'uninstall') { console.error('Error: Installation cancelled'); process.exit(1); }
+      fs.writeFileSync(arg('--output'), 'captured log');
+      console.log('@@ANDROLOG_CAPTURE ' + JSON.stringify({state:'installing'}));
+      console.log('@@ANDROLOG_CAPTURE ' + JSON.stringify({state:'recording'}));
+    } else {
+      console.log('@@ANDROLOG_CAPTURE ' + JSON.stringify({state:'stopping'}));
+      process.exit(0);
+    }
+  }
+});
+process.stdin.resume();`;
+
+test('an explicitly approved signing conflict resumes only the same device capture', processTest, async t => {
+  const f = await fixture(t, conflict); const confirmations = [];
+  const capture = f.backend.capture(f.apk, f.settings, { device: 'emulator-5554', tag: 'TEST' }, f.root,
+    async info => { confirmations.push(info); return true; });
+  const update = await f.until('signature-conflict');
+  assert.equal(update.packageName, 'com.example.app');
+  await f.until('recording');
+  assert.deepEqual(confirmations, [{ packageName: 'com.example.app', device: 'emulator-5554' }]);
+  assert.equal(await fs.readFile(update.log + '.response', 'utf8'), 'uninstall');
+  await f.backend.stopCapture();
+  assert.equal((await capture).apk, update.apk);
+});
+
+for (const [label, confirmation] of [['declined', async () => false], ['unavailable', undefined], ['rejected', async () => { throw new Error('Controller unavailable'); }], ['not explicitly approved', async () => 'yes']]) {
+  test(`${label} signing-conflict confirmation never sends an uninstall command`, processTest, async t => {
+    const f = await fixture(t, conflict);
+    const capturing = f.backend.capture(f.apk, f.settings, { device: 'phone-1', tag: 'TEST' }, f.root, confirmation);
+    const rejected = assert.rejects(capturing, /Installation cancelled.*Saved session files:/);
+    const update = await f.until('signature-conflict'); await rejected;
+    assert.equal(await fs.readFile(update.log + '.response', 'utf8'), 'cancel');
+    assert.equal(await fs.readFile(update.apk, 'utf8'), 'original instrumented bytes');
+    assert.equal(f.events.some(event => event.state === 'recording'), false);
+  });
+}
+
+test('a confirmation received after cancellation cannot authorize an uninstall', processTest, async t => {
+  const f = await fixture(t, conflict);
+  let accept, notified;
+  const requested = new Promise(resolve => { notified = resolve; });
+  const capture = f.backend.capture(f.apk, f.settings, { device: 'phone-1', tag: 'TEST' }, f.root,
+    () => { notified(); return new Promise(resolve => { accept = resolve; }); });
+  const rejected = assert.rejects(capture, /Operation cancelled.*Saved session files:/);
+  const update = await f.until('signature-conflict'); await requested;
+  f.backend.cancel(); await rejected;
+  accept(true); await new Promise(resolve => setTimeout(resolve, 30));
+  await assert.rejects(fs.stat(update.log + '.response'), { code: 'ENOENT' });
+  assert.equal(f.backend.active, null);
+});
+
+for (const [label, script] of [
+  ['out-of-order', `console.log('@@ANDROLOG_CAPTURE {"state":"signature-conflict","packageName":"com.example.app"}'); setInterval(() => {}, 100);`],
+  ['invalid package', `console.log('@@ANDROLOG_CAPTURE {"state":"installing"}'); console.log('@@ANDROLOG_CAPTURE {"state":"signature-conflict","packageName":"com.example;evil"}'); setInterval(() => {}, 100);`]
+]) {
+  test(`${label} signing-conflict event fails safely`, processTest, async t => {
+    const f = await fixture(t, script); let confirmations = 0;
+    await assert.rejects(f.backend.capture(f.apk, f.settings, { device: 'phone', tag: 'TEST' }, f.root,
+      async () => { confirmations++; return true; }), /invalid capture status.*Saved session files:/);
+    assert.equal(confirmations, 0);
+    assert.equal(f.backend.active, null);
+  });
+}
+
+test('duplicate conflict events invalidate a pending confirmation', processTest, async t => {
+  const f = await fixture(t, `
+console.log('@@ANDROLOG_CAPTURE {"state":"installing"}');
+console.log('@@ANDROLOG_CAPTURE {"state":"signature-conflict","packageName":"com.example.app"}');
+process.stdin.on('data', chunk => fs.writeFileSync(arg('--output') + '.response', chunk));
+setTimeout(() => console.log('@@ANDROLOG_CAPTURE {"state":"signature-conflict","packageName":"com.example.app"}'), 30);
+setInterval(() => {}, 100);`);
+  let accept, prompts = 0;
+  const capture = f.backend.capture(f.apk, f.settings, { device: 'phone', tag: 'TEST' }, f.root,
+    () => { prompts++; return new Promise(resolve => { accept = resolve; }); });
+  const failure = assert.rejects(capture, /invalid capture status.*Saved session files:/);
+  const update = await f.until('signature-conflict'); await failure;
+  assert.ok(prompts <= 1);
+  if (accept) accept(true);
+  await new Promise(resolve => setTimeout(resolve, 30));
+  await assert.rejects(fs.stat(update.log + '.response'), { code: 'ENOENT' });
+});
+
+test('unrelated installation failures never request uninstall confirmation', processTest, async t => {
+  const f = await fixture(t, `console.log('@@ANDROLOG_CAPTURE {"state":"installing"}'); console.error('Error: INSTALL_FAILED_INSUFFICIENT_STORAGE'); process.exit(1);`);
+  let confirmations = 0;
+  await assert.rejects(f.backend.capture(f.apk, f.settings, { device: 'phone', tag: 'TEST' }, f.root,
+    async () => { confirmations++; return true; }), /INSUFFICIENT_STORAGE.*Saved session files:/);
+  assert.equal(confirmations, 0);
+});

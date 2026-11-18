@@ -923,3 +923,20 @@ test('reset ignores a late class response from the previous session', async t =>
   assert.match(doc.getElementById('code-lines').textContent, /Your class code will appear here/);
   assert.equal(doc.querySelectorAll('.code-line').length, 0);
 });
+
+test('device progress explains a signing conflict while waiting for the confirmation', async t => {
+  let update, fail;
+  const { dom, doc } = createUi({
+    onUpdate: callback => { update = callback; },
+    startDeviceTest: () => new Promise((_resolve, reject) => { fail = reject; })
+  });
+  t.after(() => dom.window.close()); await instrumentForDevice(doc);
+  doc.getElementById('device-start').click(); await tick();
+  update({ type: 'capture', state: 'signature-conflict', packageName: 'org.example.demo' });
+  assert.match(doc.getElementById('device-status').textContent, /signing conflict/i);
+  assert.match(doc.getElementById('device-guidance').textContent, /remove the existing app and retry/i);
+  assert.equal(doc.getElementById('device-stop').disabled, true);
+  fail(new Error('Installation cancelled.')); await tick();
+  assert.match(doc.getElementById('device-error').textContent, /cancelled/);
+  assert.equal(doc.getElementById('device-start').hidden, false);
+});

@@ -63,8 +63,7 @@ public final class DeviceCapture {
     static void capture(CaptureProcesses processes, List<String> adb, LauncherActivities.LaunchTarget launcher,
                         Path apk, String tag, Path log, InputStream input, PrintStream out) throws Exception {
         state(out, "installing");
-        String installed = processes.run(CaptureWorkflow.adb(adb, "install", "-r", apk.toString()), 180, null);
-        if (!installed.matches("(?s).*\\bSuccess\\b.*")) throw new IOException("ADB did not confirm installation: " + installed.trim());
+        install(processes, adb, launcher, apk, input, out);
         processes.run(CaptureWorkflow.adb(adb, "shell", "am", "force-stop", launcher.packageName), 15, null);
         try (AdbLogCapture capture = new AdbLogCapture(processes, adb, tag, log)) {
             capture.awaitReady();
@@ -77,6 +76,70 @@ public final class DeviceCapture {
             state(out, "stopping");
             capture.finish();
         }
+    }
+
+    private static void install(CaptureProcesses processes, List<String> adb, LauncherActivities.LaunchTarget launcher,
+                                Path apk, InputStream input, PrintStream out) throws Exception {
+        String installed;
+        try {
+            installed = processes.run(CaptureWorkflow.adb(adb, "install", "-r", apk.toString()), 180, null);
+        } catch (IOException error) {
+            // A non-zero adb exit includes the executable on the first line and
+            // its output after the newline. Only the output is evidence of a conflict.
+            String message = error.getMessage();
+            int output = message == null ? -1 : message.indexOf('\n');
+            if (output < 0 || !signatureConflict(message.substring(output + 1))) throw error;
+            installed = null;
+        }
+        if (installed != null && !signatureConflict(installed)) {
+            if (!installed.matches("(?s).*\\bSuccess\\b.*")) throw new IOException("ADB did not confirm installation: " + installed.trim());
+            return;
+        }
+
+        Map<String, String> conflict = new LinkedHashMap<>();
+        conflict.put("state", "signature-conflict");
+        conflict.put("packageName", launcher.packageName);
+        out.println("@@ANDROLOG_CAPTURE " + JSON.toJson(conflict));
+        out.flush();
+        if (!"uninstall".equals(readDecision(input))) {
+            throw new IOException("Installation cancelled; the existing app was not removed.");
+        }
+
+        String uninstalled = processes.run(CaptureWorkflow.adb(adb, "uninstall", launcher.packageName), 180, null);
+        if (!uninstalled.matches("(?m)^Success\\s*$")) {
+            throw new IOException("ADB did not confirm removal of the existing app: " + uninstalled.trim());
+        }
+        state(out, "installing");
+        // Retry only once; a second failure must never cause another removal.
+        String retry = processes.run(CaptureWorkflow.adb(adb, "install", "-r", apk.toString()), 180, null);
+        if (signatureConflict(retry) || !retry.matches("(?s).*\\bSuccess\\b.*")) {
+            throw new IOException("ADB did not confirm installation after removing the existing app: " + retry.trim());
+        }
+    }
+
+    private static boolean signatureConflict(String output) {
+        // Match the adb failure code, not a coincidental token in an APK path
+        // or another diagnostic. A bare code line is accepted as well.
+        return output != null && java.util.regex.Pattern.compile(
+                "(?m)(?:\\bFailure\\s*\\[|^\\s*)INSTALL_FAILED_UPDATE_INCOMPATIBLE(?=[:\\]\\s]|$)")
+                .matcher(output).find();
+    }
+
+    private static String readDecision(InputStream input) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        while (bytes.size() <= 32) {
+            int next = input.read();
+            if (next < 0) return ""; // EOF is never authorization, even after a partial command.
+            if (next == '\n') {
+                byte[] line = bytes.toByteArray();
+                int length = line.length;
+                if (length > 0 && line[length - 1] == '\r') length--;
+                return new String(line, 0, length, java.nio.charset.StandardCharsets.US_ASCII);
+            }
+            if (next > 127) return "";
+            bytes.write(next);
+        }
+        return "";
     }
 
     private static void waitForStop(AdbLogCapture capture, InputStream input) throws Exception {

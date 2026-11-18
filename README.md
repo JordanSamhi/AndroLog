@@ -59,6 +59,8 @@ The code browser shows Jimple reconstructed from the APK. Messages and selected 
 
 Click **Test on device**, choose a connected Android phone or emulator, and click **Start test**. AndroLog installs your instrumented APK, starts recording, and launches the app. Exercise it, then click **Stop & analyze** to open Coverage automatically. Enable USB debugging and authorize the computer when using a physical device.
 
+If an existing app has a conflicting signing key, AndroLog offers to remove it and retry installation. Removing an app also deletes its data; you must confirm before AndroLog removes it.
+
 [![Test on device recording an emulator run, with an elapsed timer and Stop & analyze button](data/screenshots/gui-device-test.png)](data/screenshots/gui-device-test.png)
 
 Each test keeps the exact APK and its logs together. You can also use the commands under **Run your app** after saving, or the CLI's [`--capture` option](docs/cli.md#automatic-capture).

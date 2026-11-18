@@ -37,9 +37,9 @@ async function mainFixture(t) {
       return { dir: workspace, html: path.join(workspace, 'report.html'), report: { instrumentedInput: true, coverageSummary: {}, custom: { summary: { points: [] } } } };
     }
     async listDevices() { return [{ serial: 'emulator-5554', name: 'Pixel', state: 'device' }]; }
-    async capture(apk, settings, options, root) {
+    async capture(apk, settings, options, root, confirmUninstall) {
       calls.push({ capture: apk, options, root });
-      if (controls.capture) return controls.capture(apk, options, root);
+      if (controls.capture) return controls.capture(apk, options, root, confirmUninstall);
       return { dir: root, apk: path.join(root, 'tested.apk'), log: path.join(root, 'runtime.log'), tag: options.tag };
     }
     async stopCapture() { calls.push({ stopCapture: true }); }
@@ -51,7 +51,7 @@ async function mainFixture(t) {
     dialog: {
       showOpenDialog: async () => ({ canceled: false, filePaths: [files.shift()] }),
       showSaveDialog: async () => ({ canceled: false, filePath: saves.shift() }),
-      showMessageBox: async () => ({ response: controls.confirmResponse ?? 1 })
+      showMessageBox: async (_window, options) => { (controls.dialogs ||= []).push(options); return { response: controls.confirmResponse ?? 1 }; }
     },
     BrowserWindow: class {
       constructor() { window = this; this.webContents = { mainFrame: {}, setWindowOpenHandler() {}, on() {} }; }
@@ -191,4 +191,27 @@ test('lazy code requests use the selected original APK and do not lock navigatio
   assert.equal(controls.browserCloses, closes + 1);
   files.push(path.join(dir, 'next.apk')); await invoke('select:apk');
   assert.equal(controls.browserCloses, closes + 2);
+});
+
+test('signature conflict asks about the exact app and device and defaults to cancel', async t => {
+  const { dir, files, controls, invoke } = await mainFixture(t);
+  files.push(path.join(dir, 'original.apk')); await invoke('select:apk');
+  await invoke('apk:instrument', { tag: 'TEST' }, null);
+  let accepted;
+  controls.capture = async (_apk, _options, root, confirmUninstall) => {
+    accepted = await confirmUninstall({ packageName: 'org.example.demo', device: 'emulator-5554' });
+    return { apk: path.join(root, 'tested.apk'), log: path.join(root, 'runtime.log'), tag: 'TEST' };
+  };
+  controls.confirmResponse = 0;
+  await invoke('device:start', { device: 'emulator-5554' });
+  assert.equal(accepted, false);
+  const prompt = controls.dialogs.at(-1);
+  assert.match(prompt.message, /org\.example\.demo/);
+  assert.match(prompt.message, /emulator-5554/);
+  assert.match(prompt.detail, /permanently delete the app and all of its data/);
+  assert.equal(prompt.defaultId, 0); assert.equal(prompt.cancelId, 0);
+  assert.equal(prompt.buttons[0], 'Cancel');
+  controls.confirmResponse = 1;
+  await invoke('device:start', { device: 'emulator-5554' });
+  assert.equal(accepted, true);
 });

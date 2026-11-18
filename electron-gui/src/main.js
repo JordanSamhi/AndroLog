@@ -136,7 +136,16 @@ function registerHandlers() {
     await backend.closeCodeBrowser();
     capturing = true;
     try {
-      const captured = await backend.capture(result.output, settings, { device: opts.device, tag: result.tag }, path.join(app.getPath('userData'), 'captures'));
+      const confirmUninstall = async ({ packageName, device }) => {
+        const { response } = await dialog.showMessageBox(window, {
+          type: 'warning', title: 'App signing conflict',
+          message: `Remove ${packageName} from ${device}?`,
+          detail: 'The installed app uses a different signing key. Removing it will permanently delete the app and all of its data on this device. AndroLog will then install the instrumented APK.',
+          buttons: ['Cancel', 'Remove app and retry'], defaultId: 0, cancelId: 0, noLink: true
+        });
+        return response === 1;
+      };
+      const captured = await backend.capture(result.output, settings, { device: opts.device, tag: result.tag }, path.join(app.getPath('userData'), 'captures'), confirmUninstall);
       // This persistent session owns the exact APK installed on the device and its log.
       // It must survive temporary report cleanup and subsequent instrumentations.
       selectedCoverageApk = captured.apk; selectedLog = captured.log;
