@@ -45,14 +45,14 @@
     drawMetrics(null); renderCustomLogs(null);
   }
   function setBusy(busy, kind = '') {
-    state.busy = busy; state.stageKind = kind; document.body.classList.toggle('busy', busy); $('operation-panel').hidden = !busy || kind === 'capture';
+    state.busy = busy; state.stageKind = kind; document.body.classList.toggle('busy', busy); $('operation-panel').hidden = !busy || kind === 'capture' || kind === 'reset';
     if (busy && kind === 'instrument') window.andrologAnimation?.setStage(0, true);
     $('analysis-progress').hidden = !(busy && kind === 'coverage');
     window.andrologAnimation?.setAnalysis?.(0, busy && kind === 'coverage');
     if (busy && kind === 'coverage') { $('analysis-title').textContent = 'Preparing analysis'; $('analysis-description').textContent = 'Reading the APK and runtime log…'; document.querySelectorAll('.analysis-stage i').forEach(el => el.classList.remove('done')); }
     $('cancel-coverage').hidden = !(busy && kind === 'coverage');
     $('analyze').textContent = busy && kind === 'coverage' ? 'Analyzing…' : 'Analyze run →';
-    for (const id of ['choose-apk','coverage-choose-apk','choose-log','open-custom','instrument','save-apk','test-device','analyze','settings-save','save-report','report-export','preset-essentials','preset-all','preset-custom']) $(id).disabled = busy;
+    for (const id of ['reset-workspace','choose-apk','coverage-choose-apk','choose-log','open-custom','instrument','save-apk','test-device','analyze','settings-save','save-report','report-export','preset-essentials','preset-all','preset-custom']) $(id).disabled = busy;
     document.querySelectorAll('.custom-point-link').forEach(el => { el.disabled = busy; });
     document.querySelectorAll('[data-probe], #log-tag, #coverage-tag, #package-prefix, #exclude-libraries, [data-setting]').forEach(el => { el.disabled = busy; });
     if (!busy) updateAvailability();
@@ -85,6 +85,40 @@
   $('cancel-operation').addEventListener('click', () => { api.cancel(); $('operation-description').textContent = 'Stopping the current operation…'; });
   $('cancel-coverage').addEventListener('click', () => { api.cancel(); $('analyze').textContent = 'Stopping…'; });
   $('details-open').addEventListener('click', () => $('log-dialog').showModal()); $('details-close').addEventListener('click', () => $('log-dialog').close());
+  $('reset-workspace').addEventListener('click', async () => {
+    if (state.busy || deviceTest.loading || deviceTest.active) return;
+    setBusy(true, 'reset');
+    try {
+      if (!(await api.resetSession())) return;
+      state.apk = null; state.coverageApk = null; state.log = null; state.catalog = null;
+      state.points.clear(); state.draft.clear(); state.selected = null; state.selectedClass = null;
+      state.openPackages.clear(); state.openClasses.clear(); editorDrafts.clear();
+      state.result = false; state.instrumentTag = null; state.instrumentProbes = []; state.logText = '';
+      state.reportGeneration++; codeBrowser.view++; codeBrowser.classRequest++;
+      codeBrowser.classLoads.clear(); codeBrowser.variableLoads.clear(); variableSelection = null;
+      $('apk-name').textContent = 'Start with an APK'; $('apk-path').textContent = 'Choose the original app you want to instrument.'; $('apk-path').removeAttribute('title');
+      $('choose-apk').innerHTML = 'Choose APK <span>↗</span>';
+      $('coverage-apk').textContent = 'No APK selected'; $('coverage-apk').removeAttribute('title');
+      $('log-name').textContent = 'No log selected'; $('log-name').removeAttribute('title');
+      for (const id of ['log-tag', 'coverage-tag', 'package-prefix']) $(id).value = $(id).defaultValue;
+      $('exclude-libraries').checked = $('exclude-libraries').defaultChecked;
+      document.querySelectorAll('[data-probe]').forEach(input => { input.checked = input.defaultChecked; });
+      document.querySelector('.advanced').open = false;
+      $('custom-count').textContent = 'Track a statement, message or variable';
+      $('save-apk').hidden = true; $('test-device').hidden = true; $('next-steps').hidden = true;
+      $('install-command').textContent = ''; $('logcat-command').textContent = ''; $('next-coverage').textContent = '';
+      $('action-title').textContent = 'Ready to instrument'; $('action-description').textContent = 'Your original APK stays unchanged.';
+      $('operation-log').textContent = ''; $('classes').replaceChildren(); $('class-search').value = ''; $('code-class').textContent = 'Choose a class';
+      $('point-message').value = ''; $('point-label').textContent = 'Select a statement'; $('point-label').removeAttribute('title');
+      $('point-message').disabled = true; $('remove-point').disabled = true; updateVariables();
+      $('code-lines').innerHTML = '<div class="empty-code">Your class code will appear here.</div>';
+      $('dialog-count').textContent = 'No log points selected';
+      for (const id of ['code-dialog', 'device-dialog', 'log-dialog']) if ($(id).open) $(id).close();
+      clearTimeout(toastTimer); $('toast').hidden = true; clearReport();
+      window.andrologAnimation?.setStage(0, true); window.andrologAnimation?.setAnalysis?.(0, false);
+    } catch (error) { toast(error.message || String(error), true); }
+    finally { setBusy(false); }
+  });
   async function chooseApk() {
     try {
       const selected = await api.chooseApk(); if (!selected) return;

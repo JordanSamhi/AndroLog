@@ -18,7 +18,7 @@ function createUi(overrides = {}) {
   const api = {
     settings: async () => ({ platforms: '/sdk/platforms', buildTools: '/sdk/build-tools/36', andrologVersion: '0.1', appVersion: '0.1.3' }),
     chooseApk: async () => '/apps/original.apk', chooseCoverageApk: async () => '/apps/instrumented.apk', chooseLog: async () => '/logs/runtime.log',
-    chooseSetting: async () => null, saveSettings: async value => value, cancel: async () => {}, onUpdate: () => {},
+    chooseSetting: async () => null, saveSettings: async value => value, resetSession: async () => true, cancel: async () => {}, onUpdate: () => {},
     listDevices: async () => [{ serial: 'emulator-5554', name: 'Pixel', state: 'device' }], stopDeviceTest: async () => {},
     inspectCode: async () => ({ apkSha256: 'a'.repeat(64), methods: [{ className: 'org.example.Main', signature: '<org.example.Main: void run()>', statements: [{ index: 1, text: 'return', selectable: true }] }] }),
     instrument: async (opts, plan) => { calls.push({ opts, plan }); return { name: 'original.apk' }; },
@@ -846,4 +846,80 @@ test('coverage separates internal reach points, custom strings, and variable val
   assert.equal(row('value').querySelector('.point-value').textContent, '42');
   assert.doesNotMatch(doc.getElementById('messages-list').textContent, /internal metadata|not a value|not a variable/);
   row('arrival').click(); assert.equal(doc.getElementById('page-explore').hidden, false);
+});
+
+test('reset starts a fresh workspace and retains SDK settings', async t => {
+  const { dom, window, doc, calls } = createUi(); t.after(() => dom.window.close()); await tick();
+  doc.getElementById('choose-apk').click(); await tick();
+  doc.getElementById('open-custom').click(); await tick();
+  doc.querySelector('.code-line').click(); doc.getElementById('code-apply').click();
+  assert.match(doc.getElementById('custom-count').textContent, /1 log point/);
+  doc.getElementById('preset-all').click();
+  doc.getElementById('log-tag').value = 'SESSION';
+  doc.getElementById('package-prefix').value = 'org.example';
+  doc.getElementById('exclude-libraries').checked = true;
+  doc.querySelector('.advanced').open = true;
+  doc.getElementById('instrument').click(); await tick();
+  doc.getElementById('save-apk').click(); await tick();
+  doc.getElementById('choose-log').click(); await tick();
+  doc.getElementById('analyze').click(); await tick();
+  assert.equal(doc.getElementById('report-frame').hidden, false);
+  assert.equal(doc.getElementById('next-steps').hidden, false);
+
+  doc.getElementById('reset-workspace').click(); await tick();
+  assert.equal(doc.getElementById('apk-name').textContent, 'Start with an APK');
+  assert.equal(doc.getElementById('apk-path').title, '');
+  assert.equal(doc.getElementById('instrument').disabled, true);
+  assert.equal(doc.getElementById('open-custom').disabled, true);
+  assert.equal(doc.getElementById('save-apk').hidden, true);
+  assert.equal(doc.getElementById('test-device').hidden, true);
+  assert.equal(doc.getElementById('next-steps').hidden, true);
+  assert.equal(doc.getElementById('install-command').textContent, '');
+  assert.equal(doc.getElementById('action-title').textContent, 'Ready to instrument');
+  assert.equal(doc.getElementById('log-tag').value, 'ANDROLOG');
+  assert.equal(doc.getElementById('coverage-tag').value, 'ANDROLOG');
+  assert.equal(doc.getElementById('package-prefix').value, '');
+  assert.equal(doc.getElementById('exclude-libraries').checked, false);
+  assert.equal(doc.querySelector('.advanced').open, false);
+  assert.deepEqual([...doc.querySelectorAll('[data-probe]')].map(input => input.checked), [true, true, false, true, false]);
+  assert.equal(doc.getElementById('coverage-apk').textContent, 'No APK selected');
+  assert.equal(doc.getElementById('log-name').textContent, 'No log selected');
+  assert.equal(doc.getElementById('analyze').disabled, true);
+  assert.equal(doc.getElementById('report-frame').hidden, true);
+  assert.equal(doc.getElementById('report-frame').hasAttribute('src'), false);
+  assert.match(doc.querySelector('.stat').textContent, /Awaiting analysis/);
+  assert.equal(doc.getElementById('settings-platforms').value, '/sdk/platforms');
+  assert.equal(doc.getElementById('settings-buildTools').value, '/sdk/build-tools/36');
+
+  doc.getElementById('choose-apk').click(); await tick();
+  doc.getElementById('instrument').click(); await tick();
+  assert.equal(calls.at(-1).plan, null, 'previous custom points are not reused');
+});
+
+test('cancelled or busy reset leaves the workspace unchanged', async t => {
+  let resetCalls = 0, finish;
+  const { dom, doc } = createUi({ resetSession: async () => { resetCalls++; return false; }, instrument: () => new Promise(resolve => { finish = resolve; }) });
+  t.after(() => dom.window.close());
+  doc.getElementById('choose-apk').click(); await tick();
+  doc.getElementById('reset-workspace').click(); await tick();
+  assert.equal(resetCalls, 1); assert.equal(doc.getElementById('apk-name').textContent, 'original.apk');
+  doc.getElementById('instrument').click(); await tick();
+  assert.equal(doc.getElementById('reset-workspace').disabled, true);
+  doc.getElementById('reset-workspace').click(); await tick(); assert.equal(resetCalls, 1);
+  finish({ name: 'original.apk' }); await tick();
+  assert.equal(doc.getElementById('reset-workspace').disabled, false);
+});
+
+test('reset ignores a late class response from the previous session', async t => {
+  const pending = pendingResult();
+  const { dom, doc } = createUi({ inspectCode: async () => lazyCatalog(), inspectClass: () => pending.promise });
+  t.after(() => dom.window.close());
+  await openVariableEditor(doc); chooseClass(doc, 'Main'); await tick();
+  doc.getElementById('code-cancel').click();
+  doc.getElementById('reset-workspace').click(); await tick();
+  pending.resolve(lazyClass('org.example.Main', 'stale')); await tick();
+  assert.equal(doc.getElementById('apk-name').textContent, 'Start with an APK');
+  assert.equal(doc.getElementById('code-class').textContent, 'Choose a class');
+  assert.match(doc.getElementById('code-lines').textContent, /Your class code will appear here/);
+  assert.equal(doc.querySelectorAll('.code-line').length, 0);
 });

@@ -37,6 +37,8 @@ The Electron GUI targets macOS, Windows, and Linux. You can also [build a deskto
 
 Open the **original APK** in **Instrument**. Select classes, methods, statements, Android components, or **Dynamic call graph**, then click **Instrument APK**. Save the result or test it directly on a connected device.
 
+Click **Reset** to start a new session. This clears the current selections and report while keeping your saved files and SDK settings.
+
 [![Instrument view: choose an APK, logging options, and a Logcat tag](data/screenshots/gui-instrument.png)](data/screenshots/gui-instrument.png)
 
 Open **Custom logging**, browse the package → class → method tree, and select a statement:

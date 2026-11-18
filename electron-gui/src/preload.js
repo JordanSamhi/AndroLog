@@ -4,6 +4,7 @@ if (window.top === window) contextBridge.exposeInMainWorld('androlog', Object.fr
   platform: process.platform,
   copyText: text => ipcRenderer.invoke('clipboard:write', text),
   settings: () => ipcRenderer.invoke('settings:get'), chooseSetting: kind => ipcRenderer.invoke('settings:choose', kind), saveSettings: value => ipcRenderer.invoke('settings:save', value),
+  resetSession: () => ipcRenderer.invoke('session:reset'),
   chooseApk: () => ipcRenderer.invoke('select:apk'), chooseCoverageApk: () => ipcRenderer.invoke('select:coverage-apk'), chooseLog: () => ipcRenderer.invoke('select:log'),
   inspectCode: () => ipcRenderer.invoke('code:inspect'), inspectClass: name => ipcRenderer.invoke('code:class', name), inspectVariables: method => ipcRenderer.invoke('code:variables', method),
   instrument: (options, plan) => ipcRenderer.invoke('apk:instrument', options, plan),

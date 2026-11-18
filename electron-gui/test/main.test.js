@@ -15,19 +15,26 @@ async function mainFixture(t) {
   const handlers = new Map(), files = [], saves = [], calls = [], controls = {};
   let ready, window;
   class Backend {
-    async discard() {}
+    async discard(workspace) {
+      (controls.discarded ||= []).push(workspace);
+      if (controls.removeDiscarded) await fs.rm(workspace, { recursive: true, force: true });
+    }
     async closeCodeBrowser() { controls.browserCloses = (controls.browserCloses || 0) + 1; }
     async inspect(apk) { calls.push({ inspect: apk }); return { methods: [] }; }
     async inspectClass(apk, settings, className) { calls.push({ classApk: apk, className }); return controls.readClass ? controls.readClass() : { className, methods: [] }; }
     async inspectVariables(apk, settings, method) { calls.push({ variableApk: apk, method }); return { signature: method, locals: [], statements: [] }; }
     async instrument(apk, settings, options, plan) {
       calls.push({ instrument: apk, options, plan });
-      const output = path.join(dir, 'working.apk'); await fs.writeFile(output, 'instrumented');
-      return { dir, input: apk, output };
+      const workspace = controls.separateWorkspaces ? path.join(dir, 'instrumentation') : dir;
+      await fs.mkdir(workspace, { recursive: true });
+      const output = path.join(workspace, 'working.apk'); await fs.writeFile(output, 'instrumented');
+      return { dir: workspace, input: apk, output };
     }
     async analyze(apk, log, settings, options) {
       calls.push({ apk, log, options });
-      return { dir, html: path.join(dir, 'report.html'), report: { instrumentedInput: true, coverageSummary: {}, custom: { summary: { points: [] } } } };
+      const workspace = controls.separateWorkspaces ? path.join(dir, 'report') : dir;
+      await fs.mkdir(workspace, { recursive: true });
+      return { dir: workspace, html: path.join(workspace, 'report.html'), report: { instrumentedInput: true, coverageSummary: {}, custom: { summary: { points: [] } } } };
     }
     async listDevices() { return [{ serial: 'emulator-5554', name: 'Pixel', state: 'device' }]; }
     async capture(apk, settings, options, root) {
@@ -44,7 +51,7 @@ async function mainFixture(t) {
     dialog: {
       showOpenDialog: async () => ({ canceled: false, filePaths: [files.shift()] }),
       showSaveDialog: async () => ({ canceled: false, filePath: saves.shift() }),
-      showMessageBox: async () => ({ response: 1 })
+      showMessageBox: async () => ({ response: controls.confirmResponse ?? 1 })
     },
     BrowserWindow: class {
       constructor() { window = this; this.webContents = { mainFrame: {}, setWindowOpenHandler() {}, on() {} }; }
@@ -88,6 +95,51 @@ test('saving an instrumented APK selects that file for coverage and preserves th
   assert.equal(await fs.readFile(saved, 'utf8'), 'instrumented');
 });
 
+test('reset clears the complete session while preserving settings and saved user files', async t => {
+  const { dir, files, saves, controls, invoke } = await mainFixture(t);
+  controls.separateWorkspaces = true; controls.removeDiscarded = true;
+  const original = path.join(dir, 'original.apk'), saved = path.join(dir, 'saved.apk'), log = path.join(dir, 'runtime.log');
+  await fs.writeFile(original, 'original'); await fs.writeFile(log, 'captured logs');
+  const settings = { platforms: '/sdk/platforms', buildTools: '/sdk/build-tools', java: '/java/bin/java' };
+  await invoke('settings:save', settings);
+  files.push(original); await invoke('select:apk'); files.push(log); await invoke('select:log');
+  await invoke('apk:instrument', { tag: 'ANDROLOG' }, null);
+  saves.push(saved); await invoke('apk:save');
+  await invoke('coverage:analyze', { tag: 'ANDROLOG' });
+  const closesBefore = controls.browserCloses;
+
+  assert.equal(await invoke('session:reset'), true);
+  assert.equal(controls.browserCloses, closesBefore + 1);
+  assert.deepEqual(controls.discarded, [path.join(dir, 'instrumentation'), path.join(dir, 'report')]);
+  await assert.rejects(fs.stat(path.join(dir, 'instrumentation')), { code: 'ENOENT' });
+  await assert.rejects(fs.stat(path.join(dir, 'report')), { code: 'ENOENT' });
+  assert.equal(await fs.readFile(original, 'utf8'), 'original');
+  assert.equal(await fs.readFile(saved, 'utf8'), 'instrumented');
+  assert.equal(await fs.readFile(log, 'utf8'), 'captured logs');
+  const retained = await invoke('settings:get');
+  for (const key of Object.keys(settings)) assert.equal(retained[key], settings[key]);
+  await assert.rejects(invoke('code:inspect'), /Choose the original APK/);
+  await assert.rejects(invoke('apk:instrument', { tag: 'ANDROLOG' }, null), /Choose an APK/);
+  await assert.rejects(invoke('apk:save'), /Instrument an APK/);
+  await assert.rejects(invoke('coverage:analyze', { tag: 'ANDROLOG' }), /instrumented APK and a runtime log/);
+  await assert.rejects(invoke('device:start', { device: 'emulator-5554' }), /Instrument an APK/);
+});
+
+test('canceling reset preserves an unsaved APK and the active session', async t => {
+  const { dir, files, saves, controls, invoke } = await mainFixture(t);
+  const original = path.join(dir, 'original.apk'), saved = path.join(dir, 'saved.apk');
+  await fs.writeFile(original, 'original'); files.push(original); await invoke('select:apk');
+  await invoke('apk:instrument', { tag: 'ANDROLOG' }, null);
+  const closesBefore = controls.browserCloses;
+  controls.confirmResponse = 0;
+  assert.equal(await invoke('session:reset'), false);
+  assert.equal(controls.browserCloses, closesBefore);
+  assert.equal(controls.discarded?.length || 0, 0);
+  await invoke('code:inspect');
+  saves.push(saved); assert.equal(await invoke('apk:save'), saved);
+  assert.equal(await fs.readFile(saved, 'utf8'), 'instrumented');
+});
+
 test('device testing uses the produced APK and its original tag, then selects the captured pair for analysis', async t => {
   const { dir, files, calls, invoke } = await mainFixture(t);
   await assert.rejects(invoke('device:start', { device: 'emulator-5554' }), /Instrument an APK/);
@@ -113,6 +165,7 @@ test('capture locks conflicting operations, allows stop, and releases the lock o
   controls.capture = () => new Promise((_resolve, reject) => { fail = reject; });
   const capture = invoke('device:start', { device: 'emulator-5554' });
   const failure = assert.rejects(capture, /Disconnected/);
+  await assert.rejects(invoke('session:reset'), /Another operation/);
   await assert.rejects(invoke('device:start', { device: 'other' }), /Another operation/);
   await assert.rejects(invoke('select:coverage-apk'), /Wait for/);
   await assert.rejects(invoke('settings:save', {}), /Wait for/);

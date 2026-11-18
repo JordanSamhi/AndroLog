@@ -39,7 +39,7 @@ function currentOnly(event) { if (!window || event.sender !== window.webContents
 function handle(name, fn) { ipcMain.handle(name, async (event, ...args) => { currentOnly(event); return fn(...args); }); }
 async function confirmDiscard() {
   if (!dirty) return true;
-  const { response } = await dialog.showMessageBox(window, { type: 'warning', buttons: ['Keep working', 'Discard'], defaultId: 0, cancelId: 0, title: 'Unsaved APK', message: 'Your instrumented APK has not been saved.', detail: 'Save it before choosing another APK or closing the app.' });
+  const { response } = await dialog.showMessageBox(window, { type: 'warning', buttons: ['Keep working', 'Discard'], defaultId: 0, cancelId: 0, title: 'Unsaved APK', message: 'Your instrumented APK has not been saved.', detail: 'Save it before starting a new session, choosing another APK or closing the app.' });
   return response === 1;
 }
 async function chooseFile(title, extensions) {
@@ -47,6 +47,15 @@ async function chooseFile(title, extensions) {
   return picked.canceled ? null : picked.filePaths[0];
 }
 function registerHandlers() {
+  handle('session:reset', () => exclusive(async () => {
+    if (!(await confirmDiscard())) return false;
+    await backend.closeCodeBrowser();
+    await removeSession(result);
+    if (report?.dir !== result?.dir) await removeSession(report);
+    selectedApk = null; selectedCoverageApk = null; selectedLog = null;
+    result = null; report = null; dirty = false;
+    return true;
+  }));
   handle('clipboard:write', text => {
     if (typeof text !== 'string' || !text || text.length > 32768) throw new Error('Cannot copy this command.');
     clipboard.writeText(text);
