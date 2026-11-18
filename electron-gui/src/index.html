@@ -10,7 +10,7 @@
 <div class="app-shell">
   <aside class="sidebar">
     <div class="brand"><img src="icon.png" alt=""><div><strong>AndroLog</strong><span id="app-version"></span></div></div>
-    <nav class="workspace-tabs" role="tablist" aria-label="Workspace views" aria-orientation="vertical"><button class="workspace-tab active" id="tab-instrument" data-page="instrument" role="tab" aria-selected="true" aria-controls="page-instrument"><span class="menu-icon" aria-hidden="true">◇</span>Instrument</button><button class="workspace-tab" id="tab-coverage" data-page="coverage" role="tab" aria-selected="false" aria-controls="page-coverage" tabindex="-1"><span class="menu-icon" aria-hidden="true">◫</span>Coverage</button><button class="workspace-tab" id="tab-explore" data-page="explore" role="tab" aria-selected="false" aria-controls="page-explore" tabindex="-1"><span class="menu-icon" aria-hidden="true">⌘</span>Explore report</button></nav>
+    <nav class="workspace-tabs" role="tablist" aria-label="Workspace views" aria-orientation="vertical"><button class="workspace-tab active" id="tab-instrument" data-page="instrument" role="tab" aria-selected="true" aria-controls="page-instrument"><span class="menu-icon" aria-hidden="true">◇</span>Instrument</button><button class="workspace-tab" id="tab-coverage" data-page="coverage" role="tab" aria-selected="false" aria-controls="page-coverage" tabindex="-1" disabled><span class="menu-icon" aria-hidden="true">◫</span>Coverage</button><button class="workspace-tab" id="tab-explore" data-page="explore" role="tab" aria-selected="false" aria-controls="page-explore" tabindex="-1" disabled><span class="menu-icon" aria-hidden="true">⌘</span>Explore report</button></nav>
     <div class="side-spacer"></div>
     <div class="sdk-status"><span class="status-dot" id="sdk-dot"></span><span id="sdk-summary">Android SDK</span></div>
     <button class="nav settings-nav" data-page="settings"><span class="nav-icon">⚙</span> Settings</button>
@@ -18,11 +18,12 @@
   <main class="main-content">
     <div class="topline"><button class="subtle-button" id="details-open">Run details <span>↗</span></button></div>
     <section class="page active" id="page-instrument" role="tabpanel" aria-labelledby="tab-instrument">
-      <header class="page-heading"><div><h1 id="instrument-heading">Instrument APK</h1><p class="lead">Choose an app and what you want to log.</p></div><button class="button secondary" id="reset-workspace" type="button" title="Start a new session">Reset <span aria-hidden="true">↺</span></button></header>
-      <div class="workspace-grid">
+      <header class="page-heading"><div><h1 id="instrument-heading">Instrument APK</h1><p class="lead" id="instrument-lead">Choose an APK to get started.</p></div><button class="button secondary" id="reset-workspace" type="button" title="Start a new session" hidden>Reset <span aria-hidden="true">↺</span></button></header>
+      <div class="workspace-grid awaiting-apk" id="instrument-workspace">
         <div class="workspace-main">
           <div class="section-heading"><div><h2>APK</h2></div></div>
-          <div class="apk-card" id="apk-card"><div class="apk-icon">▧</div><div class="apk-copy"><strong id="apk-name">Start with an APK</strong><span id="apk-path">Choose the original app you want to instrument.</span></div><button class="button secondary" id="choose-apk">Choose APK <span>↗</span></button></div>
+          <div class="apk-card" id="apk-card"><div class="apk-icon" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M13 5.5h15l7 7v25a5 5 0 0 1-5 5H13a5 5 0 0 1-5-5v-27a5 5 0 0 1 5-5Z" fill="currentColor" fill-opacity=".09" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M28 5.5v7h7M14 23h15M14 29h15M14 35h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 20h9v9M39 20l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="apk-copy"><strong id="apk-name">Start with an APK</strong><span id="apk-path">Choose the original app you want to instrument.</span></div><button class="button secondary" id="choose-apk">Choose APK <span>↗</span></button></div>
+          <div id="instrument-options" hidden>
           <div class="tag-row"><label for="log-tag">Logcat tag</label><input id="log-tag" value="ANDROLOG" spellcheck="false"><span>Use this tag to collect your logs.</span></div>
           <div class="section-heading choices-heading"><div><h2>What to log</h2></div><div class="presets"><button id="preset-essentials">Essentials</button><button id="preset-all">Everything</button><button id="preset-custom">Custom only</button></div></div>
           <div class="probe-grid">
@@ -34,8 +35,9 @@
             <button class="custom-probe" id="open-custom"><span class="probe-symbol mint">＋</span><span class="probe-copy"><strong>Custom logging</strong><small id="custom-count">Track a statement, message or variable</small></span><span class="custom-arrow">→</span></button>
           </div>
           <details class="advanced"><summary>Advanced options <span>＋</span></summary><div class="advanced-body"><label>Package prefix <small>optional</small><input id="package-prefix" placeholder="e.g. com.example.app" spellcheck="false"></label><label class="plain-check"><input type="checkbox" id="exclude-libraries"> Exclude known libraries</label></div></details>
+          </div>
         </div>
-        <aside class="action-panel"><div class="package-art" aria-hidden="true">
+        <aside class="action-panel" id="instrument-action" hidden><div class="package-art" aria-hidden="true">
           <svg id="apk-animation" viewBox="0 0 180 130" xmlns="http://www.w3.org/2000/svg">
             <rect x="50" y="10" width="80" height="105" rx="16" fill="#fff" stroke="#bbdfcc" stroke-width="2"/>
             <text x="90" y="40" text-anchor="middle" fill="#168567" font-size="15" font-weight="750">APK</text>

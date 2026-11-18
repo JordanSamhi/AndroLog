@@ -25,6 +25,7 @@
   const deviceTest = { active: false, loading: false, phase: '', started: null, timer: null, request: 0, cancelled: false };
   function toast(text, error = false) { const el = $('toast'); el.textContent = text; el.classList.toggle('error', error); el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 6000); }
   function navigate(page) {
+    if ((page === 'coverage' || page === 'explore') && !state.apk) return;
     for (const el of document.querySelectorAll('.page')) { const selected = el.id === `page-${page}`; el.hidden = !selected; el.classList.toggle('active', selected); }
     for (const nav of document.querySelectorAll('.nav[data-page]')) { const selected = nav.dataset.page === page; nav.classList.toggle('active', selected); if (selected) nav.setAttribute('aria-current', 'page'); else nav.removeAttribute('aria-current'); }
     for (const tab of document.querySelectorAll('.workspace-tab')) { const selected = tab.dataset.page === page; tab.classList.toggle('active', selected); tab.setAttribute('aria-selected', String(selected)); tab.tabIndex = selected || (page === 'settings' && tab.dataset.page === 'instrument') ? 0 : -1; }
@@ -33,7 +34,7 @@
   for (const nav of document.querySelectorAll('[data-page]')) nav.addEventListener('click', () => navigate(nav.dataset.page));
   document.querySelector('.workspace-tabs').addEventListener('keydown', event => {
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
-    const tabs = [...document.querySelectorAll('.workspace-tab')]; let index = tabs.indexOf(document.activeElement);
+    const tabs = [...document.querySelectorAll('.workspace-tab')].filter(tab => !tab.disabled); let index = tabs.indexOf(document.activeElement);
     if (index < 0) return; event.preventDefault();
     index = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1) + tabs.length) % tabs.length;
     navigate(tabs[index].dataset.page); tabs[index].focus();
@@ -60,6 +61,12 @@
   }
   function updateAvailability() {
     if (state.busy) return;
+    const hasApk = Boolean(state.apk);
+    $('instrument-options').hidden = !hasApk; $('instrument-action').hidden = !hasApk;
+    $('instrument-workspace').classList.toggle('awaiting-apk', !hasApk);
+    $('instrument-lead').textContent = hasApk ? 'Choose an app and what you want to log.' : 'Choose an APK to get started.';
+    $('reset-workspace').hidden = !(state.apk || state.coverageApk || state.log || state.report);
+    $('tab-coverage').disabled = !hasApk; $('tab-explore').disabled = !hasApk;
     document.querySelectorAll('.custom-point-link').forEach(el => { el.disabled = !el.dataset.pointId; });
     $('instrument').disabled = !state.apk; $('open-custom').disabled = !state.apk; $('save-apk').disabled = !state.result;
     $('test-device').disabled = !state.result; $('test-device').hidden = !state.result;

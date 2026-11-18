@@ -33,6 +33,21 @@ body.busy .package-box,body.busy .box-top{animation:none}
 .sidebar .workspace-tab.active::after{display:none}
 .menu-icon{font-size:19px;width:22px;text-align:center;font-weight:400}
 .topline{justify-content:flex-end}
+.sidebar .workspace-tab:disabled{opacity:.38;background:transparent}
+.workspace-grid.awaiting-apk{grid-template-columns:minmax(0,760px)}
+.apk-icon svg{width:30px;height:30px}
+.awaiting-apk .apk-card{position:relative;overflow:hidden;min-height:170px;padding:26px 28px;border-color:#d9eae1;border-radius:22px;background:linear-gradient(125deg,#fff 15%,#f3fbf6 100%);box-shadow:0 20px 50px rgba(28,94,68,.09)}
+.awaiting-apk .apk-card::before{content:'';position:absolute;width:240px;height:240px;right:-70px;top:-130px;border-radius:50%;background:radial-gradient(circle,rgba(89,202,151,.16),transparent 70%);pointer-events:none}
+.awaiting-apk .apk-card>*{position:relative;z-index:1}
+.awaiting-apk .apk-icon{width:72px;height:72px;border-radius:20px;color:#078668;background:linear-gradient(145deg,#def6e9,#c9edda);box-shadow:inset 0 1px 0 #fff,0 8px 18px rgba(28,132,90,.09)}
+.awaiting-apk .apk-icon svg{width:42px;height:42px}
+.awaiting-apk .apk-copy strong{font-size:17px;letter-spacing:-.3px}
+.awaiting-apk .apk-copy span{font-size:12px;line-height:1.5;white-space:normal}
+.awaiting-apk #choose-apk{background:#087e67;border-color:#087e67;color:#fff;padding:14px 18px;box-shadow:0 8px 20px rgba(8,126,103,.2)}
+.awaiting-apk #choose-apk:not(:disabled):hover{background:#086e5a}
+#instrument-options:not([hidden]),#instrument-action:not([hidden]){animation:instrument-reveal .28s ease-out both}
+@keyframes instrument-reveal{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){#instrument-options:not([hidden]),#instrument-action:not([hidden]){animation:none}}
 .next-steps{margin-top:24px;padding:22px 24px;background:#fff;border:1px solid #e0ebe5;border-radius:16px;box-shadow:var(--shadow)}
 .command-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.copy-command{flex:none;display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #dce9e1;border-radius:8px;background:#f7faf8;color:#3d7460;font-size:11px;font-weight:650;transition:background .15s,border-color .15s}.copy-command:not(:disabled):hover{background:#e7f5ed;border-color:#b7d9c6}.copy-command svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .next-steps h2{font-size:17px}.next-steps p,.command-step small{font-size:12px;color:#718a7f;line-height:1.6}.next-steps>div:first-child p{margin-top:5px}.command-step{display:flex;gap:12px;margin-top:18px}.command-step>span{flex:none;width:24px;height:24px;border-radius:8px;background:#e5f5ec;color:#128563;font-size:11px;font-weight:800;display:grid;place-items:center}.command-step>div{flex:1;min-width:0}.command-step strong{font-size:12px}.command-step pre{margin:8px 0 5px;padding:12px 14px;border-radius:9px;background:#f1f6f3;color:#244e40;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;white-space:pre}.next-coverage{margin-top:18px;border-top:1px solid #edf2ef;padding-top:13px}.next-coverage code{color:#146f58}

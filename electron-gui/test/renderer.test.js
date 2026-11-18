@@ -36,6 +36,18 @@ test('workspace begins without fabricated coverage and keeps controls disabled',
   assert.equal(doc.getElementById('analyze').disabled, true);
   assert.equal(doc.querySelectorAll('.stat').length, 7);
   assert.match(doc.querySelector('.stat').textContent, /Awaiting analysis/);
+  assert.equal(doc.getElementById('tab-coverage').disabled, true);
+  assert.equal(doc.getElementById('tab-explore').disabled, true);
+  doc.getElementById('tab-instrument').focus();
+  for (const key of ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End']) {
+    doc.getElementById('tab-instrument').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true }));
+    assert.equal(doc.activeElement, doc.getElementById('tab-instrument'), `${key} skips disabled tabs`);
+    assert.equal(doc.getElementById('tab-instrument').getAttribute('aria-selected'), 'true');
+  }
+  doc.getElementById('tab-coverage').click(); assert.equal(doc.getElementById('page-coverage').hidden, true);
+  doc.getElementById('choose-apk').click(); await tick();
+  assert.equal(doc.getElementById('tab-coverage').disabled, false);
+  assert.equal(doc.getElementById('tab-explore').disabled, false);
   doc.querySelector('[data-page="coverage"]').click(); assert.equal(doc.getElementById('page-coverage').hidden, false);
   assert.equal(doc.getElementById('tab-coverage').getAttribute('aria-selected'), 'true');
   doc.getElementById('tab-coverage').focus();
@@ -116,11 +128,12 @@ test('instrumentation stages and completion drive the package illustration', asy
   assert.equal(stages.at(-1)[0], 5);
 });
 
-test('navigation lives in the left pane and remains keyboard accessible', t => {
+test('navigation lives in the left pane and remains keyboard accessible', async t => {
   const { dom, doc } = createUi(); t.after(() => dom.window.close());
   const menu = doc.querySelector('.sidebar [role="tablist"]'); assert.ok(menu);
   assert.equal(menu.querySelectorAll('[role="tab"]').length, 3);
   assert.equal(doc.querySelector('.topline [role="tablist"]'), null);
+  doc.getElementById('choose-apk').click(); await tick();
   doc.getElementById('tab-instrument').focus();
   doc.getElementById('tab-instrument').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
   assert.equal(doc.getElementById('tab-coverage').getAttribute('aria-selected'), 'true');
@@ -195,6 +208,10 @@ function customFixture() {
   ] };
 }
 async function selectRun(doc) {
+  if (doc.getElementById('tab-coverage').disabled) {
+    doc.getElementById('choose-apk').click(); await tick();
+  }
+  doc.getElementById('tab-coverage').click();
   doc.getElementById('coverage-choose-apk').click(); await tick();
   doc.getElementById('choose-log').click(); await tick();
 }
@@ -211,7 +228,8 @@ test('portable custom coverage comes from the APK report without any local point
   assert.match(doc.querySelector('.point-row.unobserved').textContent, /Not reached/);
   assert.deepEqual(JSON.parse(JSON.stringify(analysisArguments)), [{ tag: 'ANDROLOG' }]);
   assert.match(doc.getElementById('coverage-meta').textContent, /instrumented\.apk/);
-  assert.equal(doc.getElementById('instrument').disabled, true, 'No original APK is needed for coverage');
+  assert.equal(doc.getElementById('apk-name').textContent, 'original.apk');
+  assert.equal(doc.getElementById('coverage-apk').textContent, 'instrumented.apk');
 });
 
 test('analysis progress appears while working and follows the reported stages', async t => {
@@ -939,4 +957,71 @@ test('device progress explains a signing conflict while waiting for the confirma
   fail(new Error('Installation cancelled.')); await tick();
   assert.match(doc.getElementById('device-error').textContent, /cancelled/);
   assert.equal(doc.getElementById('device-start').hidden, false);
+});
+
+function isVisible(element) {
+  return element !== null && !element.closest('[hidden]');
+}
+
+function assertInstrumentChoicesVisible(doc, visible) {
+  const options = ['log-tag', 'preset-essentials', 'preset-all', 'preset-custom', 'open-custom', 'instrument'];
+  for (const id of options) assert.equal(isVisible(doc.getElementById(id)), visible, `${id} should ${visible ? 'appear' : 'be hidden'}`);
+  for (const input of doc.querySelectorAll('[data-probe]')) {
+    assert.equal(isVisible(input), visible, `probe ${input.dataset.probe} should ${visible ? 'appear' : 'be hidden'}`);
+  }
+  assert.equal(isVisible(doc.querySelector('.advanced')), visible, `advanced options should ${visible ? 'appear' : 'be hidden'}`);
+}
+
+test('instrumentation choices appear only after choosing an APK and survive a cancelled replacement', async t => {
+  let selection = null;
+  const { dom, doc } = createUi({ chooseApk: async () => selection }); t.after(() => dom.window.close()); await tick();
+  assert.equal(isVisible(doc.getElementById('choose-apk')), true);
+  assert.equal(isVisible(doc.getElementById('reset-workspace')), false);
+  assertInstrumentChoicesVisible(doc, false);
+
+  doc.getElementById('choose-apk').click(); await tick();
+  assertInstrumentChoicesVisible(doc, false);
+  assert.equal(doc.getElementById('tab-coverage').disabled, true);
+  assert.equal(doc.getElementById('tab-explore').disabled, true);
+  assert.equal(doc.getElementById('apk-name').textContent, 'Start with an APK');
+
+  selection = '/apps/original.apk'; doc.getElementById('choose-apk').click(); await tick();
+  assertInstrumentChoicesVisible(doc, true);
+  assert.equal(isVisible(doc.getElementById('reset-workspace')), true);
+  assert.equal(doc.getElementById('apk-name').textContent, 'original.apk');
+  doc.getElementById('preset-all').click();
+
+  selection = null; doc.getElementById('choose-apk').click(); await tick();
+  assertInstrumentChoicesVisible(doc, true);
+  assert.equal(doc.getElementById('tab-coverage').disabled, false);
+  assert.equal(doc.getElementById('tab-explore').disabled, false);
+  assert.equal(doc.getElementById('apk-name').textContent, 'original.apk');
+  assert.ok([...doc.querySelectorAll('[data-probe]')].every(input => input.checked));
+});
+
+test('reset returns to the APK-only screen and locks coverage and explore again', async t => {
+  const { dom, doc } = createUi(); t.after(() => dom.window.close()); await tick();
+  doc.getElementById('choose-apk').click(); await tick();
+  assertInstrumentChoicesVisible(doc, true);
+  doc.getElementById('tab-coverage').click();
+  doc.getElementById('coverage-choose-apk').click(); await tick();
+  doc.getElementById('choose-log').click(); await tick();
+  assert.equal(doc.getElementById('analyze').disabled, false);
+  doc.getElementById('analyze').click(); await tick();
+  assert.equal(doc.getElementById('report-frame').hidden, false);
+  doc.getElementById('tab-instrument').click();
+  doc.getElementById('reset-workspace').click(); await tick();
+  assert.equal(isVisible(doc.getElementById('choose-apk')), true);
+  assertInstrumentChoicesVisible(doc, false);
+  assert.equal(doc.getElementById('apk-name').textContent, 'Start with an APK');
+  assert.equal(isVisible(doc.getElementById('reset-workspace')), false);
+  assert.equal(doc.getElementById('tab-coverage').disabled, true);
+  assert.equal(doc.getElementById('tab-explore').disabled, true);
+  assert.equal(doc.getElementById('coverage-apk').textContent, 'No APK selected');
+  assert.equal(doc.getElementById('log-name').textContent, 'No log selected');
+  doc.getElementById('tab-coverage').click();
+  assert.equal(doc.getElementById('page-instrument').hidden, false);
+  doc.getElementById('choose-apk').click(); await tick();
+  assert.equal(doc.getElementById('tab-coverage').disabled, false);
+  assert.equal(doc.getElementById('tab-explore').disabled, false);
 });
